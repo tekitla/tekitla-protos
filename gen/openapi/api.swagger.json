@@ -355,7 +355,7 @@
         "ISSUE_STATE_CANCELED"
       ],
       "default": "ISSUE_STATE_UNSPECIFIED",
-      "description": "Categoría del estado de un issue. Es fija y la entienden todos los clientes\nsin importar la metodología del proyecto: `tq start` mueve a IN_PROGRESS,\nlos reportes cuentan como cerrados DONE y CANCELED.\n\nEn la rebanada 1 hay un estado por categoría y cada uno es una columna del\ntablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),\ncada estado concreto llega como un campo nuevo (status_id) y pertenece a una\nde estas categorías; varias columnas pueden compartir categoría.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse."
+      "description": "Categoría del estado de un issue. Es fija y la entienden todos los clientes\nsin importar la metodología del proyecto: `tk start` mueve a IN_PROGRESS,\nlos reportes cuentan como cerrados DONE y CANCELED.\n\nEn la rebanada 1 hay un estado por categoría y cada uno es una columna del\ntablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),\ncada estado concreto llega como un campo nuevo (status_id) y pertenece a una\nde estas categorías; varias columnas pueden compartir categoría.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse."
     },
     "v1ListIssuesResponse": {
       "type": "object",
@@ -440,7 +440,7 @@
         },
         "key": {
           "type": "string",
-          "description": "Clave corta y única por espacio de trabajo, en mayúsculas (2 a 10 letras o dígitos,\nempieza con letra), p. ej. \"TQ\". Los issues se nombran TQ-42."
+          "description": "Clave corta y única por espacio de trabajo, en mayúsculas (2 a 10 letras o dígitos,\nempieza con letra), p. ej. \"TK\". Los issues se nombran TK-42."
         },
         "name": {
           "type": "string"

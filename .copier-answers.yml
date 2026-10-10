@@ -1,6 +1,6 @@
 # Respuestas de Copier: NO editar a mano. Las usa `copier update`.
 _commit: v0.3.0
-_src_path: gh:vrojas1015/template-protos
+_src_path: gh:dev-plantillas/template-protos
 ci_provider: github
 docs_repo: ''
 dueño: '@vrojas1015'
@@ -9,7 +9,7 @@ http_gateway: true
 languages:
 - go
 - typescript
-module_path: github.com/vrojas1015/tequio-protos
-npm_package: '@vrojas1015/tequio-protos'
-org_name: vrojas1015
-repo_name: tequio-protos
+module_path: github.com/tekitla/tekitla-protos
+npm_package: '@tekitla/tekitla-protos'
+org_name: tekitla
+repo_name: tekitla-protos

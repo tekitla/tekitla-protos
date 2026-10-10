@@ -1,20 +1,20 @@
-# tequio-protos
+# tekitla-protos
 
-Contratos gRPC de **Tequio**, el tracker de proyectos de vrojas1015 (issue 002
+Contratos gRPC de **Tekitla**, el tracker de proyectos de vrojas1015 (issue 002
 en el repo `docs`), escritos en Protobuf con [buf](https://buf.build), y su
 código generado para go y typescript. Desde las anotaciones `google.api.http`
-salen también los handlers REST y el OpenAPI que usa `tequio-gateway`.
+salen también los handlers REST y el OpenAPI que usa `tekitla-gateway`.
 
 | Lenguaje | Cómo se consume (detalle en `docs/consumir.md`) |
 |---|---|
-| Go | `go get github.com/vrojas1015/tequio-protos@vX.Y.Z` → `import issuesv1 "github.com/vrojas1015/tequio-protos/gen/go/issues/v1"` |
-| TypeScript / JS | `npm install @vrojas1015/tequio-protos@X.Y.Z` (registry de GitHub Packages) |
+| Go | `go get github.com/tekitla/tekitla-protos@vX.Y.Z` → `import issuesv1 "github.com/tekitla/tekitla-protos/gen/go/issues/v1"` |
+| TypeScript / JS | `npm install @tekitla/tekitla-protos@X.Y.Z` (registry de GitHub Packages) |
 
 ## Contratos
 
 | Paquete | Servicio | Lo implementa | Lo consumen |
 |---|---|---|---|
-| `issues.v1` (`proto/issues/v1/issues.proto`) | `IssueService`: proyectos e issues | `tequio-issues` | `tequio-gateway` → `tequio-web`, `tequio-cli` (`tq`) |
+| `issues.v1` (`proto/issues/v1/issues.proto`) | `IssueService`: proyectos e issues | `tekitla-issues` | `tekitla-gateway` → `tekitla-web`, `tekitla-cli` (`tk`) |
 
 ### `issues.v1.IssueService`
 
