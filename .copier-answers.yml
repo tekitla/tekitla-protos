@@ -1,6 +1,6 @@
 # Respuestas de Copier: NO editar a mano. Las usa `copier update`.
 _commit: v0.3.0
-_src_path: gh:vrojas1015/template-protos
+_src_path: gh:dev-plantillas/template-protos
 ci_provider: github
 docs_repo: ''
 dueño: '@vrojas1015'
