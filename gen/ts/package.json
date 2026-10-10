@@ -1,6 +1,6 @@
 {
   "name": "@tekitla/tekitla-protos",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Contratos gRPC de Tekitla (tekitla-protos): mensajes y servicios protobuf-es v2",
   "type": "module",
   "repository": {
