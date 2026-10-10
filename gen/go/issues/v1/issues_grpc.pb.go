@@ -1,4 +1,4 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues de un solo
+// Contrato de Tekitla, rebanada 1 (issue 002): proyectos e issues de un solo
 // dueño, con tres estados fijos. Organizaciones, miembros, roles y estados
 // configurables llegan en la rebanada 3 como campos y RPCs nuevos (aditivos).
 //

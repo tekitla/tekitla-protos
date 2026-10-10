@@ -1,12 +1,12 @@
-# tequio-protos
+# tekitla-protos
 
-Contratos gRPC de vrojas1015 (Protobuf + [buf](https://buf.build)) y su
+Contratos gRPC de Tekitla (Protobuf + [buf](https://buf.build)) y su
 código generado para go, typescript.
 
 | Lenguaje | Cómo se consume (detalle en `docs/consumir.md`) |
 |---|---|
-| Go | `go get github.com/vrojas1015/tequio-protos@vX.Y.Z` → `import examplev1 "github.com/vrojas1015/tequio-protos/gen/go/issues/v1"` |
-| TypeScript / JS | `npm install @vrojas1015/tequio-protos@X.Y.Z` (registry de GitHub Packages) |
+| Go | `go get github.com/tekitla/tekitla-protos@vX.Y.Z` → `import examplev1 "github.com/tekitla/tekitla-protos/gen/go/issues/v1"` |
+| TypeScript / JS | `npm install @tekitla/tekitla-protos@X.Y.Z` (registry de GitHub Packages) |
 
 ## Trabajo diario
 

@@ -1,4 +1,4 @@
-# Makefile de tequio-protos (necesita bash: en Windows, Git Bash)
+# Makefile de tekitla-protos (necesita bash: en Windows, Git Bash)
 .DEFAULT_GOAL := help
 SHELL := bash
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# CI tequio-protos — contratos gRPC (go, typescript)
+# CI tekitla-protos — contratos gRPC (go, typescript)
 # =============================================================================
 #
 #   - Pull request   -> lint + breaking (contra la rama base) + código
@@ -9,7 +9,7 @@
 #
 # El tag ES la versión. Se crea con `make release VERSION=X.Y.Z` (bump +
 # commit + tag) y lo pushea una persona. Ver docs/publicar.md.
-# Go no se publica: `go get github.com/vrojas1015/tequio-protos@vX.Y.Z` lee el tag.
+# Go no se publica: `go get github.com/tekitla/tekitla-protos@vX.Y.Z` lee el tag.
 # npm: GitHub Packages con GITHUB_TOKEN (sin secretos propios).
 # Opcional: secret BUF_TOKEN (token de la BSR) para evitar el rate limit de
 # los plugins remotos en `buf generate`.
@@ -108,7 +108,7 @@ jobs:
         with:
           node-version: "24"
           registry-url: https://npm.pkg.github.com
-          scope: "@vrojas1015"
+          scope: "@tekitla"
       - run: npm publish
         working-directory: gen/ts
         env:

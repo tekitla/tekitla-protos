@@ -1,11 +1,11 @@
 {
-  "name": "@vrojas1015/tequio-protos",
+  "name": "@tekitla/tekitla-protos",
   "version": "0.1.0",
-  "description": "Contratos gRPC de vrojas1015 (tequio-protos): mensajes y servicios protobuf-es v2",
+  "description": "Contratos gRPC de Tekitla (tekitla-protos): mensajes y servicios protobuf-es v2",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vrojas1015/tequio-protos.git",
+    "url": "git+https://github.com/tekitla/tekitla-protos.git",
     "directory": "gen/ts"
   },
   "files": [

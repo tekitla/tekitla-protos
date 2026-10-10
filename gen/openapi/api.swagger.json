@@ -423,7 +423,7 @@
         },
         "key": {
           "type": "string",
-          "description": "Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,\nempieza con letra), p. ej. \"TQ\". Los issues se nombran TQ-42."
+          "description": "Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,\nempieza con letra), p. ej. \"TK\". Los issues se nombran TK-42."
         },
         "name": {
           "type": "string"

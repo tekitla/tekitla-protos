@@ -1,4 +1,4 @@
-module github.com/vrojas1015/tequio-protos
+module github.com/tekitla/tekitla-protos
 
 go 1.25.0
 

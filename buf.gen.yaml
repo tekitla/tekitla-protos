@@ -12,7 +12,7 @@ managed:
   override:
     # <module_path>/gen/go/<paquete>/vN, package <paquete>vN (ej. examplev1).
     - file_option: go_package_prefix
-      value: github.com/vrojas1015/tequio-protos/gen/go
+      value: github.com/tekitla/tekitla-protos/gen/go
   # Las deps de la BSR (buf.yaml) quedan FUERA del managed mode: traen sus
   # propios paquetes (googleapis -> google.golang.org/genproto/...).
   disable:

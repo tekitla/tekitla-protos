@@ -1,4 +1,4 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues de un solo
+// Contrato de Tekitla, rebanada 1 (issue 002): proyectos e issues de un solo
 // dueño, con tres estados fijos. Organizaciones, miembros, roles y estados
 // configurables llegan en la rebanada 3 como campos y RPCs nuevos (aditivos).
 //
@@ -150,7 +150,7 @@ type Project struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,
-	// empieza con letra), p. ej. "TQ". Los issues se nombran TQ-42.
+	// empieza con letra), p. ej. "TK". Los issues se nombran TK-42.
 	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
@@ -1167,8 +1167,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"ListIssues\x12\x1c.issues.v1.ListIssuesRequest\x1a\x1d.issues.v1.ListIssuesResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/projects/{project_id}/issues\x12v\n" +
 	"\bGetIssue\x12\x1a.issues.v1.GetIssueRequest\x1a\x1b.issues.v1.GetIssueResponse\"1\x82\xd3\xe4\x93\x02+\x12)/v1/projects/{project_id}/issues/{number}\x12y\n" +
 	"\vCreateIssue\x12\x1d.issues.v1.CreateIssueRequest\x1a\x1e.issues.v1.CreateIssueResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\" /v1/projects/{project_id}/issues\x12\x81\x01\n" +
-	"\tMoveIssue\x12\x1b.issues.v1.MoveIssueRequest\x1a\x1c.issues.v1.MoveIssueResponse\"9\x82\xd3\xe4\x93\x023:\x01*\"./v1/projects/{project_id}/issues/{number}:moveB\xa0\x01\n" +
-	"\rcom.issues.v1B\vIssuesProtoP\x01Z=github.com/vrojas1015/tequio-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
+	"\tMoveIssue\x12\x1b.issues.v1.MoveIssueRequest\x1a\x1c.issues.v1.MoveIssueResponse\"9\x82\xd3\xe4\x93\x023:\x01*\"./v1/projects/{project_id}/issues/{number}:moveB\x9e\x01\n" +
+	"\rcom.issues.v1B\vIssuesProtoP\x01Z;github.com/tekitla/tekitla-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
 	"Issues::V1b\x06proto3"
 
 var (
