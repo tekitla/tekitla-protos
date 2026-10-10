@@ -1,0 +1,445 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "issues/v1/issues.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "IssueService",
+      "description": "IssueService gestiona los proyectos y sus issues.\n\nTodo acceso se limita a los proyectos del usuario autenticado (el gateway\npropaga su identidad en la metadata). Un proyecto ajeno responde NOT_FOUND,\nnunca PERMISSION_DENIED, para no revelar que existe.\n\nLas opciones google.api.http definen las rutas REST que expone el\napi-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar\nacá: el gateway la expone solo si figura en su routes.yaml."
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/projects": {
+      "get": {
+        "summary": "Lista los proyectos del usuario, ordenados por nombre.",
+        "operationId": "IssueService_ListProjects",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListProjectsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page.cursor",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page.limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      },
+      "post": {
+        "summary": "Crea un proyecto. ALREADY_EXISTS si el usuario ya tiene uno con esa key.",
+        "operationId": "IssueService_CreateProject",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateProjectResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateProjectRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/issues": {
+      "get": {
+        "summary": "Lista los issues de un proyecto, opcionalmente filtrados por estado.\nOrden: prioridad descendente y, dentro de la misma, el más reciente primero.",
+        "operationId": "IssueService_ListIssues",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIssuesResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "state",
+            "description": "UNSPECIFIED: todos los estados.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ISSUE_STATE_UNSPECIFIED",
+              "ISSUE_STATE_TODO",
+              "ISSUE_STATE_IN_PROGRESS",
+              "ISSUE_STATE_DONE"
+            ],
+            "default": "ISSUE_STATE_UNSPECIFIED"
+          },
+          {
+            "name": "page.cursor",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page.limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      },
+      "post": {
+        "summary": "Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto.",
+        "operationId": "IssueService_CreateIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceCreateIssueBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/issues/{number}": {
+      "get": {
+        "summary": "Devuelve un issue por su número dentro del proyecto.",
+        "operationId": "IssueService_GetIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/issues/{number}:move": {
+      "post": {
+        "summary": "Cambia el estado de un issue (mover de columna en el tablero).",
+        "operationId": "IssueService_MoveIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1MoveIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceMoveIssueBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "IssueServiceCreateIssueBody": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/definitions/v1Priority"
+        }
+      }
+    },
+    "IssueServiceMoveIssueBody": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/definitions/v1IssueState",
+          "description": "Estado destino; UNSPECIFIED es INVALID_ARGUMENT."
+        }
+      }
+    },
+    "v1CreateIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
+    "v1CreateProjectRequest": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateProjectResponse": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "$ref": "#/definitions/v1Project"
+        }
+      }
+    },
+    "v1GetIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
+    "v1Issue": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Número correlativo dentro del proyecto, desde 1. No se reutiliza."
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "description": "Markdown."
+        },
+        "state": {
+          "$ref": "#/definitions/v1IssueState"
+        },
+        "priority": {
+          "$ref": "#/definitions/v1Priority"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1IssueState": {
+      "type": "string",
+      "enum": [
+        "ISSUE_STATE_UNSPECIFIED",
+        "ISSUE_STATE_TODO",
+        "ISSUE_STATE_IN_PROGRESS",
+        "ISSUE_STATE_DONE"
+      ],
+      "default": "ISSUE_STATE_UNSPECIFIED",
+      "description": "Estado de un issue: las columnas del tablero.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho."
+    },
+    "v1ListIssuesResponse": {
+      "type": "object",
+      "properties": {
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Issue"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1PageResponse"
+        }
+      }
+    },
+    "v1ListProjectsResponse": {
+      "type": "object",
+      "properties": {
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Project"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1PageResponse"
+        }
+      }
+    },
+    "v1MoveIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
+    "v1PageRequest": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "PageRequest: paginación por cursor opaco. limit \u003c= 0 usa el default del servicio."
+    },
+    "v1PageResponse": {
+      "type": "object",
+      "properties": {
+        "nextCursor": {
+          "type": "string"
+        },
+        "hasNext": {
+          "type": "boolean"
+        }
+      },
+      "description": "PageResponse: next_cursor vacío y has_next=false en la última página."
+    },
+    "v1Priority": {
+      "type": "string",
+      "enum": [
+        "PRIORITY_UNSPECIFIED",
+        "PRIORITY_LOW",
+        "PRIORITY_MEDIUM",
+        "PRIORITY_HIGH",
+        "PRIORITY_URGENT"
+      ],
+      "default": "PRIORITY_UNSPECIFIED",
+      "description": "Prioridad de un issue. Al crear, UNSPECIFIED se guarda como MEDIUM."
+    },
+    "v1Project": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string",
+          "description": "Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,\nempieza con letra), p. ej. \"TQ\". Los issues se nombran TQ-42."
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,181 @@
+// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues de un solo
+// dueño, con tres estados fijos. Organizaciones, miembros, roles y estados
+// configurables llegan en la rebanada 3 como campos y RPCs nuevos (aditivos).
+//
+// Reglas (detalle en CLAUDE.md):
+//   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
+//     vN publicado: `[deprecated = true]` (si se borra, `reserved`).
+//   - En v1 solo cambios aditivos; un cambio incompatible es un paquete v2.
+//   - Enums con un primer valor <ENUM>_UNSPECIFIED = 0.
+//   - `optional` cuando hay que distinguir "no vino" de "vino vacío/cero".
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// IssueService gestiona los proyectos y sus issues.
+//
+// Todo acceso se limita a los proyectos del usuario autenticado (el gateway
+// propaga su identidad en la metadata). Un proyecto ajeno responde NOT_FOUND,
+// nunca PERMISSION_DENIED, para no revelar que existe.
+//
+// Las opciones google.api.http definen las rutas REST que expone el
+// api-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar
+// acá: el gateway la expone solo si figura en su routes.yaml.
+service IssueService {
+  // Lista los proyectos del usuario, ordenados por nombre.
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option (google.api.http) = {get: "/v1/projects"};
+  }
+  // Crea un proyecto. ALREADY_EXISTS si el usuario ya tiene uno con esa key.
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects"
+      body: "*"
+    };
+  }
+  // Lista los issues de un proyecto, opcionalmente filtrados por estado.
+  // Orden: prioridad descendente y, dentro de la misma, el más reciente primero.
+  rpc ListIssues(ListIssuesRequest) returns (ListIssuesResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/issues"};
+  }
+  // Devuelve un issue por su número dentro del proyecto.
+  rpc GetIssue(GetIssueRequest) returns (GetIssueResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}"};
+  }
+  // Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto.
+  rpc CreateIssue(CreateIssueRequest) returns (CreateIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/issues"
+      body: "*"
+    };
+  }
+  // Cambia el estado de un issue (mover de columna en el tablero).
+  rpc MoveIssue(MoveIssueRequest) returns (MoveIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/issues/{number}:move"
+      body: "*"
+    };
+  }
+}
+
+// Estado de un issue: las columnas del tablero.
+enum IssueState {
+  ISSUE_STATE_UNSPECIFIED = 0;
+  // Por hacer.
+  ISSUE_STATE_TODO = 1;
+  // En curso.
+  ISSUE_STATE_IN_PROGRESS = 2;
+  // Hecho.
+  ISSUE_STATE_DONE = 3;
+}
+
+// Prioridad de un issue. Al crear, UNSPECIFIED se guarda como MEDIUM.
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_LOW = 1;
+  PRIORITY_MEDIUM = 2;
+  PRIORITY_HIGH = 3;
+  PRIORITY_URGENT = 4;
+}
+
+message Project {
+  string id = 1;
+  // Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,
+  // empieza con letra), p. ej. "TQ". Los issues se nombran TQ-42.
+  string key = 2;
+  string name = 3;
+  string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message Issue {
+  string id = 1;
+  string project_id = 2;
+  // Número correlativo dentro del proyecto, desde 1. No se reutiliza.
+  int32 number = 3;
+  string title = 4;
+  // Markdown.
+  string description = 5;
+  IssueState state = 6;
+  Priority priority = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// PageRequest: paginación por cursor opaco. limit <= 0 usa el default del servicio.
+message PageRequest {
+  string cursor = 1;
+  int32 limit = 2;
+}
+
+// PageResponse: next_cursor vacío y has_next=false en la última página.
+message PageResponse {
+  string next_cursor = 1;
+  bool has_next = 2;
+}
+
+message ListProjectsRequest {
+  PageRequest page = 1;
+}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+  PageResponse page = 2;
+}
+
+message CreateProjectRequest {
+  string key = 1;
+  string name = 2;
+  string description = 3;
+}
+
+message CreateProjectResponse {
+  Project project = 1;
+}
+
+message ListIssuesRequest {
+  string project_id = 1;
+  // UNSPECIFIED: todos los estados.
+  IssueState state = 2;
+  PageRequest page = 3;
+}
+
+message ListIssuesResponse {
+  repeated Issue issues = 1;
+  PageResponse page = 2;
+}
+
+message GetIssueRequest {
+  string project_id = 1;
+  int32 number = 2;
+}
+
+message GetIssueResponse {
+  Issue issue = 1;
+}
+
+message CreateIssueRequest {
+  string project_id = 1;
+  string title = 2;
+  string description = 3;
+  Priority priority = 4;
+}
+
+message CreateIssueResponse {
+  Issue issue = 1;
+}
+
+message MoveIssueRequest {
+  string project_id = 1;
+  int32 number = 2;
+  // Estado destino; UNSPECIFIED es INVALID_ARGUMENT.
+  IssueState state = 3;
+}
+
+message MoveIssueResponse {
+  Issue issue = 1;
+}

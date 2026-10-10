@@ -1,0 +1,52 @@
+# `make generate` -> scripts/generate.sh -> buf generate.
+#
+# Plugins REMOTOS de la BSR (buf.build): corren en los servidores de Buf, no
+# hace falta instalar protoc ni protoc-gen-*; solo `buf` e internet.
+# Versiones FIJADAS: subir una versión cambia el código generado y, en Python,
+# Java y TS, el mínimo del runtime (ver "Versiones" en docs/publicar.md).
+version: v2
+managed:
+  # Managed mode: buf completa go_package, java_package, etc.; los .proto no
+  # llevan opciones específicas de lenguaje.
+  enabled: true
+  override:
+    # <module_path>/gen/go/<paquete>/vN, package <paquete>vN (ej. examplev1).
+    - file_option: go_package_prefix
+      value: github.com/vrojas1015/tequio-protos/gen/go
+  # Las deps de la BSR (buf.yaml) quedan FUERA del managed mode: traen sus
+  # propios paquetes (googleapis -> google.golang.org/genproto/...).
+  disable:
+    - module: buf.build/googleapis/googleapis
+plugins:
+  # --- Go -------------------------------------------------------------------
+  - remote: buf.build/protocolbuffers/go:v1.36.12
+    out: gen/go
+    opt: paths=source_relative
+  - remote: buf.build/grpc/go:v1.6.2
+    out: gen/go
+    opt: paths=source_relative
+  # --- REST para el api-gateway (grpc-gateway v2) ----------------------------
+  # *.pb.gw.go junto al código Go (RegisterXxxHandler) y un OpenAPI v2 de
+  # todas las rutas en gen/openapi/api.swagger.json (lo embebe gen/openapi).
+  # disable_default_errors: el gateway responde con su propio formato de error.
+  # Runtime: github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 (go.mod).
+  - remote: buf.build/grpc-ecosystem/gateway:v2.30.0
+    out: gen/go
+    opt: paths=source_relative
+  - remote: buf.build/grpc-ecosystem/openapiv2:v2.30.0
+    out: gen/openapi
+    opt:
+      - allow_merge=true
+      - merge_file_name=api
+      - disable_default_errors=true
+  # --- TypeScript / JavaScript (protobuf-es v2) -----------------------------
+  # js+dts: JS ESM listo para Node y bundlers + tipos .d.ts. No hay paso de
+  # build. Los descriptores de servicio sirven directo a Connect-ES v2
+  # (@connectrpc/connect), sin plugin extra.
+  - remote: buf.build/bufbuild/es:v2.16.0
+    out: gen/ts/lib
+    # El código importa google/api/annotations: se genera junto (gen/ts/lib/google/api).
+    include_imports: true
+    opt:
+      - target=js+dts
+      - import_extension=js
