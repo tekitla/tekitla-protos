@@ -1,4 +1,4 @@
-# Publicar una versión de tequio-protos
+# Publicar una versión de tekitla-protos
 
 ## Modelo
 
@@ -33,7 +33,7 @@ set X.Y.Z`, commit y MR/PR; después del merge, sobre ese commit de `main`:
 
 | Lenguaje | Destino |
 |---|---|
-| Go | Nada: el proxy de Go lee el tag (`go get github.com/vrojas1015/tequio-protos@vX.Y.Z`) |
+| Go | Nada: el proxy de Go lee el tag (`go get github.com/tekitla/tekitla-protos@vX.Y.Z`) |
 | TS/JS | GitHub Packages npm (`GITHUB_TOKEN`, `packages: write`) |
 
 Un registry no acepta volver a publicar la misma versión: si algo falló a
@@ -45,7 +45,7 @@ un tag publicado (el proxy de Go y los caches ya lo guardaron).
 - Settings > Rules > Rulesets: proteger tags `v*`.
 - Settings > Actions > General > Workflow permissions: lectura por default
   (el workflow pide `contents: write` / `packages: write` solo donde publica).
-- npm en GitHub Packages: el scope `@vrojas1015` tiene que ser el
+- npm en GitHub Packages: el scope `@tekitla` tiene que ser el
   owner del repo (usuario u organización).
 - Visibilidad de los paquetes (Packages > Package settings): heredar del repo o
   dar acceso a los repos consumidores.

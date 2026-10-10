@@ -1,4 +1,4 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues dentro de un
+// Contrato de Tekitla, rebanada 1 (issue 002): proyectos e issues dentro de un
 // espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
 // roles, estados configurables por proyecto y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
@@ -34,7 +34,7 @@ export declare type Project = Message<"issues.v1.Project"> & {
 
   /**
    * Clave corta y única por espacio de trabajo, en mayúsculas (2 a 10 letras o dígitos,
-   * empieza con letra), p. ej. "TQ". Los issues se nombran TQ-42.
+   * empieza con letra), p. ej. "TK". Los issues se nombran TK-42.
    *
    * @generated from field: string key = 2;
    */
@@ -463,7 +463,7 @@ export declare const MoveIssueResponseSchema: GenMessage<MoveIssueResponse>;
 
 /**
  * Categoría del estado de un issue. Es fija y la entienden todos los clientes
- * sin importar la metodología del proyecto: `tq start` mueve a IN_PROGRESS,
+ * sin importar la metodología del proyecto: `tk start` mueve a IN_PROGRESS,
  * los reportes cuentan como cerrados DONE y CANCELED.
  *
  * En la rebanada 1 hay un estado por categoría y cada uno es una columna del

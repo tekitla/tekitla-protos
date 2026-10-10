@@ -1,4 +1,4 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues dentro de un
+// Contrato de Tekitla, rebanada 1 (issue 002): proyectos e issues dentro de un
 // espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
 // roles, estados configurables por proyecto y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).

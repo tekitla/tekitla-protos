@@ -1,8 +1,8 @@
-# tequio-protos — contexto para Claude
+# tekitla-protos — contexto para Claude
 
 ## Qué es este repo
 
-Contratos gRPC (Protobuf) de vrojas1015 y su código generado para
+Contratos gRPC (Protobuf) de Tekitla y su código generado para
 go, typescript. Es la fuente de verdad de las APIs entre
 servicios, gateway y apps. Generado desde la plantilla Copier `protos`
 (`.copier-answers.yml`; actualizar con `copier update`).
@@ -16,9 +16,9 @@ Nada de lógica de negocio.
 |---|---|
 | `proto/<paquete>/vN/*.proto` | Contratos (package `<paquete>.vN`) |
 | `buf.yaml` / `buf.gen.yaml` | Lint STANDARD, breaking FILE / plugins remotos con versión fija |
-| `go.mod` + `gen/go/` | Módulo Go `github.com/vrojas1015/tequio-protos` (import `github.com/vrojas1015/tequio-protos/gen/go/<paquete>/vN`) |
+| `go.mod` + `gen/go/` | Módulo Go `github.com/tekitla/tekitla-protos` (import `github.com/tekitla/tekitla-protos/gen/go/<paquete>/vN`) |
 | `gen/go/**/*.pb.gw.go`, `gen/openapi/` | REST del api-gateway (grpc-gateway): `RegisterXxxHandler` y OpenAPI v2 (`api.swagger.json`, embebido en el paquete `openapi`) |
-| `gen/ts/` | Paquete npm `@vrojas1015/tequio-protos` (JS ESM + `.d.ts` en `lib/`) |
+| `gen/ts/` | Paquete npm `@tekitla/tekitla-protos` (JS ESM + `.d.ts` en `lib/`) |
 | `scripts/` | `generate.sh`, `version.sh`, `release.sh` |
 | `docs/` | `consumir.md`, `publicar.md`, `co-desarrollo.md` |
 
@@ -105,5 +105,5 @@ commitear `proto/` y `gen/` juntos.
 ## Contratos
 
 `proto/issues/v1/issues.proto` (`issues.v1.IssueService`): proyectos e issues
-de Tequio, rebanada 1 del issue 002 (plan en el repo `docs`). Lo implementa
-`tequio-issues`.
+de Tekitla, rebanada 1 del issue 002 (plan en el repo `docs`). Lo implementa
+`tekitla-issues`.
