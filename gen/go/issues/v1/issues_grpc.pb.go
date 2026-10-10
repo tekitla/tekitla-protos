@@ -1,6 +1,7 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues de un solo
-// dueño, con tres estados fijos. Organizaciones, miembros, roles y estados
-// configurables llegan en la rebanada 3 como campos y RPCs nuevos (aditivos).
+// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues dentro de un
+// espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
+// roles, estados configurables por proyecto y las piezas de cada metodología
+// (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -44,24 +45,30 @@ const (
 //
 // IssueService gestiona los proyectos y sus issues.
 //
-// Todo acceso se limita a los proyectos del usuario autenticado (el gateway
-// propaga su identidad en la metadata). Un proyecto ajeno responde NOT_FOUND,
-// nunca PERMISSION_DENIED, para no revelar que existe.
+// Todo acceso se limita a los espacios de trabajo del usuario autenticado (el
+// gateway propaga su identidad en la metadata). En la rebanada 1 cada usuario
+// tiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant
+// de la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no
+// visible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no
+// revelar que existe.
 //
 // Las opciones google.api.http definen las rutas REST que expone el
 // api-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar
 // acá: el gateway la expone solo si figura en su routes.yaml.
 type IssueServiceClient interface {
-	// Lista los proyectos del usuario, ordenados por nombre.
+	// Lista los proyectos visibles para el usuario en todos sus espacios de
+	// trabajo (o en uno, con workspace_id), ordenados por nombre.
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
-	// Crea un proyecto. ALREADY_EXISTS si el usuario ya tiene uno con esa key.
+	// Crea un proyecto. ALREADY_EXISTS si el espacio de trabajo ya tiene uno con
+	// esa key.
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	// Lista los issues de un proyecto, opcionalmente filtrados por estado.
-	// Orden: prioridad descendente y, dentro de la misma, el más reciente primero.
+	// Orden: rank ascendente (el orden manual del backlog y de cada columna).
 	ListIssues(ctx context.Context, in *ListIssuesRequest, opts ...grpc.CallOption) (*ListIssuesResponse, error)
 	// Devuelve un issue por su número dentro del proyecto.
 	GetIssue(ctx context.Context, in *GetIssueRequest, opts ...grpc.CallOption) (*GetIssueResponse, error)
-	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto.
+	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
+	// lo ubica al final del orden (rank mayor que el de todos los demás).
 	CreateIssue(ctx context.Context, in *CreateIssueRequest, opts ...grpc.CallOption) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero).
 	MoveIssue(ctx context.Context, in *MoveIssueRequest, opts ...grpc.CallOption) (*MoveIssueResponse, error)
@@ -141,24 +148,30 @@ func (c *issueServiceClient) MoveIssue(ctx context.Context, in *MoveIssueRequest
 //
 // IssueService gestiona los proyectos y sus issues.
 //
-// Todo acceso se limita a los proyectos del usuario autenticado (el gateway
-// propaga su identidad en la metadata). Un proyecto ajeno responde NOT_FOUND,
-// nunca PERMISSION_DENIED, para no revelar que existe.
+// Todo acceso se limita a los espacios de trabajo del usuario autenticado (el
+// gateway propaga su identidad en la metadata). En la rebanada 1 cada usuario
+// tiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant
+// de la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no
+// visible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no
+// revelar que existe.
 //
 // Las opciones google.api.http definen las rutas REST que expone el
 // api-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar
 // acá: el gateway la expone solo si figura en su routes.yaml.
 type IssueServiceServer interface {
-	// Lista los proyectos del usuario, ordenados por nombre.
+	// Lista los proyectos visibles para el usuario en todos sus espacios de
+	// trabajo (o en uno, con workspace_id), ordenados por nombre.
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
-	// Crea un proyecto. ALREADY_EXISTS si el usuario ya tiene uno con esa key.
+	// Crea un proyecto. ALREADY_EXISTS si el espacio de trabajo ya tiene uno con
+	// esa key.
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	// Lista los issues de un proyecto, opcionalmente filtrados por estado.
-	// Orden: prioridad descendente y, dentro de la misma, el más reciente primero.
+	// Orden: rank ascendente (el orden manual del backlog y de cada columna).
 	ListIssues(context.Context, *ListIssuesRequest) (*ListIssuesResponse, error)
 	// Devuelve un issue por su número dentro del proyecto.
 	GetIssue(context.Context, *GetIssueRequest) (*GetIssueResponse, error)
-	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto.
+	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
+	// lo ubica al final del orden (rank mayor que el de todos los demás).
 	CreateIssue(context.Context, *CreateIssueRequest) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero).
 	MoveIssue(context.Context, *MoveIssueRequest) (*MoveIssueResponse, error)

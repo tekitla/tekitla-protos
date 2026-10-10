@@ -1,6 +1,7 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues de un solo
-// dueño, con tres estados fijos. Organizaciones, miembros, roles y estados
-// configurables llegan en la rebanada 3 como campos y RPCs nuevos (aditivos).
+// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues dentro de un
+// espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
+// roles, estados configurables por proyecto y las piezas de cada metodología
+// (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -34,7 +35,14 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Estado de un issue: las columnas del tablero.
+// Categoría del estado de un issue. Es fija y la entienden todos los clientes
+// sin importar la metodología del proyecto: `tq start` mueve a IN_PROGRESS,
+// los reportes cuentan como cerrados DONE y CANCELED.
+//
+// En la rebanada 1 hay un estado por categoría y cada uno es una columna del
+// tablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),
+// cada estado concreto llega como un campo nuevo (status_id) y pertenece a una
+// de estas categorías; varias columnas pueden compartir categoría.
 type IssueState int32
 
 const (
@@ -45,6 +53,8 @@ const (
 	IssueState_ISSUE_STATE_IN_PROGRESS IssueState = 2
 	// Hecho.
 	IssueState_ISSUE_STATE_DONE IssueState = 3
+	// Descartado: cerrado sin hacerse.
+	IssueState_ISSUE_STATE_CANCELED IssueState = 4
 )
 
 // Enum value maps for IssueState.
@@ -54,12 +64,14 @@ var (
 		1: "ISSUE_STATE_TODO",
 		2: "ISSUE_STATE_IN_PROGRESS",
 		3: "ISSUE_STATE_DONE",
+		4: "ISSUE_STATE_CANCELED",
 	}
 	IssueState_value = map[string]int32{
 		"ISSUE_STATE_UNSPECIFIED": 0,
 		"ISSUE_STATE_TODO":        1,
 		"ISSUE_STATE_IN_PROGRESS": 2,
 		"ISSUE_STATE_DONE":        3,
+		"ISSUE_STATE_CANCELED":    4,
 	}
 )
 
@@ -149,13 +161,16 @@ func (Priority) EnumDescriptor() ([]byte, []int) {
 type Project struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,
+	// Clave corta y única por espacio de trabajo, en mayúsculas (2 a 10 letras o dígitos,
 	// empieza con letra), p. ej. "TQ". Los issues se nombran TQ-42.
-	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Key         string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Name        string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	CreatedAt   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt   *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Espacio de trabajo dueño del proyecto (personal o de un equipo). En la
+	// rebanada 1 siempre es el espacio personal del usuario.
+	WorkspaceId   string `protobuf:"bytes,7,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -232,6 +247,13 @@ func (x *Project) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *Project) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
 type Issue struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -240,11 +262,15 @@ type Issue struct {
 	Number int32  `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
 	Title  string `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
 	// Markdown.
-	Description   string                 `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
-	State         IssueState             `protobuf:"varint,6,opt,name=state,proto3,enum=issues.v1.IssueState" json:"state,omitempty"`
-	Priority      Priority               `protobuf:"varint,7,opt,name=priority,proto3,enum=issues.v1.Priority" json:"priority,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Description string                 `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
+	State       IssueState             `protobuf:"varint,6,opt,name=state,proto3,enum=issues.v1.IssueState" json:"state,omitempty"`
+	Priority    Priority               `protobuf:"varint,7,opt,name=priority,proto3,enum=issues.v1.Priority" json:"priority,omitempty"`
+	CreatedAt   *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt   *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Posición en el orden manual del proyecto, opaca. Se compara como string
+	// (orden lexicográfico); el cliente no la calcula ni la interpreta. El orden
+	// de una columna es el de sus issues por rank.
+	Rank          string `protobuf:"bytes,10,opt,name=rank,proto3" json:"rank,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -340,6 +366,13 @@ func (x *Issue) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Issue) GetRank() string {
+	if x != nil {
+		return x.Rank
+	}
+	return ""
 }
 
 // PageRequest: paginación por cursor opaco. limit <= 0 usa el default del servicio.
@@ -449,8 +482,11 @@ func (x *PageResponse) GetHasNext() bool {
 }
 
 type ListProjectsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          *PageRequest           `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Page  *PageRequest           `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
+	// Vacío: todos los espacios del usuario. Un espacio ajeno devuelve la lista
+	// vacía, no un error, para no revelar que existe.
+	WorkspaceId   string `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -490,6 +526,13 @@ func (x *ListProjectsRequest) GetPage() *PageRequest {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *ListProjectsRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
 }
 
 type ListProjectsResponse struct {
@@ -545,10 +588,12 @@ func (x *ListProjectsResponse) GetPage() *PageResponse {
 }
 
 type CreateProjectRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Key         string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// Vacío: el espacio personal del usuario (el único en la rebanada 1).
+	WorkspaceId   string `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -600,6 +645,13 @@ func (x *CreateProjectRequest) GetName() string {
 func (x *CreateProjectRequest) GetDescription() string {
 	if x != nil {
 		return x.Description
+	}
+	return ""
+}
+
+func (x *CreateProjectRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
 	}
 	return ""
 }
@@ -1078,7 +1130,7 @@ var File_issues_v1_issues_proto protoreflect.FileDescriptor
 
 const file_issues_v1_issues_proto_rawDesc = "" +
 	"\n" +
-	"\x16issues/v1/issues.proto\x12\tissues.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd7\x01\n" +
+	"\x16issues/v1/issues.proto\x12\tissues.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xfa\x01\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x12\n" +
@@ -1087,7 +1139,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xda\x02\n" +
+	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
+	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\xee\x02\n" +
 	"\x05Issue\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1100,23 +1153,27 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\";\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x12\n" +
+	"\x04rank\x18\n" +
+	" \x01(\tR\x04rank\";\n" +
 	"\vPageRequest\x12\x16\n" +
 	"\x06cursor\x18\x01 \x01(\tR\x06cursor\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"J\n" +
 	"\fPageResponse\x12\x1f\n" +
 	"\vnext_cursor\x18\x01 \x01(\tR\n" +
 	"nextCursor\x12\x19\n" +
-	"\bhas_next\x18\x02 \x01(\bR\ahasNext\"A\n" +
+	"\bhas_next\x18\x02 \x01(\bR\ahasNext\"d\n" +
 	"\x13ListProjectsRequest\x12*\n" +
-	"\x04page\x18\x01 \x01(\v2\x16.issues.v1.PageRequestR\x04page\"s\n" +
+	"\x04page\x18\x01 \x01(\v2\x16.issues.v1.PageRequestR\x04page\x12!\n" +
+	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\"s\n" +
 	"\x14ListProjectsResponse\x12.\n" +
 	"\bprojects\x18\x01 \x03(\v2\x12.issues.v1.ProjectR\bprojects\x12+\n" +
-	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page\"^\n" +
+	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page\"\x81\x01\n" +
 	"\x14CreateProjectRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"E\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12!\n" +
+	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\"E\n" +
 	"\x15CreateProjectResponse\x12,\n" +
 	"\aproject\x18\x01 \x01(\v2\x12.issues.v1.ProjectR\aproject\"\x8b\x01\n" +
 	"\x11ListIssuesRequest\x12\x1d\n" +
@@ -1147,13 +1204,14 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x06number\x18\x02 \x01(\x05R\x06number\x12+\n" +
 	"\x05state\x18\x03 \x01(\x0e2\x15.issues.v1.IssueStateR\x05state\";\n" +
 	"\x11MoveIssueResponse\x12&\n" +
-	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue*r\n" +
+	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue*\x8c\x01\n" +
 	"\n" +
 	"IssueState\x12\x1b\n" +
 	"\x17ISSUE_STATE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ISSUE_STATE_TODO\x10\x01\x12\x1b\n" +
 	"\x17ISSUE_STATE_IN_PROGRESS\x10\x02\x12\x14\n" +
-	"\x10ISSUE_STATE_DONE\x10\x03*s\n" +
+	"\x10ISSUE_STATE_DONE\x10\x03\x12\x18\n" +
+	"\x14ISSUE_STATE_CANCELED\x10\x04*s\n" +
 	"\bPriority\x12\x18\n" +
 	"\x14PRIORITY_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fPRIORITY_LOW\x10\x01\x12\x13\n" +

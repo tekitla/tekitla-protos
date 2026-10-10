@@ -1,6 +1,7 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues de un solo
-// dueño, con tres estados fijos. Organizaciones, miembros, roles y estados
-// configurables llegan en la rebanada 3 como campos y RPCs nuevos (aditivos).
+// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues dentro de un
+// espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
+// roles, estados configurables por proyecto y las piezas de cada metodología
+// (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -17,19 +18,24 @@ import "google/protobuf/timestamp.proto";
 
 // IssueService gestiona los proyectos y sus issues.
 //
-// Todo acceso se limita a los proyectos del usuario autenticado (el gateway
-// propaga su identidad en la metadata). Un proyecto ajeno responde NOT_FOUND,
-// nunca PERMISSION_DENIED, para no revelar que existe.
+// Todo acceso se limita a los espacios de trabajo del usuario autenticado (el
+// gateway propaga su identidad en la metadata). En la rebanada 1 cada usuario
+// tiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant
+// de la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no
+// visible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no
+// revelar que existe.
 //
 // Las opciones google.api.http definen las rutas REST que expone el
 // api-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar
 // acá: el gateway la expone solo si figura en su routes.yaml.
 service IssueService {
-  // Lista los proyectos del usuario, ordenados por nombre.
+  // Lista los proyectos visibles para el usuario en todos sus espacios de
+  // trabajo (o en uno, con workspace_id), ordenados por nombre.
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
     option (google.api.http) = {get: "/v1/projects"};
   }
-  // Crea un proyecto. ALREADY_EXISTS si el usuario ya tiene uno con esa key.
+  // Crea un proyecto. ALREADY_EXISTS si el espacio de trabajo ya tiene uno con
+  // esa key.
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {
     option (google.api.http) = {
       post: "/v1/projects"
@@ -37,7 +43,7 @@ service IssueService {
     };
   }
   // Lista los issues de un proyecto, opcionalmente filtrados por estado.
-  // Orden: prioridad descendente y, dentro de la misma, el más reciente primero.
+  // Orden: rank ascendente (el orden manual del backlog y de cada columna).
   rpc ListIssues(ListIssuesRequest) returns (ListIssuesResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issues"};
   }
@@ -45,7 +51,8 @@ service IssueService {
   rpc GetIssue(GetIssueRequest) returns (GetIssueResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}"};
   }
-  // Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto.
+  // Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
+  // lo ubica al final del orden (rank mayor que el de todos los demás).
   rpc CreateIssue(CreateIssueRequest) returns (CreateIssueResponse) {
     option (google.api.http) = {
       post: "/v1/projects/{project_id}/issues"
@@ -61,7 +68,14 @@ service IssueService {
   }
 }
 
-// Estado de un issue: las columnas del tablero.
+// Categoría del estado de un issue. Es fija y la entienden todos los clientes
+// sin importar la metodología del proyecto: `tq start` mueve a IN_PROGRESS,
+// los reportes cuentan como cerrados DONE y CANCELED.
+//
+// En la rebanada 1 hay un estado por categoría y cada uno es una columna del
+// tablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),
+// cada estado concreto llega como un campo nuevo (status_id) y pertenece a una
+// de estas categorías; varias columnas pueden compartir categoría.
 enum IssueState {
   ISSUE_STATE_UNSPECIFIED = 0;
   // Por hacer.
@@ -70,6 +84,8 @@ enum IssueState {
   ISSUE_STATE_IN_PROGRESS = 2;
   // Hecho.
   ISSUE_STATE_DONE = 3;
+  // Descartado: cerrado sin hacerse.
+  ISSUE_STATE_CANCELED = 4;
 }
 
 // Prioridad de un issue. Al crear, UNSPECIFIED se guarda como MEDIUM.
@@ -83,13 +99,16 @@ enum Priority {
 
 message Project {
   string id = 1;
-  // Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,
+  // Clave corta y única por espacio de trabajo, en mayúsculas (2 a 10 letras o dígitos,
   // empieza con letra), p. ej. "TQ". Los issues se nombran TQ-42.
   string key = 2;
   string name = 3;
   string description = 4;
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp updated_at = 6;
+  // Espacio de trabajo dueño del proyecto (personal o de un equipo). En la
+  // rebanada 1 siempre es el espacio personal del usuario.
+  string workspace_id = 7;
 }
 
 message Issue {
@@ -104,6 +123,10 @@ message Issue {
   Priority priority = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
+  // Posición en el orden manual del proyecto, opaca. Se compara como string
+  // (orden lexicográfico); el cliente no la calcula ni la interpreta. El orden
+  // de una columna es el de sus issues por rank.
+  string rank = 10;
 }
 
 // PageRequest: paginación por cursor opaco. limit <= 0 usa el default del servicio.
@@ -120,6 +143,9 @@ message PageResponse {
 
 message ListProjectsRequest {
   PageRequest page = 1;
+  // Vacío: todos los espacios del usuario. Un espacio ajeno devuelve la lista
+  // vacía, no un error, para no revelar que existe.
+  string workspace_id = 2;
 }
 
 message ListProjectsResponse {
@@ -131,6 +157,8 @@ message CreateProjectRequest {
   string key = 1;
   string name = 2;
   string description = 3;
+  // Vacío: el espacio personal del usuario (el único en la rebanada 1).
+  string workspace_id = 4;
 }
 
 message CreateProjectResponse {

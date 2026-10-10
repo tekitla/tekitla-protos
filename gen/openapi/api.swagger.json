@@ -7,7 +7,7 @@
   "tags": [
     {
       "name": "IssueService",
-      "description": "IssueService gestiona los proyectos y sus issues.\n\nTodo acceso se limita a los proyectos del usuario autenticado (el gateway\npropaga su identidad en la metadata). Un proyecto ajeno responde NOT_FOUND,\nnunca PERMISSION_DENIED, para no revelar que existe.\n\nLas opciones google.api.http definen las rutas REST que expone el\napi-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar\nacá: el gateway la expone solo si figura en su routes.yaml."
+      "description": "IssueService gestiona los proyectos y sus issues.\n\nTodo acceso se limita a los espacios de trabajo del usuario autenticado (el\ngateway propaga su identidad en la metadata). En la rebanada 1 cada usuario\ntiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant\nde la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no\nvisible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no\nrevelar que existe.\n\nLas opciones google.api.http definen las rutas REST que expone el\napi-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar\nacá: el gateway la expone solo si figura en su routes.yaml."
     }
   ],
   "consumes": [
@@ -19,7 +19,7 @@
   "paths": {
     "/v1/projects": {
       "get": {
-        "summary": "Lista los proyectos del usuario, ordenados por nombre.",
+        "summary": "Lista los proyectos visibles para el usuario en todos sus espacios de\ntrabajo (o en uno, con workspace_id), ordenados por nombre.",
         "operationId": "IssueService_ListProjects",
         "responses": {
           "200": {
@@ -42,6 +42,13 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          },
+          {
+            "name": "workspaceId",
+            "description": "Vacío: todos los espacios del usuario. Un espacio ajeno devuelve la lista\nvacía, no un error, para no revelar que existe.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -49,7 +56,7 @@
         ]
       },
       "post": {
-        "summary": "Crea un proyecto. ALREADY_EXISTS si el usuario ya tiene uno con esa key.",
+        "summary": "Crea un proyecto. ALREADY_EXISTS si el espacio de trabajo ya tiene uno con\nesa key.",
         "operationId": "IssueService_CreateProject",
         "responses": {
           "200": {
@@ -76,7 +83,7 @@
     },
     "/v1/projects/{projectId}/issues": {
       "get": {
-        "summary": "Lista los issues de un proyecto, opcionalmente filtrados por estado.\nOrden: prioridad descendente y, dentro de la misma, el más reciente primero.",
+        "summary": "Lista los issues de un proyecto, opcionalmente filtrados por estado.\nOrden: rank ascendente (el orden manual del backlog y de cada columna).",
         "operationId": "IssueService_ListIssues",
         "responses": {
           "200": {
@@ -95,7 +102,7 @@
           },
           {
             "name": "state",
-            "description": "UNSPECIFIED: todos los estados.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.",
+            "description": "UNSPECIFIED: todos los estados.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse.",
             "in": "query",
             "required": false,
             "type": "string",
@@ -103,7 +110,8 @@
               "ISSUE_STATE_UNSPECIFIED",
               "ISSUE_STATE_TODO",
               "ISSUE_STATE_IN_PROGRESS",
-              "ISSUE_STATE_DONE"
+              "ISSUE_STATE_DONE",
+              "ISSUE_STATE_CANCELED"
             ],
             "default": "ISSUE_STATE_UNSPECIFIED"
           },
@@ -126,7 +134,7 @@
         ]
       },
       "post": {
-        "summary": "Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto.",
+        "summary": "Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y\nlo ubica al final del orden (rank mayor que el de todos los demás).",
         "operationId": "IssueService_CreateIssue",
         "responses": {
           "200": {
@@ -273,6 +281,10 @@
         },
         "description": {
           "type": "string"
+        },
+        "workspaceId": {
+          "type": "string",
+          "description": "Vacío: el espacio personal del usuario (el único en la rebanada 1)."
         }
       }
     },
@@ -326,6 +338,10 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "rank": {
+          "type": "string",
+          "description": "Posición en el orden manual del proyecto, opaca. Se compara como string\n(orden lexicográfico); el cliente no la calcula ni la interpreta. El orden\nde una columna es el de sus issues por rank."
         }
       }
     },
@@ -335,10 +351,11 @@
         "ISSUE_STATE_UNSPECIFIED",
         "ISSUE_STATE_TODO",
         "ISSUE_STATE_IN_PROGRESS",
-        "ISSUE_STATE_DONE"
+        "ISSUE_STATE_DONE",
+        "ISSUE_STATE_CANCELED"
       ],
       "default": "ISSUE_STATE_UNSPECIFIED",
-      "description": "Estado de un issue: las columnas del tablero.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho."
+      "description": "Categoría del estado de un issue. Es fija y la entienden todos los clientes\nsin importar la metodología del proyecto: `tq start` mueve a IN_PROGRESS,\nlos reportes cuentan como cerrados DONE y CANCELED.\n\nEn la rebanada 1 hay un estado por categoría y cada uno es una columna del\ntablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),\ncada estado concreto llega como un campo nuevo (status_id) y pertenece a una\nde estas categorías; varias columnas pueden compartir categoría.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse."
     },
     "v1ListIssuesResponse": {
       "type": "object",
@@ -423,7 +440,7 @@
         },
         "key": {
           "type": "string",
-          "description": "Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,\nempieza con letra), p. ej. \"TQ\". Los issues se nombran TQ-42."
+          "description": "Clave corta y única por espacio de trabajo, en mayúsculas (2 a 10 letras o dígitos,\nempieza con letra), p. ej. \"TQ\". Los issues se nombran TQ-42."
         },
         "name": {
           "type": "string"
@@ -438,6 +455,10 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "workspaceId": {
+          "type": "string",
+          "description": "Espacio de trabajo dueño del proyecto (personal o de un equipo). En la\nrebanada 1 siempre es el espacio personal del usuario."
         }
       }
     }

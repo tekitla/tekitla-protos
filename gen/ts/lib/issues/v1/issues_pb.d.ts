@@ -1,6 +1,7 @@
-// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues de un solo
-// dueño, con tres estados fijos. Organizaciones, miembros, roles y estados
-// configurables llegan en la rebanada 3 como campos y RPCs nuevos (aditivos).
+// Contrato de Tequio, rebanada 1 (issue 002): proyectos e issues dentro de un
+// espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
+// roles, estados configurables por proyecto y las piezas de cada metodología
+// (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -32,7 +33,7 @@ export declare type Project = Message<"issues.v1.Project"> & {
   id: string;
 
   /**
-   * Clave corta y única por usuario, en mayúsculas (2 a 10 letras o dígitos,
+   * Clave corta y única por espacio de trabajo, en mayúsculas (2 a 10 letras o dígitos,
    * empieza con letra), p. ej. "TQ". Los issues se nombran TQ-42.
    *
    * @generated from field: string key = 2;
@@ -58,6 +59,14 @@ export declare type Project = Message<"issues.v1.Project"> & {
    * @generated from field: google.protobuf.Timestamp updated_at = 6;
    */
   updatedAt?: Timestamp | undefined;
+
+  /**
+   * Espacio de trabajo dueño del proyecto (personal o de un equipo). En la
+   * rebanada 1 siempre es el espacio personal del usuario.
+   *
+   * @generated from field: string workspace_id = 7;
+   */
+  workspaceId: string;
 };
 
 /**
@@ -118,6 +127,15 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
    * @generated from field: google.protobuf.Timestamp updated_at = 9;
    */
   updatedAt?: Timestamp | undefined;
+
+  /**
+   * Posición en el orden manual del proyecto, opaca. Se compara como string
+   * (orden lexicográfico); el cliente no la calcula ni la interpreta. El orden
+   * de una columna es el de sus issues por rank.
+   *
+   * @generated from field: string rank = 10;
+   */
+  rank: string;
 };
 
 /**
@@ -180,6 +198,14 @@ export declare type ListProjectsRequest = Message<"issues.v1.ListProjectsRequest
    * @generated from field: issues.v1.PageRequest page = 1;
    */
   page?: PageRequest | undefined;
+
+  /**
+   * Vacío: todos los espacios del usuario. Un espacio ajeno devuelve la lista
+   * vacía, no un error, para no revelar que existe.
+   *
+   * @generated from field: string workspace_id = 2;
+   */
+  workspaceId: string;
 };
 
 /**
@@ -227,6 +253,13 @@ export declare type CreateProjectRequest = Message<"issues.v1.CreateProjectReque
    * @generated from field: string description = 3;
    */
   description: string;
+
+  /**
+   * Vacío: el espacio personal del usuario (el único en la rebanada 1).
+   *
+   * @generated from field: string workspace_id = 4;
+   */
+  workspaceId: string;
 };
 
 /**
@@ -429,7 +462,14 @@ export declare type MoveIssueResponse = Message<"issues.v1.MoveIssueResponse"> &
 export declare const MoveIssueResponseSchema: GenMessage<MoveIssueResponse>;
 
 /**
- * Estado de un issue: las columnas del tablero.
+ * Categoría del estado de un issue. Es fija y la entienden todos los clientes
+ * sin importar la metodología del proyecto: `tq start` mueve a IN_PROGRESS,
+ * los reportes cuentan como cerrados DONE y CANCELED.
+ *
+ * En la rebanada 1 hay un estado por categoría y cada uno es una columna del
+ * tablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),
+ * cada estado concreto llega como un campo nuevo (status_id) y pertenece a una
+ * de estas categorías; varias columnas pueden compartir categoría.
  *
  * @generated from enum issues.v1.IssueState
  */
@@ -459,6 +499,13 @@ export enum IssueState {
    * @generated from enum value: ISSUE_STATE_DONE = 3;
    */
   DONE = 3,
+
+  /**
+   * Descartado: cerrado sin hacerse.
+   *
+   * @generated from enum value: ISSUE_STATE_CANCELED = 4;
+   */
+  CANCELED = 4,
 }
 
 /**
@@ -506,9 +553,12 @@ export declare const PrioritySchema: GenEnum<Priority>;
 /**
  * IssueService gestiona los proyectos y sus issues.
  *
- * Todo acceso se limita a los proyectos del usuario autenticado (el gateway
- * propaga su identidad en la metadata). Un proyecto ajeno responde NOT_FOUND,
- * nunca PERMISSION_DENIED, para no revelar que existe.
+ * Todo acceso se limita a los espacios de trabajo del usuario autenticado (el
+ * gateway propaga su identidad en la metadata). En la rebanada 1 cada usuario
+ * tiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant
+ * de la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no
+ * visible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no
+ * revelar que existe.
  *
  * Las opciones google.api.http definen las rutas REST que expone el
  * api-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar
@@ -518,7 +568,8 @@ export declare const PrioritySchema: GenEnum<Priority>;
  */
 export declare const IssueService: GenService<{
   /**
-   * Lista los proyectos del usuario, ordenados por nombre.
+   * Lista los proyectos visibles para el usuario en todos sus espacios de
+   * trabajo (o en uno, con workspace_id), ordenados por nombre.
    *
    * @generated from rpc issues.v1.IssueService.ListProjects
    */
@@ -528,7 +579,8 @@ export declare const IssueService: GenService<{
     output: typeof ListProjectsResponseSchema;
   },
   /**
-   * Crea un proyecto. ALREADY_EXISTS si el usuario ya tiene uno con esa key.
+   * Crea un proyecto. ALREADY_EXISTS si el espacio de trabajo ya tiene uno con
+   * esa key.
    *
    * @generated from rpc issues.v1.IssueService.CreateProject
    */
@@ -539,7 +591,7 @@ export declare const IssueService: GenService<{
   },
   /**
    * Lista los issues de un proyecto, opcionalmente filtrados por estado.
-   * Orden: prioridad descendente y, dentro de la misma, el más reciente primero.
+   * Orden: rank ascendente (el orden manual del backlog y de cada columna).
    *
    * @generated from rpc issues.v1.IssueService.ListIssues
    */
@@ -559,7 +611,8 @@ export declare const IssueService: GenService<{
     output: typeof GetIssueResponseSchema;
   },
   /**
-   * Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto.
+   * Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
+   * lo ubica al final del orden (rank mayor que el de todos los demás).
    *
    * @generated from rpc issues.v1.IssueService.CreateIssue
    */
