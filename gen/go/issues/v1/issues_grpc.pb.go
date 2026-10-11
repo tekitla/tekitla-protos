@@ -1,6 +1,7 @@
-// Contrato de Tekitla, rebanada 1 (issue 002): proyectos e issues dentro de un
-// espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
-// roles, estados configurables por proyecto y las piezas de cada metodología
+// Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
+// trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
+// estados configurables por proyecto, orden manual, edición, etiquetas,
+// comentarios e historial. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -31,12 +32,23 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IssueService_ListProjects_FullMethodName  = "/issues.v1.IssueService/ListProjects"
-	IssueService_CreateProject_FullMethodName = "/issues.v1.IssueService/CreateProject"
-	IssueService_ListIssues_FullMethodName    = "/issues.v1.IssueService/ListIssues"
-	IssueService_GetIssue_FullMethodName      = "/issues.v1.IssueService/GetIssue"
-	IssueService_CreateIssue_FullMethodName   = "/issues.v1.IssueService/CreateIssue"
-	IssueService_MoveIssue_FullMethodName     = "/issues.v1.IssueService/MoveIssue"
+	IssueService_ListProjects_FullMethodName    = "/issues.v1.IssueService/ListProjects"
+	IssueService_CreateProject_FullMethodName   = "/issues.v1.IssueService/CreateProject"
+	IssueService_ListIssues_FullMethodName      = "/issues.v1.IssueService/ListIssues"
+	IssueService_GetIssue_FullMethodName        = "/issues.v1.IssueService/GetIssue"
+	IssueService_CreateIssue_FullMethodName     = "/issues.v1.IssueService/CreateIssue"
+	IssueService_MoveIssue_FullMethodName       = "/issues.v1.IssueService/MoveIssue"
+	IssueService_UpdateIssue_FullMethodName     = "/issues.v1.IssueService/UpdateIssue"
+	IssueService_ListStatuses_FullMethodName    = "/issues.v1.IssueService/ListStatuses"
+	IssueService_CreateStatus_FullMethodName    = "/issues.v1.IssueService/CreateStatus"
+	IssueService_UpdateStatus_FullMethodName    = "/issues.v1.IssueService/UpdateStatus"
+	IssueService_DeleteStatus_FullMethodName    = "/issues.v1.IssueService/DeleteStatus"
+	IssueService_ListLabels_FullMethodName      = "/issues.v1.IssueService/ListLabels"
+	IssueService_CreateLabel_FullMethodName     = "/issues.v1.IssueService/CreateLabel"
+	IssueService_UpdateLabel_FullMethodName     = "/issues.v1.IssueService/UpdateLabel"
+	IssueService_DeleteLabel_FullMethodName     = "/issues.v1.IssueService/DeleteLabel"
+	IssueService_CreateComment_FullMethodName   = "/issues.v1.IssueService/CreateComment"
+	IssueService_ListIssueEvents_FullMethodName = "/issues.v1.IssueService/ListIssueEvents"
 )
 
 // IssueServiceClient is the client API for IssueService service.
@@ -70,8 +82,39 @@ type IssueServiceClient interface {
 	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
 	// lo ubica al final del orden (rank mayor que el de todos los demás).
 	CreateIssue(ctx context.Context, in *CreateIssueRequest, opts ...grpc.CallOption) (*CreateIssueResponse, error)
-	// Cambia el estado de un issue (mover de columna en el tablero).
+	// Cambia el estado de un issue (mover de columna en el tablero) y,
+	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
 	MoveIssue(ctx context.Context, in *MoveIssueRequest, opts ...grpc.CallOption) (*MoveIssueResponse, error)
+	// Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
+	// lo que viene; cada cambio queda en el historial.
+	UpdateIssue(ctx context.Context, in *UpdateIssueRequest, opts ...grpc.CallOption) (*UpdateIssueResponse, error)
+	// Estados del proyecto (las columnas del tablero), en orden. Todo proyecto
+	// nace con cuatro, uno por categoría: Por hacer, En curso, Hecho y
+	// Descartado.
+	ListStatuses(ctx context.Context, in *ListStatusesRequest, opts ...grpc.CallOption) (*ListStatusesResponse, error)
+	// Agrega un estado. ALREADY_EXISTS si ya hay uno con ese nombre;
+	// FAILED_PRECONDITION si el proyecto ya tiene el máximo (20).
+	CreateStatus(ctx context.Context, in *CreateStatusRequest, opts ...grpc.CallOption) (*CreateStatusResponse, error)
+	// Renombra o reubica un estado. La categoría no cambia: para eso se crea
+	// otro y se borra este pasando sus issues.
+	UpdateStatus(ctx context.Context, in *UpdateStatusRequest, opts ...grpc.CallOption) (*UpdateStatusResponse, error)
+	// Borra un estado y pasa sus issues a move_to_status_id. FAILED_PRECONDITION
+	// si es el último de su categoría, o si tiene issues y no viene destino.
+	DeleteStatus(ctx context.Context, in *DeleteStatusRequest, opts ...grpc.CallOption) (*DeleteStatusResponse, error)
+	// Etiquetas del proyecto, por nombre.
+	ListLabels(ctx context.Context, in *ListLabelsRequest, opts ...grpc.CallOption) (*ListLabelsResponse, error)
+	// Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
+	// FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+	CreateLabel(ctx context.Context, in *CreateLabelRequest, opts ...grpc.CallOption) (*CreateLabelResponse, error)
+	// Renombra o cambia el color de una etiqueta.
+	UpdateLabel(ctx context.Context, in *UpdateLabelRequest, opts ...grpc.CallOption) (*UpdateLabelResponse, error)
+	// Borra una etiqueta y la quita de todos los issues (sin evento en su
+	// historial).
+	DeleteLabel(ctx context.Context, in *DeleteLabelRequest, opts ...grpc.CallOption) (*DeleteLabelResponse, error)
+	// Comenta un issue. El comentario aparece en su historial.
+	CreateComment(ctx context.Context, in *CreateCommentRequest, opts ...grpc.CallOption) (*CreateCommentResponse, error)
+	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+	ListIssueEvents(ctx context.Context, in *ListIssueEventsRequest, opts ...grpc.CallOption) (*ListIssueEventsResponse, error)
 }
 
 type issueServiceClient struct {
@@ -142,6 +185,116 @@ func (c *issueServiceClient) MoveIssue(ctx context.Context, in *MoveIssueRequest
 	return out, nil
 }
 
+func (c *issueServiceClient) UpdateIssue(ctx context.Context, in *UpdateIssueRequest, opts ...grpc.CallOption) (*UpdateIssueResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateIssueResponse)
+	err := c.cc.Invoke(ctx, IssueService_UpdateIssue_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) ListStatuses(ctx context.Context, in *ListStatusesRequest, opts ...grpc.CallOption) (*ListStatusesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStatusesResponse)
+	err := c.cc.Invoke(ctx, IssueService_ListStatuses_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) CreateStatus(ctx context.Context, in *CreateStatusRequest, opts ...grpc.CallOption) (*CreateStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateStatusResponse)
+	err := c.cc.Invoke(ctx, IssueService_CreateStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) UpdateStatus(ctx context.Context, in *UpdateStatusRequest, opts ...grpc.CallOption) (*UpdateStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateStatusResponse)
+	err := c.cc.Invoke(ctx, IssueService_UpdateStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) DeleteStatus(ctx context.Context, in *DeleteStatusRequest, opts ...grpc.CallOption) (*DeleteStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteStatusResponse)
+	err := c.cc.Invoke(ctx, IssueService_DeleteStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) ListLabels(ctx context.Context, in *ListLabelsRequest, opts ...grpc.CallOption) (*ListLabelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListLabelsResponse)
+	err := c.cc.Invoke(ctx, IssueService_ListLabels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) CreateLabel(ctx context.Context, in *CreateLabelRequest, opts ...grpc.CallOption) (*CreateLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateLabelResponse)
+	err := c.cc.Invoke(ctx, IssueService_CreateLabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) UpdateLabel(ctx context.Context, in *UpdateLabelRequest, opts ...grpc.CallOption) (*UpdateLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateLabelResponse)
+	err := c.cc.Invoke(ctx, IssueService_UpdateLabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) DeleteLabel(ctx context.Context, in *DeleteLabelRequest, opts ...grpc.CallOption) (*DeleteLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteLabelResponse)
+	err := c.cc.Invoke(ctx, IssueService_DeleteLabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) CreateComment(ctx context.Context, in *CreateCommentRequest, opts ...grpc.CallOption) (*CreateCommentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateCommentResponse)
+	err := c.cc.Invoke(ctx, IssueService_CreateComment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) ListIssueEvents(ctx context.Context, in *ListIssueEventsRequest, opts ...grpc.CallOption) (*ListIssueEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListIssueEventsResponse)
+	err := c.cc.Invoke(ctx, IssueService_ListIssueEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IssueServiceServer is the server API for IssueService service.
 // All implementations must embed UnimplementedIssueServiceServer
 // for forward compatibility.
@@ -173,8 +326,39 @@ type IssueServiceServer interface {
 	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
 	// lo ubica al final del orden (rank mayor que el de todos los demás).
 	CreateIssue(context.Context, *CreateIssueRequest) (*CreateIssueResponse, error)
-	// Cambia el estado de un issue (mover de columna en el tablero).
+	// Cambia el estado de un issue (mover de columna en el tablero) y,
+	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
 	MoveIssue(context.Context, *MoveIssueRequest) (*MoveIssueResponse, error)
+	// Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
+	// lo que viene; cada cambio queda en el historial.
+	UpdateIssue(context.Context, *UpdateIssueRequest) (*UpdateIssueResponse, error)
+	// Estados del proyecto (las columnas del tablero), en orden. Todo proyecto
+	// nace con cuatro, uno por categoría: Por hacer, En curso, Hecho y
+	// Descartado.
+	ListStatuses(context.Context, *ListStatusesRequest) (*ListStatusesResponse, error)
+	// Agrega un estado. ALREADY_EXISTS si ya hay uno con ese nombre;
+	// FAILED_PRECONDITION si el proyecto ya tiene el máximo (20).
+	CreateStatus(context.Context, *CreateStatusRequest) (*CreateStatusResponse, error)
+	// Renombra o reubica un estado. La categoría no cambia: para eso se crea
+	// otro y se borra este pasando sus issues.
+	UpdateStatus(context.Context, *UpdateStatusRequest) (*UpdateStatusResponse, error)
+	// Borra un estado y pasa sus issues a move_to_status_id. FAILED_PRECONDITION
+	// si es el último de su categoría, o si tiene issues y no viene destino.
+	DeleteStatus(context.Context, *DeleteStatusRequest) (*DeleteStatusResponse, error)
+	// Etiquetas del proyecto, por nombre.
+	ListLabels(context.Context, *ListLabelsRequest) (*ListLabelsResponse, error)
+	// Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
+	// FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+	CreateLabel(context.Context, *CreateLabelRequest) (*CreateLabelResponse, error)
+	// Renombra o cambia el color de una etiqueta.
+	UpdateLabel(context.Context, *UpdateLabelRequest) (*UpdateLabelResponse, error)
+	// Borra una etiqueta y la quita de todos los issues (sin evento en su
+	// historial).
+	DeleteLabel(context.Context, *DeleteLabelRequest) (*DeleteLabelResponse, error)
+	// Comenta un issue. El comentario aparece en su historial.
+	CreateComment(context.Context, *CreateCommentRequest) (*CreateCommentResponse, error)
+	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+	ListIssueEvents(context.Context, *ListIssueEventsRequest) (*ListIssueEventsResponse, error)
 	mustEmbedUnimplementedIssueServiceServer()
 }
 
@@ -202,6 +386,39 @@ func (UnimplementedIssueServiceServer) CreateIssue(context.Context, *CreateIssue
 }
 func (UnimplementedIssueServiceServer) MoveIssue(context.Context, *MoveIssueRequest) (*MoveIssueResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MoveIssue not implemented")
+}
+func (UnimplementedIssueServiceServer) UpdateIssue(context.Context, *UpdateIssueRequest) (*UpdateIssueResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateIssue not implemented")
+}
+func (UnimplementedIssueServiceServer) ListStatuses(context.Context, *ListStatusesRequest) (*ListStatusesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListStatuses not implemented")
+}
+func (UnimplementedIssueServiceServer) CreateStatus(context.Context, *CreateStatusRequest) (*CreateStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateStatus not implemented")
+}
+func (UnimplementedIssueServiceServer) UpdateStatus(context.Context, *UpdateStatusRequest) (*UpdateStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateStatus not implemented")
+}
+func (UnimplementedIssueServiceServer) DeleteStatus(context.Context, *DeleteStatusRequest) (*DeleteStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteStatus not implemented")
+}
+func (UnimplementedIssueServiceServer) ListLabels(context.Context, *ListLabelsRequest) (*ListLabelsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLabels not implemented")
+}
+func (UnimplementedIssueServiceServer) CreateLabel(context.Context, *CreateLabelRequest) (*CreateLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateLabel not implemented")
+}
+func (UnimplementedIssueServiceServer) UpdateLabel(context.Context, *UpdateLabelRequest) (*UpdateLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateLabel not implemented")
+}
+func (UnimplementedIssueServiceServer) DeleteLabel(context.Context, *DeleteLabelRequest) (*DeleteLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteLabel not implemented")
+}
+func (UnimplementedIssueServiceServer) CreateComment(context.Context, *CreateCommentRequest) (*CreateCommentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateComment not implemented")
+}
+func (UnimplementedIssueServiceServer) ListIssueEvents(context.Context, *ListIssueEventsRequest) (*ListIssueEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListIssueEvents not implemented")
 }
 func (UnimplementedIssueServiceServer) mustEmbedUnimplementedIssueServiceServer() {}
 func (UnimplementedIssueServiceServer) testEmbeddedByValue()                      {}
@@ -332,6 +549,204 @@ func _IssueService_MoveIssue_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IssueService_UpdateIssue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateIssueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).UpdateIssue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_UpdateIssue_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).UpdateIssue(ctx, req.(*UpdateIssueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_ListStatuses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStatusesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).ListStatuses(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_ListStatuses_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).ListStatuses(ctx, req.(*ListStatusesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_CreateStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).CreateStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_CreateStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).CreateStatus(ctx, req.(*CreateStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_UpdateStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).UpdateStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_UpdateStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).UpdateStatus(ctx, req.(*UpdateStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_DeleteStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).DeleteStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_DeleteStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).DeleteStatus(ctx, req.(*DeleteStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_ListLabels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLabelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).ListLabels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_ListLabels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).ListLabels(ctx, req.(*ListLabelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_CreateLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).CreateLabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_CreateLabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).CreateLabel(ctx, req.(*CreateLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_UpdateLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).UpdateLabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_UpdateLabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).UpdateLabel(ctx, req.(*UpdateLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_DeleteLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).DeleteLabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_DeleteLabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).DeleteLabel(ctx, req.(*DeleteLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_CreateComment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCommentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).CreateComment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_CreateComment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).CreateComment(ctx, req.(*CreateCommentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_ListIssueEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIssueEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).ListIssueEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_ListIssueEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).ListIssueEvents(ctx, req.(*ListIssueEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IssueService_ServiceDesc is the grpc.ServiceDesc for IssueService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -362,6 +777,50 @@ var IssueService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MoveIssue",
 			Handler:    _IssueService_MoveIssue_Handler,
+		},
+		{
+			MethodName: "UpdateIssue",
+			Handler:    _IssueService_UpdateIssue_Handler,
+		},
+		{
+			MethodName: "ListStatuses",
+			Handler:    _IssueService_ListStatuses_Handler,
+		},
+		{
+			MethodName: "CreateStatus",
+			Handler:    _IssueService_CreateStatus_Handler,
+		},
+		{
+			MethodName: "UpdateStatus",
+			Handler:    _IssueService_UpdateStatus_Handler,
+		},
+		{
+			MethodName: "DeleteStatus",
+			Handler:    _IssueService_DeleteStatus_Handler,
+		},
+		{
+			MethodName: "ListLabels",
+			Handler:    _IssueService_ListLabels_Handler,
+		},
+		{
+			MethodName: "CreateLabel",
+			Handler:    _IssueService_CreateLabel_Handler,
+		},
+		{
+			MethodName: "UpdateLabel",
+			Handler:    _IssueService_UpdateLabel_Handler,
+		},
+		{
+			MethodName: "DeleteLabel",
+			Handler:    _IssueService_DeleteLabel_Handler,
+		},
+		{
+			MethodName: "CreateComment",
+			Handler:    _IssueService_CreateComment_Handler,
+		},
+		{
+			MethodName: "ListIssueEvents",
+			Handler:    _IssueService_ListIssueEvents_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

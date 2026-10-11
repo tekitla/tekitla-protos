@@ -195,11 +195,134 @@
         "tags": [
           "IssueService"
         ]
+      },
+      "patch": {
+        "summary": "Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia\nlo que viene; cada cambio queda en el historial.",
+        "operationId": "IssueService_UpdateIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceUpdateIssueBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/issues/{number}/comments": {
+      "post": {
+        "summary": "Comenta un issue. El comentario aparece en su historial.",
+        "operationId": "IssueService_CreateComment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateCommentResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceCreateCommentBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/issues/{number}/events": {
+      "get": {
+        "summary": "Historial de un issue (cambios y comentarios), del más viejo al más nuevo.",
+        "operationId": "IssueService_ListIssueEvents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIssueEventsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.cursor",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page.limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
       }
     },
     "/v1/projects/{projectId}/issues/{number}:move": {
       "post": {
-        "summary": "Cambia el estado de un issue (mover de columna en el tablero).",
+        "summary": "Cambia el estado de un issue (mover de columna en el tablero) y,\nopcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).",
         "operationId": "IssueService_MoveIssue",
         "responses": {
           "200": {
@@ -236,9 +359,272 @@
           "IssueService"
         ]
       }
+    },
+    "/v1/projects/{projectId}/labels": {
+      "get": {
+        "summary": "Etiquetas del proyecto, por nombre.",
+        "operationId": "IssueService_ListLabels",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListLabelsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      },
+      "post": {
+        "summary": "Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;\nFAILED_PRECONDITION si el proyecto ya tiene el máximo (100).",
+        "operationId": "IssueService_CreateLabel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateLabelResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceCreateLabelBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/labels/{labelId}": {
+      "delete": {
+        "summary": "Borra una etiqueta y la quita de todos los issues (sin evento en su\nhistorial).",
+        "operationId": "IssueService_DeleteLabel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteLabelResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "labelId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      },
+      "patch": {
+        "summary": "Renombra o cambia el color de una etiqueta.",
+        "operationId": "IssueService_UpdateLabel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateLabelResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "labelId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceUpdateLabelBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/statuses": {
+      "get": {
+        "summary": "Estados del proyecto (las columnas del tablero), en orden. Todo proyecto\nnace con cuatro, uno por categoría: Por hacer, En curso, Hecho y\nDescartado.",
+        "operationId": "IssueService_ListStatuses",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListStatusesResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      },
+      "post": {
+        "summary": "Agrega un estado. ALREADY_EXISTS si ya hay uno con ese nombre;\nFAILED_PRECONDITION si el proyecto ya tiene el máximo (20).",
+        "operationId": "IssueService_CreateStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateStatusResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceCreateStatusBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/statuses/{statusId}": {
+      "delete": {
+        "summary": "Borra un estado y pasa sus issues a move_to_status_id. FAILED_PRECONDITION\nsi es el último de su categoría, o si tiene issues y no viene destino.",
+        "operationId": "IssueService_DeleteStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteStatusResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "statusId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "moveToStatusId",
+            "description": "Estado al que pasan sus issues (puede ser de otra categoría; cada issue\nmovido lo registra en su historial). Obligatorio si el estado tiene\nissues.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      },
+      "patch": {
+        "summary": "Renombra o reubica un estado. La categoría no cambia: para eso se crea\notro y se borra este pasando sus issues.",
+        "operationId": "IssueService_UpdateStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateStatusResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "statusId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceUpdateStatusBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
     }
   },
   "definitions": {
+    "IssueServiceCreateCommentBody": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "string"
+        }
+      }
+    },
     "IssueServiceCreateIssueBody": {
       "type": "object",
       "properties": {
@@ -253,12 +639,169 @@
         }
       }
     },
+    "IssueServiceCreateLabelBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor"
+        }
+      }
+    },
+    "IssueServiceCreateStatusBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/definitions/v1IssueState",
+          "description": "UNSPECIFIED es INVALID_ARGUMENT."
+        },
+        "afterStatusId": {
+          "type": "string",
+          "description": "Queda después de este estado; vacío: al final."
+        }
+      }
+    },
     "IssueServiceMoveIssueBody": {
       "type": "object",
       "properties": {
         "state": {
           "$ref": "#/definitions/v1IssueState",
-          "description": "Estado destino; UNSPECIFIED es INVALID_ARGUMENT."
+          "description": "Categoría destino, para los clientes que no conocen los estados del\nproyecto: el issue va al primer estado de esa categoría (si ya está en\nesa categoría, no cambia de estado). Se ignora si viene status_id.\nUNSPECIFIED sin status_id es INVALID_ARGUMENT."
+        },
+        "statusId": {
+          "type": "string",
+          "description": "Estado destino. Uno de otro proyecto es INVALID_ARGUMENT."
+        },
+        "beforeNumber": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Lugar dentro de la columna destino, tal como el cliente la ve: debajo de\nafter_number y arriba de before_number (0 = sin vecino de ese lado). Con\nlos dos en 0 conserva su rank. FAILED_PRECONDITION si los vecinos ya no\nestán en esa columna o en ese orden (la vista está vieja: recargar)."
+        },
+        "afterNumber": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "IssueServiceUpdateIssueBody": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Solo cambia lo que viene. Título vacío es INVALID_ARGUMENT."
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/definitions/v1Priority",
+          "description": "UNSPECIFIED es INVALID_ARGUMENT."
+        },
+        "labels": {
+          "$ref": "#/definitions/v1LabelIds",
+          "description": "Reemplaza las etiquetas del issue; ausente, no cambian. Una etiqueta de\notro proyecto es INVALID_ARGUMENT."
+        }
+      }
+    },
+    "IssueServiceUpdateLabelBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor",
+          "description": "UNSPECIFIED se guarda como NEUTRAL."
+        }
+      }
+    },
+    "IssueServiceUpdateStatusBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "afterStatusId": {
+          "type": "string",
+          "description": "Reubica el estado después de este; presente y vacío: al principio."
+        }
+      }
+    },
+    "issuesV1Label": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "description": "Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres."
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor"
+        }
+      }
+    },
+    "issuesV1Status": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "description": "Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres."
+        },
+        "category": {
+          "$ref": "#/definitions/v1IssueState",
+          "description": "Categoría: la que ven los clientes que no conocen los estados del\nproyecto (la CLI, los reportes). CANCELED no se muestra en el tablero."
+        },
+        "rank": {
+          "type": "string",
+          "description": "Posición en el orden de columnas, opaca (como Issue.rank)."
+        }
+      },
+      "description": "Estado concreto de un proyecto: una columna del tablero."
+    },
+    "v1Comment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "authorId": {
+          "type": "string",
+          "description": "uid de quien lo escribió. Nombre y avatar los resuelve el cliente con\naccounts-service (rebanada 3b)."
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown, 1 a 10 000 caracteres."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1CreateCommentResponse": {
+      "type": "object",
+      "properties": {
+        "comment": {
+          "$ref": "#/definitions/v1Comment"
         }
       }
     },
@@ -267,6 +810,14 @@
       "properties": {
         "issue": {
           "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
+    "v1CreateLabelResponse": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "$ref": "#/definitions/issuesV1Label"
         }
       }
     },
@@ -295,6 +846,24 @@
           "$ref": "#/definitions/v1Project"
         }
       }
+    },
+    "v1CreateStatusResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/issuesV1Status"
+        }
+      }
+    },
+    "v1DeleteLabelResponse": {
+      "type": "object"
+    },
+    "v1DeleteStatusResponse": {
+      "type": "object"
+    },
+    "v1DescriptionChanged": {
+      "type": "object",
+      "description": "La descripción puede ser larga: el evento solo dice que cambió."
     },
     "v1GetIssueResponse": {
       "type": "object",
@@ -342,8 +911,63 @@
         "rank": {
           "type": "string",
           "description": "Posición en el orden manual del proyecto, opaca. Se compara como string\n(orden lexicográfico); el cliente no la calcula ni la interpreta. El orden\nde una columna es el de sus issues por rank."
+        },
+        "statusId": {
+          "type": "string",
+          "description": "Estado concreto (columna). state es su categoría."
+        },
+        "labelIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Etiquetas del issue, ordenadas por nombre de etiqueta."
         }
       }
+    },
+    "v1IssueCreated": {
+      "type": "object"
+    },
+    "v1IssueEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string",
+          "description": "uid de quien hizo el cambio."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created": {
+          "$ref": "#/definitions/v1IssueCreated"
+        },
+        "statusChanged": {
+          "$ref": "#/definitions/v1StatusChanged"
+        },
+        "titleChanged": {
+          "$ref": "#/definitions/v1TitleChanged"
+        },
+        "descriptionChanged": {
+          "$ref": "#/definitions/v1DescriptionChanged"
+        },
+        "priorityChanged": {
+          "$ref": "#/definitions/v1PriorityChanged"
+        },
+        "labelsChanged": {
+          "$ref": "#/definitions/v1LabelsChanged"
+        },
+        "commented": {
+          "$ref": "#/definitions/v1Comment"
+        }
+      },
+      "description": "Un cambio en un issue, para su historial. Reordenar dentro de la misma\ncolumna no genera evento."
     },
     "v1IssueState": {
       "type": "string",
@@ -355,7 +979,79 @@
         "ISSUE_STATE_CANCELED"
       ],
       "default": "ISSUE_STATE_UNSPECIFIED",
-      "description": "Categoría del estado de un issue. Es fija y la entienden todos los clientes\nsin importar la metodología del proyecto: `tk start` mueve a IN_PROGRESS,\nlos reportes cuentan como cerrados DONE y CANCELED.\n\nEn la rebanada 1 hay un estado por categoría y cada uno es una columna del\ntablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),\ncada estado concreto llega como un campo nuevo (status_id) y pertenece a una\nde estas categorías; varias columnas pueden compartir categoría.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse."
+      "description": "Categoría del estado de un issue. Es fija y la entienden todos los clientes\nsin importar la metodología del proyecto: `tk start` mueve a IN_PROGRESS,\nlos reportes cuentan como cerrados DONE y CANCELED.\n\nCada proyecto define sus estados concretos (Status, las columnas del\ntablero) y cada uno pertenece a una de estas categorías; varias columnas\npueden compartir categoría. Issue.state es siempre la categoría de\nIssue.status_id.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse."
+    },
+    "v1LabelColor": {
+      "type": "string",
+      "enum": [
+        "LABEL_COLOR_UNSPECIFIED",
+        "LABEL_COLOR_NEUTRAL",
+        "LABEL_COLOR_INFO",
+        "LABEL_COLOR_SUCCESS",
+        "LABEL_COLOR_WARNING",
+        "LABEL_COLOR_DANGER",
+        "LABEL_COLOR_ACCENT",
+        "LABEL_COLOR_BRAND"
+      ],
+      "default": "LABEL_COLOR_UNSPECIFIED",
+      "description": "Color de una etiqueta: un tono del design system, no un valor libre.\n\n - LABEL_COLOR_UNSPECIFIED: Se guarda como NEUTRAL."
+    },
+    "v1LabelIds": {
+      "type": "object",
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Lista de ids de etiquetas, con presencia: un mensaje ausente no es una\nlista vacía."
+    },
+    "v1LabelsChanged": {
+      "type": "object",
+      "properties": {
+        "addedLabelIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "removedLabelIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "addedLabelNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "removedLabelNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Los nombres de las etiquetas se guardan al momento del cambio (ver\nStatusChanged)."
+    },
+    "v1ListIssueEventsResponse": {
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IssueEvent"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1PageResponse"
+        }
+      }
     },
     "v1ListIssuesResponse": {
       "type": "object",
@@ -372,6 +1068,19 @@
         }
       }
     },
+    "v1ListLabelsResponse": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/issuesV1Label"
+          }
+        }
+      },
+      "description": "Sin paginar: son 100 como máximo."
+    },
     "v1ListProjectsResponse": {
       "type": "object",
       "properties": {
@@ -386,6 +1095,19 @@
           "$ref": "#/definitions/v1PageResponse"
         }
       }
+    },
+    "v1ListStatusesResponse": {
+      "type": "object",
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/issuesV1Status"
+          }
+        }
+      },
+      "description": "Sin paginar: son 20 como máximo."
     },
     "v1MoveIssueResponse": {
       "type": "object",
@@ -432,6 +1154,17 @@
       "default": "PRIORITY_UNSPECIFIED",
       "description": "Prioridad de un issue. Al crear, UNSPECIFIED se guarda como MEDIUM."
     },
+    "v1PriorityChanged": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/v1Priority"
+        },
+        "to": {
+          "$ref": "#/definitions/v1Priority"
+        }
+      }
+    },
     "v1Project": {
       "type": "object",
       "properties": {
@@ -459,6 +1192,65 @@
         "workspaceId": {
           "type": "string",
           "description": "Espacio de trabajo dueño del proyecto (personal o de un equipo). En la\nrebanada 1 siempre es el espacio personal del usuario."
+        }
+      }
+    },
+    "v1StatusChanged": {
+      "type": "object",
+      "properties": {
+        "fromStatusId": {
+          "type": "string"
+        },
+        "fromStatusName": {
+          "type": "string"
+        },
+        "fromState": {
+          "$ref": "#/definitions/v1IssueState"
+        },
+        "toStatusId": {
+          "type": "string"
+        },
+        "toStatusName": {
+          "type": "string"
+        },
+        "toState": {
+          "$ref": "#/definitions/v1IssueState"
+        }
+      },
+      "description": "Los nombres se guardan al momento del cambio: el historial se sigue\nleyendo aunque el estado después se renombre o se borre."
+    },
+    "v1TitleChanged": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UpdateIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
+    "v1UpdateLabelResponse": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "$ref": "#/definitions/issuesV1Label"
+        }
+      }
+    },
+    "v1UpdateStatusResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/issuesV1Status"
         }
       }
     }

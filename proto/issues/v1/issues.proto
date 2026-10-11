@@ -1,6 +1,7 @@
-// Contrato de Tekitla, rebanada 1 (issue 002): proyectos e issues dentro de un
-// espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
-// roles, estados configurables por proyecto y las piezas de cada metodología
+// Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
+// trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
+// estados configurables por proyecto, orden manual, edición, etiquetas,
+// comentarios e historial. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -59,12 +60,86 @@ service IssueService {
       body: "*"
     };
   }
-  // Cambia el estado de un issue (mover de columna en el tablero).
+  // Cambia el estado de un issue (mover de columna en el tablero) y,
+  // opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
   rpc MoveIssue(MoveIssueRequest) returns (MoveIssueResponse) {
     option (google.api.http) = {
       post: "/v1/projects/{project_id}/issues/{number}:move"
       body: "*"
     };
+  }
+  // Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
+  // lo que viene; cada cambio queda en el historial.
+  rpc UpdateIssue(UpdateIssueRequest) returns (UpdateIssueResponse) {
+    option (google.api.http) = {
+      patch: "/v1/projects/{project_id}/issues/{number}"
+      body: "*"
+    };
+  }
+
+  // Estados del proyecto (las columnas del tablero), en orden. Todo proyecto
+  // nace con cuatro, uno por categoría: Por hacer, En curso, Hecho y
+  // Descartado.
+  rpc ListStatuses(ListStatusesRequest) returns (ListStatusesResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/statuses"};
+  }
+  // Agrega un estado. ALREADY_EXISTS si ya hay uno con ese nombre;
+  // FAILED_PRECONDITION si el proyecto ya tiene el máximo (20).
+  rpc CreateStatus(CreateStatusRequest) returns (CreateStatusResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/statuses"
+      body: "*"
+    };
+  }
+  // Renombra o reubica un estado. La categoría no cambia: para eso se crea
+  // otro y se borra este pasando sus issues.
+  rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse) {
+    option (google.api.http) = {
+      patch: "/v1/projects/{project_id}/statuses/{status_id}"
+      body: "*"
+    };
+  }
+  // Borra un estado y pasa sus issues a move_to_status_id. FAILED_PRECONDITION
+  // si es el último de su categoría, o si tiene issues y no viene destino.
+  rpc DeleteStatus(DeleteStatusRequest) returns (DeleteStatusResponse) {
+    option (google.api.http) = {delete: "/v1/projects/{project_id}/statuses/{status_id}"};
+  }
+
+  // Etiquetas del proyecto, por nombre.
+  rpc ListLabels(ListLabelsRequest) returns (ListLabelsResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/labels"};
+  }
+  // Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
+  // FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+  rpc CreateLabel(CreateLabelRequest) returns (CreateLabelResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/labels"
+      body: "*"
+    };
+  }
+  // Renombra o cambia el color de una etiqueta.
+  rpc UpdateLabel(UpdateLabelRequest) returns (UpdateLabelResponse) {
+    option (google.api.http) = {
+      patch: "/v1/projects/{project_id}/labels/{label_id}"
+      body: "*"
+    };
+  }
+  // Borra una etiqueta y la quita de todos los issues (sin evento en su
+  // historial).
+  rpc DeleteLabel(DeleteLabelRequest) returns (DeleteLabelResponse) {
+    option (google.api.http) = {delete: "/v1/projects/{project_id}/labels/{label_id}"};
+  }
+
+  // Comenta un issue. El comentario aparece en su historial.
+  rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/issues/{number}/comments"
+      body: "*"
+    };
+  }
+  // Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+  rpc ListIssueEvents(ListIssueEventsRequest) returns (ListIssueEventsResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}/events"};
   }
 }
 
@@ -72,10 +147,10 @@ service IssueService {
 // sin importar la metodología del proyecto: `tk start` mueve a IN_PROGRESS,
 // los reportes cuentan como cerrados DONE y CANCELED.
 //
-// En la rebanada 1 hay un estado por categoría y cada uno es una columna del
-// tablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),
-// cada estado concreto llega como un campo nuevo (status_id) y pertenece a una
-// de estas categorías; varias columnas pueden compartir categoría.
+// Cada proyecto define sus estados concretos (Status, las columnas del
+// tablero) y cada uno pertenece a una de estas categorías; varias columnas
+// pueden compartir categoría. Issue.state es siempre la categoría de
+// Issue.status_id.
 enum IssueState {
   ISSUE_STATE_UNSPECIFIED = 0;
   // Por hacer.
@@ -127,6 +202,109 @@ message Issue {
   // (orden lexicográfico); el cliente no la calcula ni la interpreta. El orden
   // de una columna es el de sus issues por rank.
   string rank = 10;
+  // Estado concreto (columna). state es su categoría.
+  string status_id = 11;
+  // Etiquetas del issue, ordenadas por nombre de etiqueta.
+  repeated string label_ids = 12;
+}
+
+// Estado concreto de un proyecto: una columna del tablero.
+message Status {
+  string id = 1;
+  string project_id = 2;
+  // Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
+  string name = 3;
+  // Categoría: la que ven los clientes que no conocen los estados del
+  // proyecto (la CLI, los reportes). CANCELED no se muestra en el tablero.
+  IssueState category = 4;
+  // Posición en el orden de columnas, opaca (como Issue.rank).
+  string rank = 5;
+}
+
+// Color de una etiqueta: un tono del design system, no un valor libre.
+enum LabelColor {
+  // Se guarda como NEUTRAL.
+  LABEL_COLOR_UNSPECIFIED = 0;
+  LABEL_COLOR_NEUTRAL = 1;
+  LABEL_COLOR_INFO = 2;
+  LABEL_COLOR_SUCCESS = 3;
+  LABEL_COLOR_WARNING = 4;
+  LABEL_COLOR_DANGER = 5;
+  LABEL_COLOR_ACCENT = 6;
+  LABEL_COLOR_BRAND = 7;
+}
+
+message Label {
+  string id = 1;
+  string project_id = 2;
+  // Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
+  string name = 3;
+  LabelColor color = 4;
+}
+
+message Comment {
+  string id = 1;
+  string issue_id = 2;
+  // uid de quien lo escribió. Nombre y avatar los resuelve el cliente con
+  // accounts-service (rebanada 3b).
+  string author_id = 3;
+  // Markdown, 1 a 10 000 caracteres.
+  string body = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+// Un cambio en un issue, para su historial. Reordenar dentro de la misma
+// columna no genera evento.
+message IssueEvent {
+  string id = 1;
+  string issue_id = 2;
+  // uid de quien hizo el cambio.
+  string actor_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+  oneof change {
+    IssueCreated created = 5;
+    StatusChanged status_changed = 6;
+    TitleChanged title_changed = 7;
+    DescriptionChanged description_changed = 8;
+    PriorityChanged priority_changed = 9;
+    LabelsChanged labels_changed = 10;
+    Comment commented = 11;
+  }
+}
+
+message IssueCreated {}
+
+// Los nombres se guardan al momento del cambio: el historial se sigue
+// leyendo aunque el estado después se renombre o se borre.
+message StatusChanged {
+  string from_status_id = 1;
+  string from_status_name = 2;
+  IssueState from_state = 3;
+  string to_status_id = 4;
+  string to_status_name = 5;
+  IssueState to_state = 6;
+}
+
+message TitleChanged {
+  string from = 1;
+  string to = 2;
+}
+
+// La descripción puede ser larga: el evento solo dice que cambió.
+message DescriptionChanged {}
+
+message PriorityChanged {
+  Priority from = 1;
+  Priority to = 2;
+}
+
+// Los nombres de las etiquetas se guardan al momento del cambio (ver
+// StatusChanged).
+message LabelsChanged {
+  repeated string added_label_ids = 1;
+  repeated string removed_label_ids = 2;
+  repeated string added_label_names = 3;
+  repeated string removed_label_names = 4;
 }
 
 // PageRequest: paginación por cursor opaco. limit <= 0 usa el default del servicio.
@@ -200,10 +378,148 @@ message CreateIssueResponse {
 message MoveIssueRequest {
   string project_id = 1;
   int32 number = 2;
-  // Estado destino; UNSPECIFIED es INVALID_ARGUMENT.
+  // Categoría destino, para los clientes que no conocen los estados del
+  // proyecto: el issue va al primer estado de esa categoría (si ya está en
+  // esa categoría, no cambia de estado). Se ignora si viene status_id.
+  // UNSPECIFIED sin status_id es INVALID_ARGUMENT.
   IssueState state = 3;
+  // Estado destino. Uno de otro proyecto es INVALID_ARGUMENT.
+  string status_id = 4;
+  // Lugar dentro de la columna destino, tal como el cliente la ve: debajo de
+  // after_number y arriba de before_number (0 = sin vecino de ese lado). Con
+  // los dos en 0 conserva su rank. FAILED_PRECONDITION si los vecinos ya no
+  // están en esa columna o en ese orden (la vista está vieja: recargar).
+  int32 before_number = 5;
+  int32 after_number = 6;
 }
 
 message MoveIssueResponse {
   Issue issue = 1;
+}
+
+message UpdateIssueRequest {
+  string project_id = 1;
+  int32 number = 2;
+  // Solo cambia lo que viene. Título vacío es INVALID_ARGUMENT.
+  optional string title = 3;
+  optional string description = 4;
+  // UNSPECIFIED es INVALID_ARGUMENT.
+  optional Priority priority = 5;
+  // Reemplaza las etiquetas del issue; ausente, no cambian. Una etiqueta de
+  // otro proyecto es INVALID_ARGUMENT.
+  LabelIds labels = 6;
+}
+
+// Lista de ids de etiquetas, con presencia: un mensaje ausente no es una
+// lista vacía.
+message LabelIds {
+  repeated string ids = 1;
+}
+
+message UpdateIssueResponse {
+  Issue issue = 1;
+}
+
+message ListStatusesRequest {
+  string project_id = 1;
+}
+
+// Sin paginar: son 20 como máximo.
+message ListStatusesResponse {
+  repeated Status statuses = 1;
+}
+
+message CreateStatusRequest {
+  string project_id = 1;
+  string name = 2;
+  // UNSPECIFIED es INVALID_ARGUMENT.
+  IssueState category = 3;
+  // Queda después de este estado; vacío: al final.
+  string after_status_id = 4;
+}
+
+message CreateStatusResponse {
+  Status status = 1;
+}
+
+message UpdateStatusRequest {
+  string project_id = 1;
+  string status_id = 2;
+  optional string name = 3;
+  // Reubica el estado después de este; presente y vacío: al principio.
+  optional string after_status_id = 4;
+}
+
+message UpdateStatusResponse {
+  Status status = 1;
+}
+
+message DeleteStatusRequest {
+  string project_id = 1;
+  string status_id = 2;
+  // Estado al que pasan sus issues (puede ser de otra categoría; cada issue
+  // movido lo registra en su historial). Obligatorio si el estado tiene
+  // issues.
+  string move_to_status_id = 3;
+}
+
+message DeleteStatusResponse {}
+
+message ListLabelsRequest {
+  string project_id = 1;
+}
+
+// Sin paginar: son 100 como máximo.
+message ListLabelsResponse {
+  repeated Label labels = 1;
+}
+
+message CreateLabelRequest {
+  string project_id = 1;
+  string name = 2;
+  LabelColor color = 3;
+}
+
+message CreateLabelResponse {
+  Label label = 1;
+}
+
+message UpdateLabelRequest {
+  string project_id = 1;
+  string label_id = 2;
+  optional string name = 3;
+  // UNSPECIFIED se guarda como NEUTRAL.
+  optional LabelColor color = 4;
+}
+
+message UpdateLabelResponse {
+  Label label = 1;
+}
+
+message DeleteLabelRequest {
+  string project_id = 1;
+  string label_id = 2;
+}
+
+message DeleteLabelResponse {}
+
+message CreateCommentRequest {
+  string project_id = 1;
+  int32 number = 2;
+  string body = 3;
+}
+
+message CreateCommentResponse {
+  Comment comment = 1;
+}
+
+message ListIssueEventsRequest {
+  string project_id = 1;
+  int32 number = 2;
+  PageRequest page = 3;
+}
+
+message ListIssueEventsResponse {
+  repeated IssueEvent events = 1;
+  PageResponse page = 2;
 }
