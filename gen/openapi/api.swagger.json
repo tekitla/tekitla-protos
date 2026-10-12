@@ -130,7 +130,7 @@
           },
           {
             "name": "query",
-            "description": "Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide\ncon parte del título sin distinguir mayúsculas ni acentos, o con el\nnúmero si viene como clave (\"TK-12\", con la key del proyecto) o solo el\nnúmero (\"12\"). Vacío o solo espacios: sin búsqueda.",
+            "description": "Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide\ncon parte del título sin distinguir mayúsculas ni acentos. Si además es\nuna clave del proyecto (\"TK-12\" o \"tk-12\": la key sin distinguir\nmayúsculas) o un número (\"12\"), también trae ese issue: \"12\" devuelve el\n#12 y los títulos que contienen \"12\". Vacío o solo espacios: sin\nbúsqueda.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -195,7 +195,7 @@
           },
           {
             "name": "orderBy",
-            "description": "UNSPECIFIED: ISSUE_ORDER_RANK.\n\n - ISSUE_ORDER_RANK: rank ascendente: el orden manual del tablero.\n - ISSUE_ORDER_UPDATED_DESC: updated_at descendente: lo último que cambió, primero.\n - ISSUE_ORDER_PRIORITY_DESC: Prioridad descendente: URGENT primero.",
+            "description": "UNSPECIFIED: ISSUE_ORDER_RANK.\n\n - ISSUE_ORDER_RANK: rank ascendente: el orden manual del tablero.\n - ISSUE_ORDER_UPDATED_DESC: updated_at descendente: lo último que cambió, primero.\n - ISSUE_ORDER_PRIORITY_DESC: Prioridad descendente: URGENT primero. Ningún issue guardado tiene\nPRIORITY_UNSPECIFIED (CreateIssue lo guarda como MEDIUM).",
             "in": "query",
             "required": false,
             "type": "string",
@@ -441,7 +441,7 @@
     },
     "/v1/projects/{projectId}/issues/{number}:move": {
       "post": {
-        "summary": "Cambia el estado de un issue (mover de columna en el tablero) y,\nopcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).\nMoverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda\nausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit\ndel estado destino no lo impide: el panel marca la columna excedida.",
+        "summary": "Cambia el estado de un issue (mover de columna en el tablero) y,\nopcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).\nMoverlo a CANCELED desde otra categoría lo descarta sin motivo\n(Issue.discard queda ausente); entre estados CANCELED, Issue.discard se\nmantiene; sacarlo de CANCELED lo borra. Pasarse del wip_limit\ndel estado destino no lo impide: el panel marca la columna excedida.",
         "operationId": "IssueService_MoveIssue",
         "responses": {
           "200": {
@@ -828,7 +828,7 @@
           "description": "Estados que se borran. Ninguno puede estar también en statuses."
         }
       },
-      "description": "La lista completa de estados como debe quedar, en el orden de columnas.\n\n- Un estado del proyecto que no está en statuses ni en deletions es\n  FAILED_PRECONDITION: la vista está vieja (otro lo creó), recargar.\n- Mismas reglas que los RPC sueltos sobre el resultado: máximo 20\n  (FAILED_PRECONDITION), al menos uno por categoría (FAILED_PRECONDITION),\n  nombres únicos (ALREADY_EXISTS).\n- Cada issue que pasa de un estado borrado a otro deja su evento\n  status_changed."
+      "description": "La lista completa de estados como debe quedar, en el orden de columnas.\n\n- Un estado del proyecto que no está en statuses ni en deletions es\n  FAILED_PRECONDITION: la vista está vieja (otro lo creó), recargar.\n- Mismas reglas que los RPC sueltos sobre el resultado: máximo 20\n  (FAILED_PRECONDITION), al menos uno por categoría (FAILED_PRECONDITION),\n  nombres únicos (ALREADY_EXISTS).\n- Cada issue que pasa de un estado borrado a otro deja su evento\n  status_changed.\n- Sin control de versión: lo que viene pisa lo guardado (como UpdateStatus).\n  Si otro editó un estado mientras tanto, su cambio se pierde."
     },
     "IssueServiceCreateCommentBody": {
       "type": "object",
@@ -1033,7 +1033,7 @@
         },
         "hidden": {
           "type": "boolean",
-          "description": "La columna no se muestra en el tablero; sus issues sí salen en\nListIssues. Los estados CANCELED nacen ocultos."
+          "description": "La columna no se muestra en el tablero; sus issues sí salen en\nListIssues. Los estados CANCELED nacen ocultos, y los que existían antes\nde este campo (v0.3.0) se migran con hidden = true; los demás, visibles."
         }
       },
       "description": "Estado concreto de un proyecto: una columna del tablero."
@@ -1228,7 +1228,7 @@
         },
         "discard": {
           "$ref": "#/definitions/v1DiscardInfo",
-          "description": "Motivo del descarte. Presente solo mientras el issue está en un estado\nCANCELED al que llegó con DiscardIssue; ausente si se descartó con\nMoveIssue (descartado sin motivo) o si no está descartado."
+          "description": "Motivo del descarte: lo pone DiscardIssue. Ausente si se descartó con\nMoveIssue (descartado sin motivo) o si no está descartado. Se mantiene\nal pasar de un estado CANCELED a otro y se borra cuando el issue sale de\nCANCELED por cualquier vía (MoveIssue, RestoreIssue, o DeleteStatus y\nBatchUpdateStatuses al mover los issues de un estado borrado)."
         }
       }
     },
@@ -1316,7 +1316,7 @@
         "ISSUE_ORDER_PRIORITY_DESC"
       ],
       "default": "ISSUE_ORDER_UNSPECIFIED",
-      "description": "Orden de ListIssues. Los empates se resuelven por rank, así el orden es\nestable entre páginas.\n\n - ISSUE_ORDER_RANK: rank ascendente: el orden manual del tablero.\n - ISSUE_ORDER_UPDATED_DESC: updated_at descendente: lo último que cambió, primero.\n - ISSUE_ORDER_PRIORITY_DESC: Prioridad descendente: URGENT primero."
+      "description": "Orden de ListIssues. Los empates se resuelven por rank, así el orden es\nestable entre páginas.\n\n - ISSUE_ORDER_RANK: rank ascendente: el orden manual del tablero.\n - ISSUE_ORDER_UPDATED_DESC: updated_at descendente: lo último que cambió, primero.\n - ISSUE_ORDER_PRIORITY_DESC: Prioridad descendente: URGENT primero. Ningún issue guardado tiene\nPRIORITY_UNSPECIFIED (CreateIssue lo guarda como MEDIUM)."
     },
     "v1IssueRestored": {
       "type": "object",
