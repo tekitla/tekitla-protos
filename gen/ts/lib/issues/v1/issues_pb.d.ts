@@ -1,6 +1,7 @@
-// Contrato de Tekitla, rebanada 1 (issue 002): proyectos e issues dentro de un
-// espacio de trabajo, con estados agrupados en categorías fijas. Miembros,
-// roles, estados configurables por proyecto y las piezas de cada metodología
+// Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
+// trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
+// estados configurables por proyecto, orden manual, edición, etiquetas,
+// comentarios e historial. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -136,6 +137,20 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
    * @generated from field: string rank = 10;
    */
   rank: string;
+
+  /**
+   * Estado concreto (columna). state es su categoría.
+   *
+   * @generated from field: string status_id = 11;
+   */
+  statusId: string;
+
+  /**
+   * Etiquetas del issue, ordenadas por nombre de etiqueta.
+   *
+   * @generated from field: repeated string label_ids = 12;
+   */
+  labelIds: string[];
 };
 
 /**
@@ -143,6 +158,354 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
  * Use `create(IssueSchema)` to create a new message.
  */
 export declare const IssueSchema: GenMessage<Issue>;
+
+/**
+ * Estado concreto de un proyecto: una columna del tablero.
+ *
+ * @generated from message issues.v1.Status
+ */
+export declare type Status = Message<"issues.v1.Status"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
+   *
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * Categoría: la que ven los clientes que no conocen los estados del
+   * proyecto (la CLI, los reportes). CANCELED no se muestra en el tablero.
+   *
+   * @generated from field: issues.v1.IssueState category = 4;
+   */
+  category: IssueState;
+
+  /**
+   * Posición en el orden de columnas, opaca (como Issue.rank).
+   *
+   * @generated from field: string rank = 5;
+   */
+  rank: string;
+};
+
+/**
+ * Describes the message issues.v1.Status.
+ * Use `create(StatusSchema)` to create a new message.
+ */
+export declare const StatusSchema: GenMessage<Status>;
+
+/**
+ * @generated from message issues.v1.Label
+ */
+export declare type Label = Message<"issues.v1.Label"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
+   *
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * @generated from field: issues.v1.LabelColor color = 4;
+   */
+  color: LabelColor;
+};
+
+/**
+ * Describes the message issues.v1.Label.
+ * Use `create(LabelSchema)` to create a new message.
+ */
+export declare const LabelSchema: GenMessage<Label>;
+
+/**
+ * @generated from message issues.v1.Comment
+ */
+export declare type Comment = Message<"issues.v1.Comment"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string issue_id = 2;
+   */
+  issueId: string;
+
+  /**
+   * uid de quien lo escribió. Nombre y avatar los resuelve el cliente con
+   * accounts-service (rebanada 3b).
+   *
+   * @generated from field: string author_id = 3;
+   */
+  authorId: string;
+
+  /**
+   * Markdown, 1 a 10 000 caracteres.
+   *
+   * @generated from field: string body = 4;
+   */
+  body: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 5;
+   */
+  createdAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message issues.v1.Comment.
+ * Use `create(CommentSchema)` to create a new message.
+ */
+export declare const CommentSchema: GenMessage<Comment>;
+
+/**
+ * Un cambio en un issue, para su historial. Reordenar dentro de la misma
+ * columna no genera evento.
+ *
+ * @generated from message issues.v1.IssueEvent
+ */
+export declare type IssueEvent = Message<"issues.v1.IssueEvent"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string issue_id = 2;
+   */
+  issueId: string;
+
+  /**
+   * uid de quien hizo el cambio.
+   *
+   * @generated from field: string actor_id = 3;
+   */
+  actorId: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 4;
+   */
+  createdAt?: Timestamp | undefined;
+
+  /**
+   * @generated from oneof issues.v1.IssueEvent.change
+   */
+  change: {
+    /**
+     * @generated from field: issues.v1.IssueCreated created = 5;
+     */
+    value: IssueCreated;
+    case: "created";
+  } | {
+    /**
+     * @generated from field: issues.v1.StatusChanged status_changed = 6;
+     */
+    value: StatusChanged;
+    case: "statusChanged";
+  } | {
+    /**
+     * @generated from field: issues.v1.TitleChanged title_changed = 7;
+     */
+    value: TitleChanged;
+    case: "titleChanged";
+  } | {
+    /**
+     * @generated from field: issues.v1.DescriptionChanged description_changed = 8;
+     */
+    value: DescriptionChanged;
+    case: "descriptionChanged";
+  } | {
+    /**
+     * @generated from field: issues.v1.PriorityChanged priority_changed = 9;
+     */
+    value: PriorityChanged;
+    case: "priorityChanged";
+  } | {
+    /**
+     * @generated from field: issues.v1.LabelsChanged labels_changed = 10;
+     */
+    value: LabelsChanged;
+    case: "labelsChanged";
+  } | {
+    /**
+     * @generated from field: issues.v1.Comment commented = 11;
+     */
+    value: Comment;
+    case: "commented";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message issues.v1.IssueEvent.
+ * Use `create(IssueEventSchema)` to create a new message.
+ */
+export declare const IssueEventSchema: GenMessage<IssueEvent>;
+
+/**
+ * @generated from message issues.v1.IssueCreated
+ */
+export declare type IssueCreated = Message<"issues.v1.IssueCreated"> & {
+};
+
+/**
+ * Describes the message issues.v1.IssueCreated.
+ * Use `create(IssueCreatedSchema)` to create a new message.
+ */
+export declare const IssueCreatedSchema: GenMessage<IssueCreated>;
+
+/**
+ * Los nombres se guardan al momento del cambio: el historial se sigue
+ * leyendo aunque el estado después se renombre o se borre.
+ *
+ * @generated from message issues.v1.StatusChanged
+ */
+export declare type StatusChanged = Message<"issues.v1.StatusChanged"> & {
+  /**
+   * @generated from field: string from_status_id = 1;
+   */
+  fromStatusId: string;
+
+  /**
+   * @generated from field: string from_status_name = 2;
+   */
+  fromStatusName: string;
+
+  /**
+   * @generated from field: issues.v1.IssueState from_state = 3;
+   */
+  fromState: IssueState;
+
+  /**
+   * @generated from field: string to_status_id = 4;
+   */
+  toStatusId: string;
+
+  /**
+   * @generated from field: string to_status_name = 5;
+   */
+  toStatusName: string;
+
+  /**
+   * @generated from field: issues.v1.IssueState to_state = 6;
+   */
+  toState: IssueState;
+};
+
+/**
+ * Describes the message issues.v1.StatusChanged.
+ * Use `create(StatusChangedSchema)` to create a new message.
+ */
+export declare const StatusChangedSchema: GenMessage<StatusChanged>;
+
+/**
+ * @generated from message issues.v1.TitleChanged
+ */
+export declare type TitleChanged = Message<"issues.v1.TitleChanged"> & {
+  /**
+   * @generated from field: string from = 1;
+   */
+  from: string;
+
+  /**
+   * @generated from field: string to = 2;
+   */
+  to: string;
+};
+
+/**
+ * Describes the message issues.v1.TitleChanged.
+ * Use `create(TitleChangedSchema)` to create a new message.
+ */
+export declare const TitleChangedSchema: GenMessage<TitleChanged>;
+
+/**
+ * La descripción puede ser larga: el evento solo dice que cambió.
+ *
+ * @generated from message issues.v1.DescriptionChanged
+ */
+export declare type DescriptionChanged = Message<"issues.v1.DescriptionChanged"> & {
+};
+
+/**
+ * Describes the message issues.v1.DescriptionChanged.
+ * Use `create(DescriptionChangedSchema)` to create a new message.
+ */
+export declare const DescriptionChangedSchema: GenMessage<DescriptionChanged>;
+
+/**
+ * @generated from message issues.v1.PriorityChanged
+ */
+export declare type PriorityChanged = Message<"issues.v1.PriorityChanged"> & {
+  /**
+   * @generated from field: issues.v1.Priority from = 1;
+   */
+  from: Priority;
+
+  /**
+   * @generated from field: issues.v1.Priority to = 2;
+   */
+  to: Priority;
+};
+
+/**
+ * Describes the message issues.v1.PriorityChanged.
+ * Use `create(PriorityChangedSchema)` to create a new message.
+ */
+export declare const PriorityChangedSchema: GenMessage<PriorityChanged>;
+
+/**
+ * Los nombres de las etiquetas se guardan al momento del cambio (ver
+ * StatusChanged).
+ *
+ * @generated from message issues.v1.LabelsChanged
+ */
+export declare type LabelsChanged = Message<"issues.v1.LabelsChanged"> & {
+  /**
+   * @generated from field: repeated string added_label_ids = 1;
+   */
+  addedLabelIds: string[];
+
+  /**
+   * @generated from field: repeated string removed_label_ids = 2;
+   */
+  removedLabelIds: string[];
+
+  /**
+   * @generated from field: repeated string added_label_names = 3;
+   */
+  addedLabelNames: string[];
+
+  /**
+   * @generated from field: repeated string removed_label_names = 4;
+   */
+  removedLabelNames: string[];
+};
+
+/**
+ * Describes the message issues.v1.LabelsChanged.
+ * Use `create(LabelsChangedSchema)` to create a new message.
+ */
+export declare const LabelsChangedSchema: GenMessage<LabelsChanged>;
 
 /**
  * PageRequest: paginación por cursor opaco. limit <= 0 usa el default del servicio.
@@ -432,11 +795,36 @@ export declare type MoveIssueRequest = Message<"issues.v1.MoveIssueRequest"> & {
   number: number;
 
   /**
-   * Estado destino; UNSPECIFIED es INVALID_ARGUMENT.
+   * Categoría destino, para los clientes que no conocen los estados del
+   * proyecto: el issue va al primer estado de esa categoría (si ya está en
+   * esa categoría, no cambia de estado). Se ignora si viene status_id.
+   * UNSPECIFIED sin status_id es INVALID_ARGUMENT.
    *
    * @generated from field: issues.v1.IssueState state = 3;
    */
   state: IssueState;
+
+  /**
+   * Estado destino. Uno de otro proyecto es INVALID_ARGUMENT.
+   *
+   * @generated from field: string status_id = 4;
+   */
+  statusId: string;
+
+  /**
+   * Lugar dentro de la columna destino, tal como el cliente la ve: debajo de
+   * after_number y arriba de before_number (0 = sin vecino de ese lado). Con
+   * los dos en 0 conserva su rank. FAILED_PRECONDITION si los vecinos ya no
+   * están en esa columna o en ese orden (la vista está vieja: recargar).
+   *
+   * @generated from field: int32 before_number = 5;
+   */
+  beforeNumber: number;
+
+  /**
+   * @generated from field: int32 after_number = 6;
+   */
+  afterNumber: number;
 };
 
 /**
@@ -462,14 +850,520 @@ export declare type MoveIssueResponse = Message<"issues.v1.MoveIssueResponse"> &
 export declare const MoveIssueResponseSchema: GenMessage<MoveIssueResponse>;
 
 /**
+ * @generated from message issues.v1.UpdateIssueRequest
+ */
+export declare type UpdateIssueRequest = Message<"issues.v1.UpdateIssueRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int32 number = 2;
+   */
+  number: number;
+
+  /**
+   * Solo cambia lo que viene. Título vacío es INVALID_ARGUMENT.
+   *
+   * @generated from field: optional string title = 3;
+   */
+  title?: string | undefined;
+
+  /**
+   * @generated from field: optional string description = 4;
+   */
+  description?: string | undefined;
+
+  /**
+   * UNSPECIFIED es INVALID_ARGUMENT.
+   *
+   * @generated from field: optional issues.v1.Priority priority = 5;
+   */
+  priority?: Priority | undefined;
+
+  /**
+   * Reemplaza las etiquetas del issue; ausente, no cambian. Una etiqueta de
+   * otro proyecto es INVALID_ARGUMENT.
+   *
+   * @generated from field: issues.v1.LabelIds labels = 6;
+   */
+  labels?: LabelIds | undefined;
+};
+
+/**
+ * Describes the message issues.v1.UpdateIssueRequest.
+ * Use `create(UpdateIssueRequestSchema)` to create a new message.
+ */
+export declare const UpdateIssueRequestSchema: GenMessage<UpdateIssueRequest>;
+
+/**
+ * Lista de ids de etiquetas, con presencia: un mensaje ausente no es una
+ * lista vacía.
+ *
+ * @generated from message issues.v1.LabelIds
+ */
+export declare type LabelIds = Message<"issues.v1.LabelIds"> & {
+  /**
+   * @generated from field: repeated string ids = 1;
+   */
+  ids: string[];
+};
+
+/**
+ * Describes the message issues.v1.LabelIds.
+ * Use `create(LabelIdsSchema)` to create a new message.
+ */
+export declare const LabelIdsSchema: GenMessage<LabelIds>;
+
+/**
+ * @generated from message issues.v1.UpdateIssueResponse
+ */
+export declare type UpdateIssueResponse = Message<"issues.v1.UpdateIssueResponse"> & {
+  /**
+   * @generated from field: issues.v1.Issue issue = 1;
+   */
+  issue?: Issue | undefined;
+};
+
+/**
+ * Describes the message issues.v1.UpdateIssueResponse.
+ * Use `create(UpdateIssueResponseSchema)` to create a new message.
+ */
+export declare const UpdateIssueResponseSchema: GenMessage<UpdateIssueResponse>;
+
+/**
+ * @generated from message issues.v1.ListStatusesRequest
+ */
+export declare type ListStatusesRequest = Message<"issues.v1.ListStatusesRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+};
+
+/**
+ * Describes the message issues.v1.ListStatusesRequest.
+ * Use `create(ListStatusesRequestSchema)` to create a new message.
+ */
+export declare const ListStatusesRequestSchema: GenMessage<ListStatusesRequest>;
+
+/**
+ * Sin paginar: son 20 como máximo.
+ *
+ * @generated from message issues.v1.ListStatusesResponse
+ */
+export declare type ListStatusesResponse = Message<"issues.v1.ListStatusesResponse"> & {
+  /**
+   * @generated from field: repeated issues.v1.Status statuses = 1;
+   */
+  statuses: Status[];
+};
+
+/**
+ * Describes the message issues.v1.ListStatusesResponse.
+ * Use `create(ListStatusesResponseSchema)` to create a new message.
+ */
+export declare const ListStatusesResponseSchema: GenMessage<ListStatusesResponse>;
+
+/**
+ * @generated from message issues.v1.CreateStatusRequest
+ */
+export declare type CreateStatusRequest = Message<"issues.v1.CreateStatusRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * UNSPECIFIED es INVALID_ARGUMENT.
+   *
+   * @generated from field: issues.v1.IssueState category = 3;
+   */
+  category: IssueState;
+
+  /**
+   * Queda después de este estado; vacío: al final.
+   *
+   * @generated from field: string after_status_id = 4;
+   */
+  afterStatusId: string;
+};
+
+/**
+ * Describes the message issues.v1.CreateStatusRequest.
+ * Use `create(CreateStatusRequestSchema)` to create a new message.
+ */
+export declare const CreateStatusRequestSchema: GenMessage<CreateStatusRequest>;
+
+/**
+ * @generated from message issues.v1.CreateStatusResponse
+ */
+export declare type CreateStatusResponse = Message<"issues.v1.CreateStatusResponse"> & {
+  /**
+   * @generated from field: issues.v1.Status status = 1;
+   */
+  status?: Status | undefined;
+};
+
+/**
+ * Describes the message issues.v1.CreateStatusResponse.
+ * Use `create(CreateStatusResponseSchema)` to create a new message.
+ */
+export declare const CreateStatusResponseSchema: GenMessage<CreateStatusResponse>;
+
+/**
+ * @generated from message issues.v1.UpdateStatusRequest
+ */
+export declare type UpdateStatusRequest = Message<"issues.v1.UpdateStatusRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string status_id = 2;
+   */
+  statusId: string;
+
+  /**
+   * @generated from field: optional string name = 3;
+   */
+  name?: string | undefined;
+
+  /**
+   * Reubica el estado después de este; presente y vacío: al principio.
+   *
+   * @generated from field: optional string after_status_id = 4;
+   */
+  afterStatusId?: string | undefined;
+};
+
+/**
+ * Describes the message issues.v1.UpdateStatusRequest.
+ * Use `create(UpdateStatusRequestSchema)` to create a new message.
+ */
+export declare const UpdateStatusRequestSchema: GenMessage<UpdateStatusRequest>;
+
+/**
+ * @generated from message issues.v1.UpdateStatusResponse
+ */
+export declare type UpdateStatusResponse = Message<"issues.v1.UpdateStatusResponse"> & {
+  /**
+   * @generated from field: issues.v1.Status status = 1;
+   */
+  status?: Status | undefined;
+};
+
+/**
+ * Describes the message issues.v1.UpdateStatusResponse.
+ * Use `create(UpdateStatusResponseSchema)` to create a new message.
+ */
+export declare const UpdateStatusResponseSchema: GenMessage<UpdateStatusResponse>;
+
+/**
+ * @generated from message issues.v1.DeleteStatusRequest
+ */
+export declare type DeleteStatusRequest = Message<"issues.v1.DeleteStatusRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string status_id = 2;
+   */
+  statusId: string;
+
+  /**
+   * Estado al que pasan sus issues (puede ser de otra categoría; cada issue
+   * movido lo registra en su historial). Obligatorio si el estado tiene
+   * issues.
+   *
+   * @generated from field: string move_to_status_id = 3;
+   */
+  moveToStatusId: string;
+};
+
+/**
+ * Describes the message issues.v1.DeleteStatusRequest.
+ * Use `create(DeleteStatusRequestSchema)` to create a new message.
+ */
+export declare const DeleteStatusRequestSchema: GenMessage<DeleteStatusRequest>;
+
+/**
+ * @generated from message issues.v1.DeleteStatusResponse
+ */
+export declare type DeleteStatusResponse = Message<"issues.v1.DeleteStatusResponse"> & {
+};
+
+/**
+ * Describes the message issues.v1.DeleteStatusResponse.
+ * Use `create(DeleteStatusResponseSchema)` to create a new message.
+ */
+export declare const DeleteStatusResponseSchema: GenMessage<DeleteStatusResponse>;
+
+/**
+ * @generated from message issues.v1.ListLabelsRequest
+ */
+export declare type ListLabelsRequest = Message<"issues.v1.ListLabelsRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+};
+
+/**
+ * Describes the message issues.v1.ListLabelsRequest.
+ * Use `create(ListLabelsRequestSchema)` to create a new message.
+ */
+export declare const ListLabelsRequestSchema: GenMessage<ListLabelsRequest>;
+
+/**
+ * Sin paginar: son 100 como máximo.
+ *
+ * @generated from message issues.v1.ListLabelsResponse
+ */
+export declare type ListLabelsResponse = Message<"issues.v1.ListLabelsResponse"> & {
+  /**
+   * @generated from field: repeated issues.v1.Label labels = 1;
+   */
+  labels: Label[];
+};
+
+/**
+ * Describes the message issues.v1.ListLabelsResponse.
+ * Use `create(ListLabelsResponseSchema)` to create a new message.
+ */
+export declare const ListLabelsResponseSchema: GenMessage<ListLabelsResponse>;
+
+/**
+ * @generated from message issues.v1.CreateLabelRequest
+ */
+export declare type CreateLabelRequest = Message<"issues.v1.CreateLabelRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: issues.v1.LabelColor color = 3;
+   */
+  color: LabelColor;
+};
+
+/**
+ * Describes the message issues.v1.CreateLabelRequest.
+ * Use `create(CreateLabelRequestSchema)` to create a new message.
+ */
+export declare const CreateLabelRequestSchema: GenMessage<CreateLabelRequest>;
+
+/**
+ * @generated from message issues.v1.CreateLabelResponse
+ */
+export declare type CreateLabelResponse = Message<"issues.v1.CreateLabelResponse"> & {
+  /**
+   * @generated from field: issues.v1.Label label = 1;
+   */
+  label?: Label | undefined;
+};
+
+/**
+ * Describes the message issues.v1.CreateLabelResponse.
+ * Use `create(CreateLabelResponseSchema)` to create a new message.
+ */
+export declare const CreateLabelResponseSchema: GenMessage<CreateLabelResponse>;
+
+/**
+ * @generated from message issues.v1.UpdateLabelRequest
+ */
+export declare type UpdateLabelRequest = Message<"issues.v1.UpdateLabelRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string label_id = 2;
+   */
+  labelId: string;
+
+  /**
+   * @generated from field: optional string name = 3;
+   */
+  name?: string | undefined;
+
+  /**
+   * UNSPECIFIED se guarda como NEUTRAL.
+   *
+   * @generated from field: optional issues.v1.LabelColor color = 4;
+   */
+  color?: LabelColor | undefined;
+};
+
+/**
+ * Describes the message issues.v1.UpdateLabelRequest.
+ * Use `create(UpdateLabelRequestSchema)` to create a new message.
+ */
+export declare const UpdateLabelRequestSchema: GenMessage<UpdateLabelRequest>;
+
+/**
+ * @generated from message issues.v1.UpdateLabelResponse
+ */
+export declare type UpdateLabelResponse = Message<"issues.v1.UpdateLabelResponse"> & {
+  /**
+   * @generated from field: issues.v1.Label label = 1;
+   */
+  label?: Label | undefined;
+};
+
+/**
+ * Describes the message issues.v1.UpdateLabelResponse.
+ * Use `create(UpdateLabelResponseSchema)` to create a new message.
+ */
+export declare const UpdateLabelResponseSchema: GenMessage<UpdateLabelResponse>;
+
+/**
+ * @generated from message issues.v1.DeleteLabelRequest
+ */
+export declare type DeleteLabelRequest = Message<"issues.v1.DeleteLabelRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string label_id = 2;
+   */
+  labelId: string;
+};
+
+/**
+ * Describes the message issues.v1.DeleteLabelRequest.
+ * Use `create(DeleteLabelRequestSchema)` to create a new message.
+ */
+export declare const DeleteLabelRequestSchema: GenMessage<DeleteLabelRequest>;
+
+/**
+ * @generated from message issues.v1.DeleteLabelResponse
+ */
+export declare type DeleteLabelResponse = Message<"issues.v1.DeleteLabelResponse"> & {
+};
+
+/**
+ * Describes the message issues.v1.DeleteLabelResponse.
+ * Use `create(DeleteLabelResponseSchema)` to create a new message.
+ */
+export declare const DeleteLabelResponseSchema: GenMessage<DeleteLabelResponse>;
+
+/**
+ * @generated from message issues.v1.CreateCommentRequest
+ */
+export declare type CreateCommentRequest = Message<"issues.v1.CreateCommentRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int32 number = 2;
+   */
+  number: number;
+
+  /**
+   * @generated from field: string body = 3;
+   */
+  body: string;
+};
+
+/**
+ * Describes the message issues.v1.CreateCommentRequest.
+ * Use `create(CreateCommentRequestSchema)` to create a new message.
+ */
+export declare const CreateCommentRequestSchema: GenMessage<CreateCommentRequest>;
+
+/**
+ * @generated from message issues.v1.CreateCommentResponse
+ */
+export declare type CreateCommentResponse = Message<"issues.v1.CreateCommentResponse"> & {
+  /**
+   * @generated from field: issues.v1.Comment comment = 1;
+   */
+  comment?: Comment | undefined;
+};
+
+/**
+ * Describes the message issues.v1.CreateCommentResponse.
+ * Use `create(CreateCommentResponseSchema)` to create a new message.
+ */
+export declare const CreateCommentResponseSchema: GenMessage<CreateCommentResponse>;
+
+/**
+ * @generated from message issues.v1.ListIssueEventsRequest
+ */
+export declare type ListIssueEventsRequest = Message<"issues.v1.ListIssueEventsRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int32 number = 2;
+   */
+  number: number;
+
+  /**
+   * @generated from field: issues.v1.PageRequest page = 3;
+   */
+  page?: PageRequest | undefined;
+};
+
+/**
+ * Describes the message issues.v1.ListIssueEventsRequest.
+ * Use `create(ListIssueEventsRequestSchema)` to create a new message.
+ */
+export declare const ListIssueEventsRequestSchema: GenMessage<ListIssueEventsRequest>;
+
+/**
+ * @generated from message issues.v1.ListIssueEventsResponse
+ */
+export declare type ListIssueEventsResponse = Message<"issues.v1.ListIssueEventsResponse"> & {
+  /**
+   * @generated from field: repeated issues.v1.IssueEvent events = 1;
+   */
+  events: IssueEvent[];
+
+  /**
+   * @generated from field: issues.v1.PageResponse page = 2;
+   */
+  page?: PageResponse | undefined;
+};
+
+/**
+ * Describes the message issues.v1.ListIssueEventsResponse.
+ * Use `create(ListIssueEventsResponseSchema)` to create a new message.
+ */
+export declare const ListIssueEventsResponseSchema: GenMessage<ListIssueEventsResponse>;
+
+/**
  * Categoría del estado de un issue. Es fija y la entienden todos los clientes
  * sin importar la metodología del proyecto: `tk start` mueve a IN_PROGRESS,
  * los reportes cuentan como cerrados DONE y CANCELED.
  *
- * En la rebanada 1 hay un estado por categoría y cada uno es una columna del
- * tablero. Con estados configurables por proyecto (Kanban, Scrum, marketing),
- * cada estado concreto llega como un campo nuevo (status_id) y pertenece a una
- * de estas categorías; varias columnas pueden compartir categoría.
+ * Cada proyecto define sus estados concretos (Status, las columnas del
+ * tablero) y cada uno pertenece a una de estas categorías; varias columnas
+ * pueden compartir categoría. Issue.state es siempre la categoría de
+ * Issue.status_id.
  *
  * @generated from enum issues.v1.IssueState
  */
@@ -551,6 +1445,60 @@ export enum Priority {
 export declare const PrioritySchema: GenEnum<Priority>;
 
 /**
+ * Color de una etiqueta: un tono del design system, no un valor libre.
+ *
+ * @generated from enum issues.v1.LabelColor
+ */
+export enum LabelColor {
+  /**
+   * Se guarda como NEUTRAL.
+   *
+   * @generated from enum value: LABEL_COLOR_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: LABEL_COLOR_NEUTRAL = 1;
+   */
+  NEUTRAL = 1,
+
+  /**
+   * @generated from enum value: LABEL_COLOR_INFO = 2;
+   */
+  INFO = 2,
+
+  /**
+   * @generated from enum value: LABEL_COLOR_SUCCESS = 3;
+   */
+  SUCCESS = 3,
+
+  /**
+   * @generated from enum value: LABEL_COLOR_WARNING = 4;
+   */
+  WARNING = 4,
+
+  /**
+   * @generated from enum value: LABEL_COLOR_DANGER = 5;
+   */
+  DANGER = 5,
+
+  /**
+   * @generated from enum value: LABEL_COLOR_ACCENT = 6;
+   */
+  ACCENT = 6,
+
+  /**
+   * @generated from enum value: LABEL_COLOR_BRAND = 7;
+   */
+  BRAND = 7,
+}
+
+/**
+ * Describes the enum issues.v1.LabelColor.
+ */
+export declare const LabelColorSchema: GenEnum<LabelColor>;
+
+/**
  * IssueService gestiona los proyectos y sus issues.
  *
  * Todo acceso se limita a los espacios de trabajo del usuario autenticado (el
@@ -622,7 +1570,8 @@ export declare const IssueService: GenService<{
     output: typeof CreateIssueResponseSchema;
   },
   /**
-   * Cambia el estado de un issue (mover de columna en el tablero).
+   * Cambia el estado de un issue (mover de columna en el tablero) y,
+   * opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
    *
    * @generated from rpc issues.v1.IssueService.MoveIssue
    */
@@ -630,6 +1579,124 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof MoveIssueRequestSchema;
     output: typeof MoveIssueResponseSchema;
+  },
+  /**
+   * Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
+   * lo que viene; cada cambio queda en el historial.
+   *
+   * @generated from rpc issues.v1.IssueService.UpdateIssue
+   */
+  updateIssue: {
+    methodKind: "unary";
+    input: typeof UpdateIssueRequestSchema;
+    output: typeof UpdateIssueResponseSchema;
+  },
+  /**
+   * Estados del proyecto (las columnas del tablero), en orden. Todo proyecto
+   * nace con cuatro, uno por categoría: Por hacer, En curso, Hecho y
+   * Descartado.
+   *
+   * @generated from rpc issues.v1.IssueService.ListStatuses
+   */
+  listStatuses: {
+    methodKind: "unary";
+    input: typeof ListStatusesRequestSchema;
+    output: typeof ListStatusesResponseSchema;
+  },
+  /**
+   * Agrega un estado. ALREADY_EXISTS si ya hay uno con ese nombre;
+   * FAILED_PRECONDITION si el proyecto ya tiene el máximo (20).
+   *
+   * @generated from rpc issues.v1.IssueService.CreateStatus
+   */
+  createStatus: {
+    methodKind: "unary";
+    input: typeof CreateStatusRequestSchema;
+    output: typeof CreateStatusResponseSchema;
+  },
+  /**
+   * Renombra o reubica un estado. La categoría no cambia: para eso se crea
+   * otro y se borra este pasando sus issues.
+   *
+   * @generated from rpc issues.v1.IssueService.UpdateStatus
+   */
+  updateStatus: {
+    methodKind: "unary";
+    input: typeof UpdateStatusRequestSchema;
+    output: typeof UpdateStatusResponseSchema;
+  },
+  /**
+   * Borra un estado y pasa sus issues a move_to_status_id. FAILED_PRECONDITION
+   * si es el último de su categoría, o si tiene issues y no viene destino.
+   *
+   * @generated from rpc issues.v1.IssueService.DeleteStatus
+   */
+  deleteStatus: {
+    methodKind: "unary";
+    input: typeof DeleteStatusRequestSchema;
+    output: typeof DeleteStatusResponseSchema;
+  },
+  /**
+   * Etiquetas del proyecto, por nombre.
+   *
+   * @generated from rpc issues.v1.IssueService.ListLabels
+   */
+  listLabels: {
+    methodKind: "unary";
+    input: typeof ListLabelsRequestSchema;
+    output: typeof ListLabelsResponseSchema;
+  },
+  /**
+   * Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
+   * FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+   *
+   * @generated from rpc issues.v1.IssueService.CreateLabel
+   */
+  createLabel: {
+    methodKind: "unary";
+    input: typeof CreateLabelRequestSchema;
+    output: typeof CreateLabelResponseSchema;
+  },
+  /**
+   * Renombra o cambia el color de una etiqueta.
+   *
+   * @generated from rpc issues.v1.IssueService.UpdateLabel
+   */
+  updateLabel: {
+    methodKind: "unary";
+    input: typeof UpdateLabelRequestSchema;
+    output: typeof UpdateLabelResponseSchema;
+  },
+  /**
+   * Borra una etiqueta y la quita de todos los issues (sin evento en su
+   * historial).
+   *
+   * @generated from rpc issues.v1.IssueService.DeleteLabel
+   */
+  deleteLabel: {
+    methodKind: "unary";
+    input: typeof DeleteLabelRequestSchema;
+    output: typeof DeleteLabelResponseSchema;
+  },
+  /**
+   * Comenta un issue. El comentario aparece en su historial.
+   *
+   * @generated from rpc issues.v1.IssueService.CreateComment
+   */
+  createComment: {
+    methodKind: "unary";
+    input: typeof CreateCommentRequestSchema;
+    output: typeof CreateCommentResponseSchema;
+  },
+  /**
+   * Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+   *
+   * @generated from rpc issues.v1.IssueService.ListIssueEvents
+   */
+  listIssueEvents: {
+    methodKind: "unary";
+    input: typeof ListIssueEventsRequestSchema;
+    output: typeof ListIssueEventsResponseSchema;
   },
 }>;
 
