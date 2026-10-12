@@ -1,7 +1,9 @@
 // Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
 // trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
 // estados configurables por proyecto, orden manual, edición, etiquetas,
-// comentarios e historial. Miembros, roles y las piezas de cada metodología
+// comentarios e historial. Después (issues 011 a 013): descartar con motivo,
+// búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
+// los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -23,7 +25,7 @@ import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
  * Describes the file issues/v1/issues.proto.
  */
 export const file_issues_v1_issues = /*@__PURE__*/
-  fileDesc("ChZpc3N1ZXMvdjEvaXNzdWVzLnByb3RvEglpc3N1ZXMudjEiuwEKB1Byb2plY3QSCgoCaWQYASABKAkSCwoDa2V5GAIgASgJEgwKBG5hbWUYAyABKAkSEwoLZGVzY3JpcHRpb24YBCABKAkSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoMd29ya3NwYWNlX2lkGAcgASgJIrwCCgVJc3N1ZRIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEg4KBm51bWJlchgDIAEoBRINCgV0aXRsZRgEIAEoCRITCgtkZXNjcmlwdGlvbhgFIAEoCRIkCgVzdGF0ZRgGIAEoDjIVLmlzc3Vlcy52MS5Jc3N1ZVN0YXRlEiUKCHByaW9yaXR5GAcgASgOMhMuaXNzdWVzLnYxLlByaW9yaXR5Ei4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi4KCnVwZGF0ZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBHJhbmsYCiABKAkSEQoJc3RhdHVzX2lkGAsgASgJEhEKCWxhYmVsX2lkcxgMIAMoCSJtCgZTdGF0dXMSCgoCaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEicKCGNhdGVnb3J5GAQgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUSDAoEcmFuaxgFIAEoCSJbCgVMYWJlbBIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEgwKBG5hbWUYAyABKAkSJAoFY29sb3IYBCABKA4yFS5pc3N1ZXMudjEuTGFiZWxDb2xvciJ4CgdDb21tZW50EgoKAmlkGAEgASgJEhAKCGlzc3VlX2lkGAIgASgJEhEKCWF1dGhvcl9pZBgDIAEoCRIMCgRib2R5GAQgASgJEi4KCmNyZWF0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wItsDCgpJc3N1ZUV2ZW50EgoKAmlkGAEgASgJEhAKCGlzc3VlX2lkGAIgASgJEhAKCGFjdG9yX2lkGAMgASgJEi4KCmNyZWF0ZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKB2NyZWF0ZWQYBSABKAsyFy5pc3N1ZXMudjEuSXNzdWVDcmVhdGVkSAASMgoOc3RhdHVzX2NoYW5nZWQYBiABKAsyGC5pc3N1ZXMudjEuU3RhdHVzQ2hhbmdlZEgAEjAKDXRpdGxlX2NoYW5nZWQYByABKAsyFy5pc3N1ZXMudjEuVGl0bGVDaGFuZ2VkSAASPAoTZGVzY3JpcHRpb25fY2hhbmdlZBgIIAEoCzIdLmlzc3Vlcy52MS5EZXNjcmlwdGlvbkNoYW5nZWRIABI2ChBwcmlvcml0eV9jaGFuZ2VkGAkgASgLMhouaXNzdWVzLnYxLlByaW9yaXR5Q2hhbmdlZEgAEjIKDmxhYmVsc19jaGFuZ2VkGAogASgLMhguaXNzdWVzLnYxLkxhYmVsc0NoYW5nZWRIABInCgljb21tZW50ZWQYCyABKAsyEi5pc3N1ZXMudjEuQ29tbWVudEgAQggKBmNoYW5nZSIOCgxJc3N1ZUNyZWF0ZWQiwwEKDVN0YXR1c0NoYW5nZWQSFgoOZnJvbV9zdGF0dXNfaWQYASABKAkSGAoQZnJvbV9zdGF0dXNfbmFtZRgCIAEoCRIpCgpmcm9tX3N0YXRlGAMgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUSFAoMdG9fc3RhdHVzX2lkGAQgASgJEhYKDnRvX3N0YXR1c19uYW1lGAUgASgJEicKCHRvX3N0YXRlGAYgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUiKAoMVGl0bGVDaGFuZ2VkEgwKBGZyb20YASABKAkSCgoCdG8YAiABKAkiFAoSRGVzY3JpcHRpb25DaGFuZ2VkIlUKD1ByaW9yaXR5Q2hhbmdlZBIhCgRmcm9tGAEgASgOMhMuaXNzdWVzLnYxLlByaW9yaXR5Eh8KAnRvGAIgASgOMhMuaXNzdWVzLnYxLlByaW9yaXR5InsKDUxhYmVsc0NoYW5nZWQSFwoPYWRkZWRfbGFiZWxfaWRzGAEgAygJEhkKEXJlbW92ZWRfbGFiZWxfaWRzGAIgAygJEhkKEWFkZGVkX2xhYmVsX25hbWVzGAMgAygJEhsKE3JlbW92ZWRfbGFiZWxfbmFtZXMYBCADKAkiLAoLUGFnZVJlcXVlc3QSDgoGY3Vyc29yGAEgASgJEg0KBWxpbWl0GAIgASgFIjUKDFBhZ2VSZXNwb25zZRITCgtuZXh0X2N1cnNvchgBIAEoCRIQCghoYXNfbmV4dBgCIAEoCCJRChNMaXN0UHJvamVjdHNSZXF1ZXN0EiQKBHBhZ2UYASABKAsyFi5pc3N1ZXMudjEuUGFnZVJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAIgASgJImMKFExpc3RQcm9qZWN0c1Jlc3BvbnNlEiQKCHByb2plY3RzGAEgAygLMhIuaXNzdWVzLnYxLlByb2plY3QSJQoEcGFnZRgCIAEoCzIXLmlzc3Vlcy52MS5QYWdlUmVzcG9uc2UiXAoUQ3JlYXRlUHJvamVjdFJlcXVlc3QSCwoDa2V5GAEgASgJEgwKBG5hbWUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAkSFAoMd29ya3NwYWNlX2lkGAQgASgJIjwKFUNyZWF0ZVByb2plY3RSZXNwb25zZRIjCgdwcm9qZWN0GAEgASgLMhIuaXNzdWVzLnYxLlByb2plY3QicwoRTGlzdElzc3Vlc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIkCgVzdGF0ZRgCIAEoDjIVLmlzc3Vlcy52MS5Jc3N1ZVN0YXRlEiQKBHBhZ2UYAyABKAsyFi5pc3N1ZXMudjEuUGFnZVJlcXVlc3QiXQoSTGlzdElzc3Vlc1Jlc3BvbnNlEiAKBmlzc3VlcxgBIAMoCzIQLmlzc3Vlcy52MS5Jc3N1ZRIlCgRwYWdlGAIgASgLMhcuaXNzdWVzLnYxLlBhZ2VSZXNwb25zZSI1Cg9HZXRJc3N1ZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIOCgZudW1iZXIYAiABKAUiMwoQR2V0SXNzdWVSZXNwb25zZRIfCgVpc3N1ZRgBIAEoCzIQLmlzc3Vlcy52MS5Jc3N1ZSJzChJDcmVhdGVJc3N1ZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRINCgV0aXRsZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRIlCghwcmlvcml0eRgEIAEoDjITLmlzc3Vlcy52MS5Qcmlvcml0eSI2ChNDcmVhdGVJc3N1ZVJlc3BvbnNlEh8KBWlzc3VlGAEgASgLMhAuaXNzdWVzLnYxLklzc3VlIpwBChBNb3ZlSXNzdWVSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDgoGbnVtYmVyGAIgASgFEiQKBXN0YXRlGAMgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUSEQoJc3RhdHVzX2lkGAQgASgJEhUKDWJlZm9yZV9udW1iZXIYBSABKAUSFAoMYWZ0ZXJfbnVtYmVyGAYgASgFIjQKEU1vdmVJc3N1ZVJlc3BvbnNlEh8KBWlzc3VlGAEgASgLMhAuaXNzdWVzLnYxLklzc3VlIt4BChJVcGRhdGVJc3N1ZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIOCgZudW1iZXIYAiABKAUSEgoFdGl0bGUYAyABKAlIAIgBARIYCgtkZXNjcmlwdGlvbhgEIAEoCUgBiAEBEioKCHByaW9yaXR5GAUgASgOMhMuaXNzdWVzLnYxLlByaW9yaXR5SAKIAQESIwoGbGFiZWxzGAYgASgLMhMuaXNzdWVzLnYxLkxhYmVsSWRzQggKBl90aXRsZUIOCgxfZGVzY3JpcHRpb25CCwoJX3ByaW9yaXR5IhcKCExhYmVsSWRzEgsKA2lkcxgBIAMoCSI2ChNVcGRhdGVJc3N1ZVJlc3BvbnNlEh8KBWlzc3VlGAEgASgLMhAuaXNzdWVzLnYxLklzc3VlIikKE0xpc3RTdGF0dXNlc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSI7ChRMaXN0U3RhdHVzZXNSZXNwb25zZRIjCghzdGF0dXNlcxgBIAMoCzIRLmlzc3Vlcy52MS5TdGF0dXMieQoTQ3JlYXRlU3RhdHVzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSJwoIY2F0ZWdvcnkYAyABKA4yFS5pc3N1ZXMudjEuSXNzdWVTdGF0ZRIXCg9hZnRlcl9zdGF0dXNfaWQYBCABKAkiOQoUQ3JlYXRlU3RhdHVzUmVzcG9uc2USIQoGc3RhdHVzGAEgASgLMhEuaXNzdWVzLnYxLlN0YXR1cyKKAQoTVXBkYXRlU3RhdHVzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCXN0YXR1c19pZBgCIAEoCRIRCgRuYW1lGAMgASgJSACIAQESHAoPYWZ0ZXJfc3RhdHVzX2lkGAQgASgJSAGIAQFCBwoFX25hbWVCEgoQX2FmdGVyX3N0YXR1c19pZCI5ChRVcGRhdGVTdGF0dXNSZXNwb25zZRIhCgZzdGF0dXMYASABKAsyES5pc3N1ZXMudjEuU3RhdHVzIlcKE0RlbGV0ZVN0YXR1c1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCglzdGF0dXNfaWQYAiABKAkSGQoRbW92ZV90b19zdGF0dXNfaWQYAyABKAkiFgoURGVsZXRlU3RhdHVzUmVzcG9uc2UiJwoRTGlzdExhYmVsc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSI2ChJMaXN0TGFiZWxzUmVzcG9uc2USIAoGbGFiZWxzGAEgAygLMhAuaXNzdWVzLnYxLkxhYmVsIlwKEkNyZWF0ZUxhYmVsUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSJAoFY29sb3IYAyABKA4yFS5pc3N1ZXMudjEuTGFiZWxDb2xvciI2ChNDcmVhdGVMYWJlbFJlc3BvbnNlEh8KBWxhYmVsGAEgASgLMhAuaXNzdWVzLnYxLkxhYmVsIosBChJVcGRhdGVMYWJlbFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIQCghsYWJlbF9pZBgCIAEoCRIRCgRuYW1lGAMgASgJSACIAQESKQoFY29sb3IYBCABKA4yFS5pc3N1ZXMudjEuTGFiZWxDb2xvckgBiAEBQgcKBV9uYW1lQggKBl9jb2xvciI2ChNVcGRhdGVMYWJlbFJlc3BvbnNlEh8KBWxhYmVsGAEgASgLMhAuaXNzdWVzLnYxLkxhYmVsIjoKEkRlbGV0ZUxhYmVsUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhAKCGxhYmVsX2lkGAIgASgJIhUKE0RlbGV0ZUxhYmVsUmVzcG9uc2UiSAoUQ3JlYXRlQ29tbWVudFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIOCgZudW1iZXIYAiABKAUSDAoEYm9keRgDIAEoCSI8ChVDcmVhdGVDb21tZW50UmVzcG9uc2USIwoHY29tbWVudBgBIAEoCzISLmlzc3Vlcy52MS5Db21tZW50ImIKFkxpc3RJc3N1ZUV2ZW50c1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIOCgZudW1iZXIYAiABKAUSJAoEcGFnZRgDIAEoCzIWLmlzc3Vlcy52MS5QYWdlUmVxdWVzdCJnChdMaXN0SXNzdWVFdmVudHNSZXNwb25zZRIlCgZldmVudHMYASADKAsyFS5pc3N1ZXMudjEuSXNzdWVFdmVudBIlCgRwYWdlGAIgASgLMhcuaXNzdWVzLnYxLlBhZ2VSZXNwb25zZSqMAQoKSXNzdWVTdGF0ZRIbChdJU1NVRV9TVEFURV9VTlNQRUNJRklFRBAAEhQKEElTU1VFX1NUQVRFX1RPRE8QARIbChdJU1NVRV9TVEFURV9JTl9QUk9HUkVTUxACEhQKEElTU1VFX1NUQVRFX0RPTkUQAxIYChRJU1NVRV9TVEFURV9DQU5DRUxFRBAEKnMKCFByaW9yaXR5EhgKFFBSSU9SSVRZX1VOU1BFQ0lGSUVEEAASEAoMUFJJT1JJVFlfTE9XEAESEwoPUFJJT1JJVFlfTUVESVVNEAISEQoNUFJJT1JJVFlfSElHSBADEhMKD1BSSU9SSVRZX1VSR0VOVBAEKtEBCgpMYWJlbENvbG9yEhsKF0xBQkVMX0NPTE9SX1VOU1BFQ0lGSUVEEAASFwoTTEFCRUxfQ09MT1JfTkVVVFJBTBABEhQKEExBQkVMX0NPTE9SX0lORk8QAhIXChNMQUJFTF9DT0xPUl9TVUNDRVNTEAMSFwoTTEFCRUxfQ09MT1JfV0FSTklORxAEEhYKEkxBQkVMX0NPTE9SX0RBTkdFUhAFEhYKEkxBQkVMX0NPTE9SX0FDQ0VOVBAGEhUKEUxBQkVMX0NPTE9SX0JSQU5EEAcyixEKDElzc3VlU2VydmljZRJlCgxMaXN0UHJvamVjdHMSHi5pc3N1ZXMudjEuTGlzdFByb2plY3RzUmVxdWVzdBofLmlzc3Vlcy52MS5MaXN0UHJvamVjdHNSZXNwb25zZSIUgtPkkwIOEgwvdjEvcHJvamVjdHMSawoNQ3JlYXRlUHJvamVjdBIfLmlzc3Vlcy52MS5DcmVhdGVQcm9qZWN0UmVxdWVzdBogLmlzc3Vlcy52MS5DcmVhdGVQcm9qZWN0UmVzcG9uc2UiF4LT5JMCEToBKiIML3YxL3Byb2plY3RzEnMKCkxpc3RJc3N1ZXMSHC5pc3N1ZXMudjEuTGlzdElzc3Vlc1JlcXVlc3QaHS5pc3N1ZXMudjEuTGlzdElzc3Vlc1Jlc3BvbnNlIiiC0+STAiISIC92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vaXNzdWVzEnYKCEdldElzc3VlEhouaXNzdWVzLnYxLkdldElzc3VlUmVxdWVzdBobLmlzc3Vlcy52MS5HZXRJc3N1ZVJlc3BvbnNlIjGC0+STAisSKS92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vaXNzdWVzL3tudW1iZXJ9EnkKC0NyZWF0ZUlzc3VlEh0uaXNzdWVzLnYxLkNyZWF0ZUlzc3VlUmVxdWVzdBoeLmlzc3Vlcy52MS5DcmVhdGVJc3N1ZVJlc3BvbnNlIiuC0+STAiU6ASoiIC92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vaXNzdWVzEoEBCglNb3ZlSXNzdWUSGy5pc3N1ZXMudjEuTW92ZUlzc3VlUmVxdWVzdBocLmlzc3Vlcy52MS5Nb3ZlSXNzdWVSZXNwb25zZSI5gtPkkwIzOgEqIi4vdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L2lzc3Vlcy97bnVtYmVyfTptb3ZlEoIBCgtVcGRhdGVJc3N1ZRIdLmlzc3Vlcy52MS5VcGRhdGVJc3N1ZVJlcXVlc3QaHi5pc3N1ZXMudjEuVXBkYXRlSXNzdWVSZXNwb25zZSI0gtPkkwIuOgEqMikvdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L2lzc3Vlcy97bnVtYmVyfRJ7CgxMaXN0U3RhdHVzZXMSHi5pc3N1ZXMudjEuTGlzdFN0YXR1c2VzUmVxdWVzdBofLmlzc3Vlcy52MS5MaXN0U3RhdHVzZXNSZXNwb25zZSIqgtPkkwIkEiIvdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L3N0YXR1c2VzEn4KDENyZWF0ZVN0YXR1cxIeLmlzc3Vlcy52MS5DcmVhdGVTdGF0dXNSZXF1ZXN0Gh8uaXNzdWVzLnYxLkNyZWF0ZVN0YXR1c1Jlc3BvbnNlIi2C0+STAic6ASoiIi92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vc3RhdHVzZXMSigEKDFVwZGF0ZVN0YXR1cxIeLmlzc3Vlcy52MS5VcGRhdGVTdGF0dXNSZXF1ZXN0Gh8uaXNzdWVzLnYxLlVwZGF0ZVN0YXR1c1Jlc3BvbnNlIjmC0+STAjM6ASoyLi92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vc3RhdHVzZXMve3N0YXR1c19pZH0ShwEKDERlbGV0ZVN0YXR1cxIeLmlzc3Vlcy52MS5EZWxldGVTdGF0dXNSZXF1ZXN0Gh8uaXNzdWVzLnYxLkRlbGV0ZVN0YXR1c1Jlc3BvbnNlIjaC0+STAjAqLi92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vc3RhdHVzZXMve3N0YXR1c19pZH0ScwoKTGlzdExhYmVscxIcLmlzc3Vlcy52MS5MaXN0TGFiZWxzUmVxdWVzdBodLmlzc3Vlcy52MS5MaXN0TGFiZWxzUmVzcG9uc2UiKILT5JMCIhIgL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9sYWJlbHMSeQoLQ3JlYXRlTGFiZWwSHS5pc3N1ZXMudjEuQ3JlYXRlTGFiZWxSZXF1ZXN0Gh4uaXNzdWVzLnYxLkNyZWF0ZUxhYmVsUmVzcG9uc2UiK4LT5JMCJToBKiIgL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9sYWJlbHMShAEKC1VwZGF0ZUxhYmVsEh0uaXNzdWVzLnYxLlVwZGF0ZUxhYmVsUmVxdWVzdBoeLmlzc3Vlcy52MS5VcGRhdGVMYWJlbFJlc3BvbnNlIjaC0+STAjA6ASoyKy92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vbGFiZWxzL3tsYWJlbF9pZH0SgQEKC0RlbGV0ZUxhYmVsEh0uaXNzdWVzLnYxLkRlbGV0ZUxhYmVsUmVxdWVzdBoeLmlzc3Vlcy52MS5EZWxldGVMYWJlbFJlc3BvbnNlIjOC0+STAi0qKy92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vbGFiZWxzL3tsYWJlbF9pZH0SkQEKDUNyZWF0ZUNvbW1lbnQSHy5pc3N1ZXMudjEuQ3JlYXRlQ29tbWVudFJlcXVlc3QaIC5pc3N1ZXMudjEuQ3JlYXRlQ29tbWVudFJlc3BvbnNlIj2C0+STAjc6ASoiMi92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vaXNzdWVzL3tudW1iZXJ9L2NvbW1lbnRzEpIBCg9MaXN0SXNzdWVFdmVudHMSIS5pc3N1ZXMudjEuTGlzdElzc3VlRXZlbnRzUmVxdWVzdBoiLmlzc3Vlcy52MS5MaXN0SXNzdWVFdmVudHNSZXNwb25zZSI4gtPkkwIyEjAvdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L2lzc3Vlcy97bnVtYmVyfS9ldmVudHNCngEKDWNvbS5pc3N1ZXMudjFCC0lzc3Vlc1Byb3RvUAFaO2dpdGh1Yi5jb20vdGVraXRsYS90ZWtpdGxhLXByb3Rvcy9nZW4vZ28vaXNzdWVzL3YxO2lzc3Vlc3YxogIDSVhYqgIJSXNzdWVzLlYxygIJSXNzdWVzXFYx4gIVSXNzdWVzXFYxXEdQQk1ldGFkYXRh6gIKSXNzdWVzOjpWMWIGcHJvdG8z", [file_google_api_annotations, file_google_protobuf_timestamp]);
+  fileDesc("ChZpc3N1ZXMvdjEvaXNzdWVzLnByb3RvEglpc3N1ZXMudjEiuwEKB1Byb2plY3QSCgoCaWQYASABKAkSCwoDa2V5GAIgASgJEgwKBG5hbWUYAyABKAkSEwoLZGVzY3JpcHRpb24YBCABKAkSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoMd29ya3NwYWNlX2lkGAcgASgJIuUCCgVJc3N1ZRIKCgJpZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEg4KBm51bWJlchgDIAEoBRINCgV0aXRsZRgEIAEoCRITCgtkZXNjcmlwdGlvbhgFIAEoCRIkCgVzdGF0ZRgGIAEoDjIVLmlzc3Vlcy52MS5Jc3N1ZVN0YXRlEiUKCHByaW9yaXR5GAcgASgOMhMuaXNzdWVzLnYxLlByaW9yaXR5Ei4KCmNyZWF0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi4KCnVwZGF0ZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBHJhbmsYCiABKAkSEQoJc3RhdHVzX2lkGAsgASgJEhEKCWxhYmVsX2lkcxgMIAMoCRInCgdkaXNjYXJkGA0gASgLMhYuaXNzdWVzLnYxLkRpc2NhcmRJbmZvImEKC0Rpc2NhcmRJbmZvEg4KBnJlYXNvbhgBIAEoCRIQCghhY3Rvcl9pZBgCIAEoCRIwCgxkaXNjYXJkZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIrYBCgZTdGF0dXMSCgoCaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEicKCGNhdGVnb3J5GAQgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUSDAoEcmFuaxgFIAEoCRIkCgVjb2xvchgGIAEoDjIVLmlzc3Vlcy52MS5MYWJlbENvbG9yEhEKCXdpcF9saW1pdBgHIAEoBRIOCgZoaWRkZW4YCCABKAgiWwoFTGFiZWwSCgoCaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEiQKBWNvbG9yGAQgASgOMhUuaXNzdWVzLnYxLkxhYmVsQ29sb3IieAoHQ29tbWVudBIKCgJpZBgBIAEoCRIQCghpc3N1ZV9pZBgCIAEoCRIRCglhdXRob3JfaWQYAyABKAkSDAoEYm9keRgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCK5BAoKSXNzdWVFdmVudBIKCgJpZBgBIAEoCRIQCghpc3N1ZV9pZBgCIAEoCRIQCghhY3Rvcl9pZBgDIAEoCRIuCgpjcmVhdGVkX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIqCgdjcmVhdGVkGAUgASgLMhcuaXNzdWVzLnYxLklzc3VlQ3JlYXRlZEgAEjIKDnN0YXR1c19jaGFuZ2VkGAYgASgLMhguaXNzdWVzLnYxLlN0YXR1c0NoYW5nZWRIABIwCg10aXRsZV9jaGFuZ2VkGAcgASgLMhcuaXNzdWVzLnYxLlRpdGxlQ2hhbmdlZEgAEjwKE2Rlc2NyaXB0aW9uX2NoYW5nZWQYCCABKAsyHS5pc3N1ZXMudjEuRGVzY3JpcHRpb25DaGFuZ2VkSAASNgoQcHJpb3JpdHlfY2hhbmdlZBgJIAEoCzIaLmlzc3Vlcy52MS5Qcmlvcml0eUNoYW5nZWRIABIyCg5sYWJlbHNfY2hhbmdlZBgKIAEoCzIYLmlzc3Vlcy52MS5MYWJlbHNDaGFuZ2VkSAASJwoJY29tbWVudGVkGAsgASgLMhIuaXNzdWVzLnYxLkNvbW1lbnRIABIuCglkaXNjYXJkZWQYDCABKAsyGS5pc3N1ZXMudjEuSXNzdWVEaXNjYXJkZWRIABIsCghyZXN0b3JlZBgNIAEoCzIYLmlzc3Vlcy52MS5Jc3N1ZVJlc3RvcmVkSABCCAoGY2hhbmdlIg4KDElzc3VlQ3JlYXRlZCLDAQoNU3RhdHVzQ2hhbmdlZBIWCg5mcm9tX3N0YXR1c19pZBgBIAEoCRIYChBmcm9tX3N0YXR1c19uYW1lGAIgASgJEikKCmZyb21fc3RhdGUYAyABKA4yFS5pc3N1ZXMudjEuSXNzdWVTdGF0ZRIUCgx0b19zdGF0dXNfaWQYBCABKAkSFgoOdG9fc3RhdHVzX25hbWUYBSABKAkSJwoIdG9fc3RhdGUYBiABKA4yFS5pc3N1ZXMudjEuSXNzdWVTdGF0ZSKrAQoOSXNzdWVEaXNjYXJkZWQSDgoGcmVhc29uGAEgASgJEhYKDmZyb21fc3RhdHVzX2lkGAIgASgJEhgKEGZyb21fc3RhdHVzX25hbWUYAyABKAkSKQoKZnJvbV9zdGF0ZRgEIAEoDjIVLmlzc3Vlcy52MS5Jc3N1ZVN0YXRlEhQKDHRvX3N0YXR1c19pZBgFIAEoCRIWCg50b19zdGF0dXNfbmFtZRgGIAEoCSJvCg1Jc3N1ZVJlc3RvcmVkEhYKDmZyb21fc3RhdHVzX2lkGAEgASgJEhgKEGZyb21fc3RhdHVzX25hbWUYAiABKAkSFAoMdG9fc3RhdHVzX2lkGAMgASgJEhYKDnRvX3N0YXR1c19uYW1lGAQgASgJIigKDFRpdGxlQ2hhbmdlZBIMCgRmcm9tGAEgASgJEgoKAnRvGAIgASgJIhQKEkRlc2NyaXB0aW9uQ2hhbmdlZCJVCg9Qcmlvcml0eUNoYW5nZWQSIQoEZnJvbRgBIAEoDjITLmlzc3Vlcy52MS5Qcmlvcml0eRIfCgJ0bxgCIAEoDjITLmlzc3Vlcy52MS5Qcmlvcml0eSJ7Cg1MYWJlbHNDaGFuZ2VkEhcKD2FkZGVkX2xhYmVsX2lkcxgBIAMoCRIZChFyZW1vdmVkX2xhYmVsX2lkcxgCIAMoCRIZChFhZGRlZF9sYWJlbF9uYW1lcxgDIAMoCRIbChNyZW1vdmVkX2xhYmVsX25hbWVzGAQgAygJIiwKC1BhZ2VSZXF1ZXN0Eg4KBmN1cnNvchgBIAEoCRINCgVsaW1pdBgCIAEoBSI1CgxQYWdlUmVzcG9uc2USEwoLbmV4dF9jdXJzb3IYASABKAkSEAoIaGFzX25leHQYAiABKAgiUQoTTGlzdFByb2plY3RzUmVxdWVzdBIkCgRwYWdlGAEgASgLMhYuaXNzdWVzLnYxLlBhZ2VSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgCIAEoCSJjChRMaXN0UHJvamVjdHNSZXNwb25zZRIkCghwcm9qZWN0cxgBIAMoCzISLmlzc3Vlcy52MS5Qcm9qZWN0EiUKBHBhZ2UYAiABKAsyFy5pc3N1ZXMudjEuUGFnZVJlc3BvbnNlIlwKFENyZWF0ZVByb2plY3RSZXF1ZXN0EgsKA2tleRgBIAEoCRIMCgRuYW1lGAIgASgJEhMKC2Rlc2NyaXB0aW9uGAMgASgJEhQKDHdvcmtzcGFjZV9pZBgEIAEoCSI8ChVDcmVhdGVQcm9qZWN0UmVzcG9uc2USIwoHcHJvamVjdBgBIAEoCzISLmlzc3Vlcy52MS5Qcm9qZWN0IqICChFMaXN0SXNzdWVzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEiQKBXN0YXRlGAIgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUSJAoEcGFnZRgDIAEoCzIWLmlzc3Vlcy52MS5QYWdlUmVxdWVzdBINCgVxdWVyeRgEIAEoCRIlCgZzdGF0ZXMYBSADKA4yFS5pc3N1ZXMudjEuSXNzdWVTdGF0ZRISCgpzdGF0dXNfaWRzGAYgAygJEicKCnByaW9yaXRpZXMYByADKA4yEy5pc3N1ZXMudjEuUHJpb3JpdHkSEQoJbGFiZWxfaWRzGAggAygJEicKCG9yZGVyX2J5GAkgASgOMhUuaXNzdWVzLnYxLklzc3VlT3JkZXIiXQoSTGlzdElzc3Vlc1Jlc3BvbnNlEiAKBmlzc3VlcxgBIAMoCzIQLmlzc3Vlcy52MS5Jc3N1ZRIlCgRwYWdlGAIgASgLMhcuaXNzdWVzLnYxLlBhZ2VSZXNwb25zZSI1Cg9HZXRJc3N1ZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIOCgZudW1iZXIYAiABKAUiMwoQR2V0SXNzdWVSZXNwb25zZRIfCgVpc3N1ZRgBIAEoCzIQLmlzc3Vlcy52MS5Jc3N1ZSJzChJDcmVhdGVJc3N1ZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRINCgV0aXRsZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRIlCghwcmlvcml0eRgEIAEoDjITLmlzc3Vlcy52MS5Qcmlvcml0eSI2ChNDcmVhdGVJc3N1ZVJlc3BvbnNlEh8KBWlzc3VlGAEgASgLMhAuaXNzdWVzLnYxLklzc3VlIpwBChBNb3ZlSXNzdWVSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDgoGbnVtYmVyGAIgASgFEiQKBXN0YXRlGAMgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUSEQoJc3RhdHVzX2lkGAQgASgJEhUKDWJlZm9yZV9udW1iZXIYBSABKAUSFAoMYWZ0ZXJfbnVtYmVyGAYgASgFIjQKEU1vdmVJc3N1ZVJlc3BvbnNlEh8KBWlzc3VlGAEgASgLMhAuaXNzdWVzLnYxLklzc3VlIt4BChJVcGRhdGVJc3N1ZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIOCgZudW1iZXIYAiABKAUSEgoFdGl0bGUYAyABKAlIAIgBARIYCgtkZXNjcmlwdGlvbhgEIAEoCUgBiAEBEioKCHByaW9yaXR5GAUgASgOMhMuaXNzdWVzLnYxLlByaW9yaXR5SAKIAQESIwoGbGFiZWxzGAYgASgLMhMuaXNzdWVzLnYxLkxhYmVsSWRzQggKBl90aXRsZUIOCgxfZGVzY3JpcHRpb25CCwoJX3ByaW9yaXR5IhcKCExhYmVsSWRzEgsKA2lkcxgBIAMoCSI2ChNVcGRhdGVJc3N1ZVJlc3BvbnNlEh8KBWlzc3VlGAEgASgLMhAuaXNzdWVzLnYxLklzc3VlIlwKE0Rpc2NhcmRJc3N1ZVJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIOCgZudW1iZXIYAiABKAUSDgoGcmVhc29uGAMgASgJEhEKCXN0YXR1c19pZBgEIAEoCSI3ChREaXNjYXJkSXNzdWVSZXNwb25zZRIfCgVpc3N1ZRgBIAEoCzIQLmlzc3Vlcy52MS5Jc3N1ZSI5ChNSZXN0b3JlSXNzdWVSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDgoGbnVtYmVyGAIgASgFIjcKFFJlc3RvcmVJc3N1ZVJlc3BvbnNlEh8KBWlzc3VlGAEgASgLMhAuaXNzdWVzLnYxLklzc3VlIikKE0xpc3RTdGF0dXNlc1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCSI7ChRMaXN0U3RhdHVzZXNSZXNwb25zZRIjCghzdGF0dXNlcxgBIAMoCzIRLmlzc3Vlcy52MS5TdGF0dXMi0gEKE0NyZWF0ZVN0YXR1c1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEicKCGNhdGVnb3J5GAMgASgOMhUuaXNzdWVzLnYxLklzc3VlU3RhdGUSFwoPYWZ0ZXJfc3RhdHVzX2lkGAQgASgJEiQKBWNvbG9yGAUgASgOMhUuaXNzdWVzLnYxLkxhYmVsQ29sb3ISEQoJd2lwX2xpbWl0GAYgASgFEhMKBmhpZGRlbhgHIAEoCEgAiAEBQgkKB19oaWRkZW4iOQoUQ3JlYXRlU3RhdHVzUmVzcG9uc2USIQoGc3RhdHVzGAEgASgLMhEuaXNzdWVzLnYxLlN0YXR1cyKFAgoTVXBkYXRlU3RhdHVzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCXN0YXR1c19pZBgCIAEoCRIRCgRuYW1lGAMgASgJSACIAQESHAoPYWZ0ZXJfc3RhdHVzX2lkGAQgASgJSAGIAQESKQoFY29sb3IYBSABKA4yFS5pc3N1ZXMudjEuTGFiZWxDb2xvckgCiAEBEhYKCXdpcF9saW1pdBgGIAEoBUgDiAEBEhMKBmhpZGRlbhgHIAEoCEgEiAEBQgcKBV9uYW1lQhIKEF9hZnRlcl9zdGF0dXNfaWRCCAoGX2NvbG9yQgwKCl93aXBfbGltaXRCCQoHX2hpZGRlbiI5ChRVcGRhdGVTdGF0dXNSZXNwb25zZRIhCgZzdGF0dXMYASABKAsyES5pc3N1ZXMudjEuU3RhdHVzIlcKE0RlbGV0ZVN0YXR1c1JlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCglzdGF0dXNfaWQYAiABKAkSGQoRbW92ZV90b19zdGF0dXNfaWQYAyABKAkiFgoURGVsZXRlU3RhdHVzUmVzcG9uc2UihwEKGkJhdGNoVXBkYXRlU3RhdHVzZXNSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSJwoIc3RhdHVzZXMYAiADKAsyFS5pc3N1ZXMudjEuU3RhdHVzU3BlYxIsCglkZWxldGlvbnMYAyADKAsyGS5pc3N1ZXMudjEuU3RhdHVzRGVsZXRpb24imAEKClN0YXR1c1NwZWMSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRInCghjYXRlZ29yeRgDIAEoDjIVLmlzc3Vlcy52MS5Jc3N1ZVN0YXRlEiQKBWNvbG9yGAQgASgOMhUuaXNzdWVzLnYxLkxhYmVsQ29sb3ISEQoJd2lwX2xpbWl0GAUgASgFEg4KBmhpZGRlbhgGIAEoCCI+Cg5TdGF0dXNEZWxldGlvbhIRCglzdGF0dXNfaWQYASABKAkSGQoRbW92ZV90b19zdGF0dXNfaWQYAiABKAkiQgobQmF0Y2hVcGRhdGVTdGF0dXNlc1Jlc3BvbnNlEiMKCHN0YXR1c2VzGAEgAygLMhEuaXNzdWVzLnYxLlN0YXR1cyInChFMaXN0TGFiZWxzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIjYKEkxpc3RMYWJlbHNSZXNwb25zZRIgCgZsYWJlbHMYASADKAsyEC5pc3N1ZXMudjEuTGFiZWwiXAoSQ3JlYXRlTGFiZWxSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDAoEbmFtZRgCIAEoCRIkCgVjb2xvchgDIAEoDjIVLmlzc3Vlcy52MS5MYWJlbENvbG9yIjYKE0NyZWF0ZUxhYmVsUmVzcG9uc2USHwoFbGFiZWwYASABKAsyEC5pc3N1ZXMudjEuTGFiZWwiiwEKElVwZGF0ZUxhYmVsUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhAKCGxhYmVsX2lkGAIgASgJEhEKBG5hbWUYAyABKAlIAIgBARIpCgVjb2xvchgEIAEoDjIVLmlzc3Vlcy52MS5MYWJlbENvbG9ySAGIAQFCBwoFX25hbWVCCAoGX2NvbG9yIjYKE1VwZGF0ZUxhYmVsUmVzcG9uc2USHwoFbGFiZWwYASABKAsyEC5pc3N1ZXMudjEuTGFiZWwiOgoSRGVsZXRlTGFiZWxSZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSEAoIbGFiZWxfaWQYAiABKAkiFQoTRGVsZXRlTGFiZWxSZXNwb25zZSJIChRDcmVhdGVDb21tZW50UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEg4KBm51bWJlchgCIAEoBRIMCgRib2R5GAMgASgJIjwKFUNyZWF0ZUNvbW1lbnRSZXNwb25zZRIjCgdjb21tZW50GAEgASgLMhIuaXNzdWVzLnYxLkNvbW1lbnQiYgoWTGlzdElzc3VlRXZlbnRzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEg4KBm51bWJlchgCIAEoBRIkCgRwYWdlGAMgASgLMhYuaXNzdWVzLnYxLlBhZ2VSZXF1ZXN0ImcKF0xpc3RJc3N1ZUV2ZW50c1Jlc3BvbnNlEiUKBmV2ZW50cxgBIAMoCzIVLmlzc3Vlcy52MS5Jc3N1ZUV2ZW50EiUKBHBhZ2UYAiABKAsyFy5pc3N1ZXMudjEuUGFnZVJlc3BvbnNlKowBCgpJc3N1ZVN0YXRlEhsKF0lTU1VFX1NUQVRFX1VOU1BFQ0lGSUVEEAASFAoQSVNTVUVfU1RBVEVfVE9ETxABEhsKF0lTU1VFX1NUQVRFX0lOX1BST0dSRVNTEAISFAoQSVNTVUVfU1RBVEVfRE9ORRADEhgKFElTU1VFX1NUQVRFX0NBTkNFTEVEEAQqcwoIUHJpb3JpdHkSGAoUUFJJT1JJVFlfVU5TUEVDSUZJRUQQABIQCgxQUklPUklUWV9MT1cQARITCg9QUklPUklUWV9NRURJVU0QAhIRCg1QUklPUklUWV9ISUdIEAMSEwoPUFJJT1JJVFlfVVJHRU5UEAQq0QEKCkxhYmVsQ29sb3ISGwoXTEFCRUxfQ09MT1JfVU5TUEVDSUZJRUQQABIXChNMQUJFTF9DT0xPUl9ORVVUUkFMEAESFAoQTEFCRUxfQ09MT1JfSU5GTxACEhcKE0xBQkVMX0NPTE9SX1NVQ0NFU1MQAxIXChNMQUJFTF9DT0xPUl9XQVJOSU5HEAQSFgoSTEFCRUxfQ09MT1JfREFOR0VSEAUSFgoSTEFCRUxfQ09MT1JfQUNDRU5UEAYSFQoRTEFCRUxfQ09MT1JfQlJBTkQQByp8CgpJc3N1ZU9yZGVyEhsKF0lTU1VFX09SREVSX1VOU1BFQ0lGSUVEEAASFAoQSVNTVUVfT1JERVJfUkFOSxABEhwKGElTU1VFX09SREVSX1VQREFURURfREVTQxACEh0KGUlTU1VFX09SREVSX1BSSU9SSVRZX0RFU0MQAzLNFAoMSXNzdWVTZXJ2aWNlEmUKDExpc3RQcm9qZWN0cxIeLmlzc3Vlcy52MS5MaXN0UHJvamVjdHNSZXF1ZXN0Gh8uaXNzdWVzLnYxLkxpc3RQcm9qZWN0c1Jlc3BvbnNlIhSC0+STAg4SDC92MS9wcm9qZWN0cxJrCg1DcmVhdGVQcm9qZWN0Eh8uaXNzdWVzLnYxLkNyZWF0ZVByb2plY3RSZXF1ZXN0GiAuaXNzdWVzLnYxLkNyZWF0ZVByb2plY3RSZXNwb25zZSIXgtPkkwIROgEqIgwvdjEvcHJvamVjdHMScwoKTGlzdElzc3VlcxIcLmlzc3Vlcy52MS5MaXN0SXNzdWVzUmVxdWVzdBodLmlzc3Vlcy52MS5MaXN0SXNzdWVzUmVzcG9uc2UiKILT5JMCIhIgL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9pc3N1ZXMSdgoIR2V0SXNzdWUSGi5pc3N1ZXMudjEuR2V0SXNzdWVSZXF1ZXN0GhsuaXNzdWVzLnYxLkdldElzc3VlUmVzcG9uc2UiMYLT5JMCKxIpL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9pc3N1ZXMve251bWJlcn0SeQoLQ3JlYXRlSXNzdWUSHS5pc3N1ZXMudjEuQ3JlYXRlSXNzdWVSZXF1ZXN0Gh4uaXNzdWVzLnYxLkNyZWF0ZUlzc3VlUmVzcG9uc2UiK4LT5JMCJToBKiIgL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9pc3N1ZXMSgQEKCU1vdmVJc3N1ZRIbLmlzc3Vlcy52MS5Nb3ZlSXNzdWVSZXF1ZXN0GhwuaXNzdWVzLnYxLk1vdmVJc3N1ZVJlc3BvbnNlIjmC0+STAjM6ASoiLi92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vaXNzdWVzL3tudW1iZXJ9Om1vdmUSggEKC1VwZGF0ZUlzc3VlEh0uaXNzdWVzLnYxLlVwZGF0ZUlzc3VlUmVxdWVzdBoeLmlzc3Vlcy52MS5VcGRhdGVJc3N1ZVJlc3BvbnNlIjSC0+STAi46ASoyKS92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vaXNzdWVzL3tudW1iZXJ9Eo0BCgxEaXNjYXJkSXNzdWUSHi5pc3N1ZXMudjEuRGlzY2FyZElzc3VlUmVxdWVzdBofLmlzc3Vlcy52MS5EaXNjYXJkSXNzdWVSZXNwb25zZSI8gtPkkwI2OgEqIjEvdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L2lzc3Vlcy97bnVtYmVyfTpkaXNjYXJkEo0BCgxSZXN0b3JlSXNzdWUSHi5pc3N1ZXMudjEuUmVzdG9yZUlzc3VlUmVxdWVzdBofLmlzc3Vlcy52MS5SZXN0b3JlSXNzdWVSZXNwb25zZSI8gtPkkwI2OgEqIjEvdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L2lzc3Vlcy97bnVtYmVyfTpyZXN0b3JlEnsKDExpc3RTdGF0dXNlcxIeLmlzc3Vlcy52MS5MaXN0U3RhdHVzZXNSZXF1ZXN0Gh8uaXNzdWVzLnYxLkxpc3RTdGF0dXNlc1Jlc3BvbnNlIiqC0+STAiQSIi92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vc3RhdHVzZXMSfgoMQ3JlYXRlU3RhdHVzEh4uaXNzdWVzLnYxLkNyZWF0ZVN0YXR1c1JlcXVlc3QaHy5pc3N1ZXMudjEuQ3JlYXRlU3RhdHVzUmVzcG9uc2UiLYLT5JMCJzoBKiIiL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9zdGF0dXNlcxKKAQoMVXBkYXRlU3RhdHVzEh4uaXNzdWVzLnYxLlVwZGF0ZVN0YXR1c1JlcXVlc3QaHy5pc3N1ZXMudjEuVXBkYXRlU3RhdHVzUmVzcG9uc2UiOYLT5JMCMzoBKjIuL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9zdGF0dXNlcy97c3RhdHVzX2lkfRKHAQoMRGVsZXRlU3RhdHVzEh4uaXNzdWVzLnYxLkRlbGV0ZVN0YXR1c1JlcXVlc3QaHy5pc3N1ZXMudjEuRGVsZXRlU3RhdHVzUmVzcG9uc2UiNoLT5JMCMCouL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9zdGF0dXNlcy97c3RhdHVzX2lkfRKfAQoTQmF0Y2hVcGRhdGVTdGF0dXNlcxIlLmlzc3Vlcy52MS5CYXRjaFVwZGF0ZVN0YXR1c2VzUmVxdWVzdBomLmlzc3Vlcy52MS5CYXRjaFVwZGF0ZVN0YXR1c2VzUmVzcG9uc2UiOYLT5JMCMzoBKiIuL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9zdGF0dXNlczpiYXRjaFVwZGF0ZRJzCgpMaXN0TGFiZWxzEhwuaXNzdWVzLnYxLkxpc3RMYWJlbHNSZXF1ZXN0Gh0uaXNzdWVzLnYxLkxpc3RMYWJlbHNSZXNwb25zZSIogtPkkwIiEiAvdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L2xhYmVscxJ5CgtDcmVhdGVMYWJlbBIdLmlzc3Vlcy52MS5DcmVhdGVMYWJlbFJlcXVlc3QaHi5pc3N1ZXMudjEuQ3JlYXRlTGFiZWxSZXNwb25zZSIrgtPkkwIlOgEqIiAvdjEvcHJvamVjdHMve3Byb2plY3RfaWR9L2xhYmVscxKEAQoLVXBkYXRlTGFiZWwSHS5pc3N1ZXMudjEuVXBkYXRlTGFiZWxSZXF1ZXN0Gh4uaXNzdWVzLnYxLlVwZGF0ZUxhYmVsUmVzcG9uc2UiNoLT5JMCMDoBKjIrL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9sYWJlbHMve2xhYmVsX2lkfRKBAQoLRGVsZXRlTGFiZWwSHS5pc3N1ZXMudjEuRGVsZXRlTGFiZWxSZXF1ZXN0Gh4uaXNzdWVzLnYxLkRlbGV0ZUxhYmVsUmVzcG9uc2UiM4LT5JMCLSorL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9sYWJlbHMve2xhYmVsX2lkfRKRAQoNQ3JlYXRlQ29tbWVudBIfLmlzc3Vlcy52MS5DcmVhdGVDb21tZW50UmVxdWVzdBogLmlzc3Vlcy52MS5DcmVhdGVDb21tZW50UmVzcG9uc2UiPYLT5JMCNzoBKiIyL3YxL3Byb2plY3RzL3twcm9qZWN0X2lkfS9pc3N1ZXMve251bWJlcn0vY29tbWVudHMSkgEKD0xpc3RJc3N1ZUV2ZW50cxIhLmlzc3Vlcy52MS5MaXN0SXNzdWVFdmVudHNSZXF1ZXN0GiIuaXNzdWVzLnYxLkxpc3RJc3N1ZUV2ZW50c1Jlc3BvbnNlIjiC0+STAjISMC92MS9wcm9qZWN0cy97cHJvamVjdF9pZH0vaXNzdWVzL3tudW1iZXJ9L2V2ZW50c0KeAQoNY29tLmlzc3Vlcy52MUILSXNzdWVzUHJvdG9QAVo7Z2l0aHViLmNvbS90ZWtpdGxhL3Rla2l0bGEtcHJvdG9zL2dlbi9nby9pc3N1ZXMvdjE7aXNzdWVzdjGiAgNJWFiqAglJc3N1ZXMuVjHKAglJc3N1ZXNcVjHiAhVJc3N1ZXNcVjFcR1BCTWV0YWRhdGHqAgpJc3N1ZXM6OlYxYgZwcm90bzM", [file_google_api_annotations, file_google_protobuf_timestamp]);
 
 /**
  * Describes the message issues.v1.Project.
@@ -40,333 +42,410 @@ export const IssueSchema = /*@__PURE__*/
   messageDesc(file_issues_v1_issues, 1);
 
 /**
+ * Describes the message issues.v1.DiscardInfo.
+ * Use `create(DiscardInfoSchema)` to create a new message.
+ */
+export const DiscardInfoSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 2);
+
+/**
  * Describes the message issues.v1.Status.
  * Use `create(StatusSchema)` to create a new message.
  */
 export const StatusSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 2);
+  messageDesc(file_issues_v1_issues, 3);
 
 /**
  * Describes the message issues.v1.Label.
  * Use `create(LabelSchema)` to create a new message.
  */
 export const LabelSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 3);
+  messageDesc(file_issues_v1_issues, 4);
 
 /**
  * Describes the message issues.v1.Comment.
  * Use `create(CommentSchema)` to create a new message.
  */
 export const CommentSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 4);
+  messageDesc(file_issues_v1_issues, 5);
 
 /**
  * Describes the message issues.v1.IssueEvent.
  * Use `create(IssueEventSchema)` to create a new message.
  */
 export const IssueEventSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 5);
+  messageDesc(file_issues_v1_issues, 6);
 
 /**
  * Describes the message issues.v1.IssueCreated.
  * Use `create(IssueCreatedSchema)` to create a new message.
  */
 export const IssueCreatedSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 6);
+  messageDesc(file_issues_v1_issues, 7);
 
 /**
  * Describes the message issues.v1.StatusChanged.
  * Use `create(StatusChangedSchema)` to create a new message.
  */
 export const StatusChangedSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 7);
+  messageDesc(file_issues_v1_issues, 8);
+
+/**
+ * Describes the message issues.v1.IssueDiscarded.
+ * Use `create(IssueDiscardedSchema)` to create a new message.
+ */
+export const IssueDiscardedSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 9);
+
+/**
+ * Describes the message issues.v1.IssueRestored.
+ * Use `create(IssueRestoredSchema)` to create a new message.
+ */
+export const IssueRestoredSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 10);
 
 /**
  * Describes the message issues.v1.TitleChanged.
  * Use `create(TitleChangedSchema)` to create a new message.
  */
 export const TitleChangedSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 8);
+  messageDesc(file_issues_v1_issues, 11);
 
 /**
  * Describes the message issues.v1.DescriptionChanged.
  * Use `create(DescriptionChangedSchema)` to create a new message.
  */
 export const DescriptionChangedSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 9);
+  messageDesc(file_issues_v1_issues, 12);
 
 /**
  * Describes the message issues.v1.PriorityChanged.
  * Use `create(PriorityChangedSchema)` to create a new message.
  */
 export const PriorityChangedSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 10);
+  messageDesc(file_issues_v1_issues, 13);
 
 /**
  * Describes the message issues.v1.LabelsChanged.
  * Use `create(LabelsChangedSchema)` to create a new message.
  */
 export const LabelsChangedSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 11);
+  messageDesc(file_issues_v1_issues, 14);
 
 /**
  * Describes the message issues.v1.PageRequest.
  * Use `create(PageRequestSchema)` to create a new message.
  */
 export const PageRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 12);
+  messageDesc(file_issues_v1_issues, 15);
 
 /**
  * Describes the message issues.v1.PageResponse.
  * Use `create(PageResponseSchema)` to create a new message.
  */
 export const PageResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 13);
+  messageDesc(file_issues_v1_issues, 16);
 
 /**
  * Describes the message issues.v1.ListProjectsRequest.
  * Use `create(ListProjectsRequestSchema)` to create a new message.
  */
 export const ListProjectsRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 14);
+  messageDesc(file_issues_v1_issues, 17);
 
 /**
  * Describes the message issues.v1.ListProjectsResponse.
  * Use `create(ListProjectsResponseSchema)` to create a new message.
  */
 export const ListProjectsResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 15);
+  messageDesc(file_issues_v1_issues, 18);
 
 /**
  * Describes the message issues.v1.CreateProjectRequest.
  * Use `create(CreateProjectRequestSchema)` to create a new message.
  */
 export const CreateProjectRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 16);
+  messageDesc(file_issues_v1_issues, 19);
 
 /**
  * Describes the message issues.v1.CreateProjectResponse.
  * Use `create(CreateProjectResponseSchema)` to create a new message.
  */
 export const CreateProjectResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 17);
+  messageDesc(file_issues_v1_issues, 20);
 
 /**
  * Describes the message issues.v1.ListIssuesRequest.
  * Use `create(ListIssuesRequestSchema)` to create a new message.
  */
 export const ListIssuesRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 18);
+  messageDesc(file_issues_v1_issues, 21);
 
 /**
  * Describes the message issues.v1.ListIssuesResponse.
  * Use `create(ListIssuesResponseSchema)` to create a new message.
  */
 export const ListIssuesResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 19);
+  messageDesc(file_issues_v1_issues, 22);
 
 /**
  * Describes the message issues.v1.GetIssueRequest.
  * Use `create(GetIssueRequestSchema)` to create a new message.
  */
 export const GetIssueRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 20);
+  messageDesc(file_issues_v1_issues, 23);
 
 /**
  * Describes the message issues.v1.GetIssueResponse.
  * Use `create(GetIssueResponseSchema)` to create a new message.
  */
 export const GetIssueResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 21);
+  messageDesc(file_issues_v1_issues, 24);
 
 /**
  * Describes the message issues.v1.CreateIssueRequest.
  * Use `create(CreateIssueRequestSchema)` to create a new message.
  */
 export const CreateIssueRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 22);
+  messageDesc(file_issues_v1_issues, 25);
 
 /**
  * Describes the message issues.v1.CreateIssueResponse.
  * Use `create(CreateIssueResponseSchema)` to create a new message.
  */
 export const CreateIssueResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 23);
+  messageDesc(file_issues_v1_issues, 26);
 
 /**
  * Describes the message issues.v1.MoveIssueRequest.
  * Use `create(MoveIssueRequestSchema)` to create a new message.
  */
 export const MoveIssueRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 24);
+  messageDesc(file_issues_v1_issues, 27);
 
 /**
  * Describes the message issues.v1.MoveIssueResponse.
  * Use `create(MoveIssueResponseSchema)` to create a new message.
  */
 export const MoveIssueResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 25);
+  messageDesc(file_issues_v1_issues, 28);
 
 /**
  * Describes the message issues.v1.UpdateIssueRequest.
  * Use `create(UpdateIssueRequestSchema)` to create a new message.
  */
 export const UpdateIssueRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 26);
+  messageDesc(file_issues_v1_issues, 29);
 
 /**
  * Describes the message issues.v1.LabelIds.
  * Use `create(LabelIdsSchema)` to create a new message.
  */
 export const LabelIdsSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 27);
+  messageDesc(file_issues_v1_issues, 30);
 
 /**
  * Describes the message issues.v1.UpdateIssueResponse.
  * Use `create(UpdateIssueResponseSchema)` to create a new message.
  */
 export const UpdateIssueResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 28);
+  messageDesc(file_issues_v1_issues, 31);
+
+/**
+ * Describes the message issues.v1.DiscardIssueRequest.
+ * Use `create(DiscardIssueRequestSchema)` to create a new message.
+ */
+export const DiscardIssueRequestSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 32);
+
+/**
+ * Describes the message issues.v1.DiscardIssueResponse.
+ * Use `create(DiscardIssueResponseSchema)` to create a new message.
+ */
+export const DiscardIssueResponseSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 33);
+
+/**
+ * Describes the message issues.v1.RestoreIssueRequest.
+ * Use `create(RestoreIssueRequestSchema)` to create a new message.
+ */
+export const RestoreIssueRequestSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 34);
+
+/**
+ * Describes the message issues.v1.RestoreIssueResponse.
+ * Use `create(RestoreIssueResponseSchema)` to create a new message.
+ */
+export const RestoreIssueResponseSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 35);
 
 /**
  * Describes the message issues.v1.ListStatusesRequest.
  * Use `create(ListStatusesRequestSchema)` to create a new message.
  */
 export const ListStatusesRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 29);
+  messageDesc(file_issues_v1_issues, 36);
 
 /**
  * Describes the message issues.v1.ListStatusesResponse.
  * Use `create(ListStatusesResponseSchema)` to create a new message.
  */
 export const ListStatusesResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 30);
+  messageDesc(file_issues_v1_issues, 37);
 
 /**
  * Describes the message issues.v1.CreateStatusRequest.
  * Use `create(CreateStatusRequestSchema)` to create a new message.
  */
 export const CreateStatusRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 31);
+  messageDesc(file_issues_v1_issues, 38);
 
 /**
  * Describes the message issues.v1.CreateStatusResponse.
  * Use `create(CreateStatusResponseSchema)` to create a new message.
  */
 export const CreateStatusResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 32);
+  messageDesc(file_issues_v1_issues, 39);
 
 /**
  * Describes the message issues.v1.UpdateStatusRequest.
  * Use `create(UpdateStatusRequestSchema)` to create a new message.
  */
 export const UpdateStatusRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 33);
+  messageDesc(file_issues_v1_issues, 40);
 
 /**
  * Describes the message issues.v1.UpdateStatusResponse.
  * Use `create(UpdateStatusResponseSchema)` to create a new message.
  */
 export const UpdateStatusResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 34);
+  messageDesc(file_issues_v1_issues, 41);
 
 /**
  * Describes the message issues.v1.DeleteStatusRequest.
  * Use `create(DeleteStatusRequestSchema)` to create a new message.
  */
 export const DeleteStatusRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 35);
+  messageDesc(file_issues_v1_issues, 42);
 
 /**
  * Describes the message issues.v1.DeleteStatusResponse.
  * Use `create(DeleteStatusResponseSchema)` to create a new message.
  */
 export const DeleteStatusResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 36);
+  messageDesc(file_issues_v1_issues, 43);
+
+/**
+ * Describes the message issues.v1.BatchUpdateStatusesRequest.
+ * Use `create(BatchUpdateStatusesRequestSchema)` to create a new message.
+ */
+export const BatchUpdateStatusesRequestSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 44);
+
+/**
+ * Describes the message issues.v1.StatusSpec.
+ * Use `create(StatusSpecSchema)` to create a new message.
+ */
+export const StatusSpecSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 45);
+
+/**
+ * Describes the message issues.v1.StatusDeletion.
+ * Use `create(StatusDeletionSchema)` to create a new message.
+ */
+export const StatusDeletionSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 46);
+
+/**
+ * Describes the message issues.v1.BatchUpdateStatusesResponse.
+ * Use `create(BatchUpdateStatusesResponseSchema)` to create a new message.
+ */
+export const BatchUpdateStatusesResponseSchema = /*@__PURE__*/
+  messageDesc(file_issues_v1_issues, 47);
 
 /**
  * Describes the message issues.v1.ListLabelsRequest.
  * Use `create(ListLabelsRequestSchema)` to create a new message.
  */
 export const ListLabelsRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 37);
+  messageDesc(file_issues_v1_issues, 48);
 
 /**
  * Describes the message issues.v1.ListLabelsResponse.
  * Use `create(ListLabelsResponseSchema)` to create a new message.
  */
 export const ListLabelsResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 38);
+  messageDesc(file_issues_v1_issues, 49);
 
 /**
  * Describes the message issues.v1.CreateLabelRequest.
  * Use `create(CreateLabelRequestSchema)` to create a new message.
  */
 export const CreateLabelRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 39);
+  messageDesc(file_issues_v1_issues, 50);
 
 /**
  * Describes the message issues.v1.CreateLabelResponse.
  * Use `create(CreateLabelResponseSchema)` to create a new message.
  */
 export const CreateLabelResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 40);
+  messageDesc(file_issues_v1_issues, 51);
 
 /**
  * Describes the message issues.v1.UpdateLabelRequest.
  * Use `create(UpdateLabelRequestSchema)` to create a new message.
  */
 export const UpdateLabelRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 41);
+  messageDesc(file_issues_v1_issues, 52);
 
 /**
  * Describes the message issues.v1.UpdateLabelResponse.
  * Use `create(UpdateLabelResponseSchema)` to create a new message.
  */
 export const UpdateLabelResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 42);
+  messageDesc(file_issues_v1_issues, 53);
 
 /**
  * Describes the message issues.v1.DeleteLabelRequest.
  * Use `create(DeleteLabelRequestSchema)` to create a new message.
  */
 export const DeleteLabelRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 43);
+  messageDesc(file_issues_v1_issues, 54);
 
 /**
  * Describes the message issues.v1.DeleteLabelResponse.
  * Use `create(DeleteLabelResponseSchema)` to create a new message.
  */
 export const DeleteLabelResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 44);
+  messageDesc(file_issues_v1_issues, 55);
 
 /**
  * Describes the message issues.v1.CreateCommentRequest.
  * Use `create(CreateCommentRequestSchema)` to create a new message.
  */
 export const CreateCommentRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 45);
+  messageDesc(file_issues_v1_issues, 56);
 
 /**
  * Describes the message issues.v1.CreateCommentResponse.
  * Use `create(CreateCommentResponseSchema)` to create a new message.
  */
 export const CreateCommentResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 46);
+  messageDesc(file_issues_v1_issues, 57);
 
 /**
  * Describes the message issues.v1.ListIssueEventsRequest.
  * Use `create(ListIssueEventsRequestSchema)` to create a new message.
  */
 export const ListIssueEventsRequestSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 47);
+  messageDesc(file_issues_v1_issues, 58);
 
 /**
  * Describes the message issues.v1.ListIssueEventsResponse.
  * Use `create(ListIssueEventsResponseSchema)` to create a new message.
  */
 export const ListIssueEventsResponseSchema = /*@__PURE__*/
-  messageDesc(file_issues_v1_issues, 48);
+  messageDesc(file_issues_v1_issues, 59);
 
 /**
  * Describes the enum issues.v1.IssueState.
@@ -410,12 +489,28 @@ export const LabelColorSchema = /*@__PURE__*/
   enumDesc(file_issues_v1_issues, 2);
 
 /**
- * Color de una etiqueta: un tono del design system, no un valor libre.
+ * Tono del design system, no un valor libre: color de una etiqueta (Label)
+ * y de un estado (Status).
  *
  * @generated from enum issues.v1.LabelColor
  */
 export const LabelColor = /*@__PURE__*/
   tsEnum(LabelColorSchema);
+
+/**
+ * Describes the enum issues.v1.IssueOrder.
+ */
+export const IssueOrderSchema = /*@__PURE__*/
+  enumDesc(file_issues_v1_issues, 3);
+
+/**
+ * Orden de ListIssues. Los empates se resuelven por rank, así el orden es
+ * estable entre páginas.
+ *
+ * @generated from enum issues.v1.IssueOrder
+ */
+export const IssueOrder = /*@__PURE__*/
+  tsEnum(IssueOrderSchema);
 
 /**
  * IssueService gestiona los proyectos y sus issues.

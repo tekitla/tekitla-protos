@@ -1,7 +1,9 @@
 // Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
 // trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
 // estados configurables por proyecto, orden manual, edición, etiquetas,
-// comentarios e historial. Miembros, roles y las piezas de cada metodología
+// comentarios e historial. Después (issues 011 a 013): descartar con motivo,
+// búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
+// los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -43,8 +45,9 @@ service IssueService {
       body: "*"
     };
   }
-  // Lista los issues de un proyecto, opcionalmente filtrados por estado.
-  // Orden: rank ascendente (el orden manual del backlog y de cada columna).
+  // Lista los issues de un proyecto con búsqueda, filtros y orden (ver
+  // ListIssuesRequest). Sin ellos: todos, por rank ascendente (el orden
+  // manual del backlog y de cada columna).
   rpc ListIssues(ListIssuesRequest) returns (ListIssuesResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issues"};
   }
@@ -62,6 +65,9 @@ service IssueService {
   }
   // Cambia el estado de un issue (mover de columna en el tablero) y,
   // opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
+  // Moverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda
+  // ausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit
+  // del estado destino no lo impide: el panel marca la columna excedida.
   rpc MoveIssue(MoveIssueRequest) returns (MoveIssueResponse) {
     option (google.api.http) = {
       post: "/v1/projects/{project_id}/issues/{number}:move"
@@ -73,6 +79,24 @@ service IssueService {
   rpc UpdateIssue(UpdateIssueRequest) returns (UpdateIssueResponse) {
     option (google.api.http) = {
       patch: "/v1/projects/{project_id}/issues/{number}"
+      body: "*"
+    };
+  }
+  // Descarta un issue con un motivo: pasa a un estado de categoría CANCELED,
+  // conserva su rank y guarda el motivo en Issue.discard. FAILED_PRECONDITION
+  // si ya está en un estado CANCELED.
+  rpc DiscardIssue(DiscardIssueRequest) returns (DiscardIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/issues/{number}:discard"
+      body: "*"
+    };
+  }
+  // Restaura un issue descartado (con o sin motivo): pasa al primer estado de
+  // categoría TODO, al final de esa columna, y borra Issue.discard.
+  // FAILED_PRECONDITION si no está en un estado CANCELED.
+  rpc RestoreIssue(RestoreIssueRequest) returns (RestoreIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/issues/{number}:restore"
       body: "*"
     };
   }
@@ -103,6 +127,16 @@ service IssueService {
   // si es el último de su categoría, o si tiene issues y no viene destino.
   rpc DeleteStatus(DeleteStatusRequest) returns (DeleteStatusResponse) {
     option (google.api.http) = {delete: "/v1/projects/{project_id}/statuses/{status_id}"};
+  }
+  // Guarda la lista completa de estados de una vez (Ajustes › Estados):
+  // crea, renombra, reordena, cambia color, WIP o visibilidad y borra en una
+  // sola transacción, todo o nada. Valida las mismas reglas que los RPC
+  // sueltos sobre el resultado final (ver BatchUpdateStatusesRequest).
+  rpc BatchUpdateStatuses(BatchUpdateStatusesRequest) returns (BatchUpdateStatusesResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/statuses:batchUpdate"
+      body: "*"
+    };
   }
 
   // Etiquetas del proyecto, por nombre.
@@ -206,6 +240,19 @@ message Issue {
   string status_id = 11;
   // Etiquetas del issue, ordenadas por nombre de etiqueta.
   repeated string label_ids = 12;
+  // Motivo del descarte. Presente solo mientras el issue está en un estado
+  // CANCELED al que llegó con DiscardIssue; ausente si se descartó con
+  // MoveIssue (descartado sin motivo) o si no está descartado.
+  DiscardInfo discard = 13;
+}
+
+// Quién descartó un issue con DiscardIssue, cuándo y por qué.
+message DiscardInfo {
+  // Sin espacios en los extremos, 1 a 500 caracteres.
+  string reason = 1;
+  // uid de quien lo descartó.
+  string actor_id = 2;
+  google.protobuf.Timestamp discarded_at = 3;
 }
 
 // Estado concreto de un proyecto: una columna del tablero.
@@ -215,15 +262,27 @@ message Status {
   // Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
   string name = 3;
   // Categoría: la que ven los clientes que no conocen los estados del
-  // proyecto (la CLI, los reportes). CANCELED no se muestra en el tablero.
+  // proyecto (la CLI, los reportes).
   IssueState category = 4;
   // Posición en el orden de columnas, opaca (como Issue.rank).
   string rank = 5;
+  // Tono de la columna. Siempre viene con valor: al crear o actualizar,
+  // UNSPECIFIED se guarda como el tono de su categoría (TODO: NEUTRAL,
+  // IN_PROGRESS: INFO, DONE: SUCCESS, CANCELED: DANGER).
+  LabelColor color = 6;
+  // Máximo de issues en la columna; 0 = sin límite (negativo es
+  // INVALID_ARGUMENT). Pasarse avisa, no bloquea: la API mueve igual y el
+  // panel marca la columna como excedida.
+  int32 wip_limit = 7;
+  // La columna no se muestra en el tablero; sus issues sí salen en
+  // ListIssues. Los estados CANCELED nacen ocultos.
+  bool hidden = 8;
 }
 
-// Color de una etiqueta: un tono del design system, no un valor libre.
+// Tono del design system, no un valor libre: color de una etiqueta (Label)
+// y de un estado (Status).
 enum LabelColor {
-  // Se guarda como NEUTRAL.
+  // En Label se guarda como NEUTRAL; en Status, como el tono de su categoría.
   LABEL_COLOR_UNSPECIFIED = 0;
   LABEL_COLOR_NEUTRAL = 1;
   LABEL_COLOR_INFO = 2;
@@ -269,6 +328,8 @@ message IssueEvent {
     PriorityChanged priority_changed = 9;
     LabelsChanged labels_changed = 10;
     Comment commented = 11;
+    IssueDiscarded discarded = 12;
+    IssueRestored restored = 13;
   }
 }
 
@@ -283,6 +344,28 @@ message StatusChanged {
   string to_status_id = 4;
   string to_status_name = 5;
   IssueState to_state = 6;
+}
+
+// Descartado con DiscardIssue. Descartar con MoveIssue registra un
+// StatusChanged. Los nombres se guardan como en StatusChanged.
+message IssueDiscarded {
+  string reason = 1;
+  string from_status_id = 2;
+  string from_status_name = 3;
+  IssueState from_state = 4;
+  // Siempre de categoría CANCELED.
+  string to_status_id = 5;
+  string to_status_name = 6;
+}
+
+// Restaurado con RestoreIssue. Los nombres se guardan como en StatusChanged.
+message IssueRestored {
+  // Siempre de categoría CANCELED.
+  string from_status_id = 1;
+  string from_status_name = 2;
+  // Siempre de categoría TODO.
+  string to_status_id = 3;
+  string to_status_name = 4;
 }
 
 message TitleChanged {
@@ -343,11 +426,46 @@ message CreateProjectResponse {
   Project project = 1;
 }
 
+// Los filtros se combinan con Y; dentro de un filtro repetido, con O. Un
+// filtro vacío no filtra.
 message ListIssuesRequest {
   string project_id = 1;
-  // UNSPECIFIED: todos los estados.
+  // Una categoría; UNSPECIFIED: todas. Para varias, states. Mandar state y
+  // states a la vez es INVALID_ARGUMENT.
   IssueState state = 2;
+  // Paginación. El cursor codifica orden y filtros: usarlo con otros
+  // filtros u otro orden es INVALID_ARGUMENT (el cliente vuelve a la primera
+  // página).
   PageRequest page = 3;
+  // Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide
+  // con parte del título sin distinguir mayúsculas ni acentos, o con el
+  // número si viene como clave ("TK-12", con la key del proyecto) o solo el
+  // número ("12"). Vacío o solo espacios: sin búsqueda.
+  string query = 4;
+  // Categorías, p. ej. [TODO, IN_PROGRESS] para los activos. UNSPECIFIED
+  // dentro de la lista es INVALID_ARGUMENT.
+  repeated IssueState states = 5;
+  // Estados concretos. Uno de otro proyecto es INVALID_ARGUMENT.
+  repeated string status_ids = 6;
+  // Prioridades. UNSPECIFIED dentro de la lista es INVALID_ARGUMENT.
+  repeated Priority priorities = 7;
+  // Etiquetas: pasa un issue con cualquiera de ellas. Una de otro proyecto
+  // es INVALID_ARGUMENT.
+  repeated string label_ids = 8;
+  // UNSPECIFIED: ISSUE_ORDER_RANK.
+  IssueOrder order_by = 9;
+}
+
+// Orden de ListIssues. Los empates se resuelven por rank, así el orden es
+// estable entre páginas.
+enum IssueOrder {
+  ISSUE_ORDER_UNSPECIFIED = 0;
+  // rank ascendente: el orden manual del tablero.
+  ISSUE_ORDER_RANK = 1;
+  // updated_at descendente: lo último que cambió, primero.
+  ISSUE_ORDER_UPDATED_DESC = 2;
+  // Prioridad descendente: URGENT primero.
+  ISSUE_ORDER_PRIORITY_DESC = 3;
 }
 
 message ListIssuesResponse {
@@ -420,6 +538,31 @@ message UpdateIssueResponse {
   Issue issue = 1;
 }
 
+message DiscardIssueRequest {
+  string project_id = 1;
+  int32 number = 2;
+  // Obligatorio: 1 a 500 caracteres sin contar los espacios de los extremos
+  // (se guarda sin ellos). Vacío o solo espacios es INVALID_ARGUMENT.
+  string reason = 3;
+  // Estado CANCELED destino, si el proyecto tiene varios. Vacío: el primero
+  // de esa categoría en el orden de columnas. Uno de otra categoría o de
+  // otro proyecto es INVALID_ARGUMENT.
+  string status_id = 4;
+}
+
+message DiscardIssueResponse {
+  Issue issue = 1;
+}
+
+message RestoreIssueRequest {
+  string project_id = 1;
+  int32 number = 2;
+}
+
+message RestoreIssueResponse {
+  Issue issue = 1;
+}
+
 message ListStatusesRequest {
   string project_id = 1;
 }
@@ -436,6 +579,11 @@ message CreateStatusRequest {
   IssueState category = 3;
   // Queda después de este estado; vacío: al final.
   string after_status_id = 4;
+  // Ver Status.color, Status.wip_limit y Status.hidden. Sin hidden, un
+  // estado CANCELED nace oculto y los demás visibles.
+  LabelColor color = 5;
+  int32 wip_limit = 6;
+  optional bool hidden = 7;
 }
 
 message CreateStatusResponse {
@@ -448,6 +596,10 @@ message UpdateStatusRequest {
   optional string name = 3;
   // Reubica el estado después de este; presente y vacío: al principio.
   optional string after_status_id = 4;
+  // Ver Status.color, Status.wip_limit y Status.hidden.
+  optional LabelColor color = 5;
+  optional int32 wip_limit = 6;
+  optional bool hidden = 7;
 }
 
 message UpdateStatusResponse {
@@ -464,6 +616,49 @@ message DeleteStatusRequest {
 }
 
 message DeleteStatusResponse {}
+
+// La lista completa de estados como debe quedar, en el orden de columnas.
+//
+// - Un estado del proyecto que no está en statuses ni en deletions es
+//   FAILED_PRECONDITION: la vista está vieja (otro lo creó), recargar.
+// - Mismas reglas que los RPC sueltos sobre el resultado: máximo 20
+//   (FAILED_PRECONDITION), al menos uno por categoría (FAILED_PRECONDITION),
+//   nombres únicos (ALREADY_EXISTS).
+// - Cada issue que pasa de un estado borrado a otro deja su evento
+//   status_changed.
+message BatchUpdateStatusesRequest {
+  string project_id = 1;
+  repeated StatusSpec statuses = 2;
+  // Estados que se borran. Ninguno puede estar también en statuses.
+  repeated StatusDeletion deletions = 3;
+}
+
+// Un estado tal como debe quedar. La posición en la lista define su rank.
+message StatusSpec {
+  // Vacío: estado nuevo. Uno de otro proyecto es INVALID_ARGUMENT.
+  string id = 1;
+  // 1 a 40 caracteres.
+  string name = 2;
+  // Obligatoria en un estado nuevo. En uno existente no cambia: UNSPECIFIED
+  // o la misma; otra es INVALID_ARGUMENT.
+  IssueState category = 3;
+  LabelColor color = 4;
+  int32 wip_limit = 5;
+  bool hidden = 6;
+}
+
+message StatusDeletion {
+  string status_id = 1;
+  // Estado al que pasan sus issues, como en DeleteStatusRequest: obligatorio
+  // si tiene issues. Tiene que ser un estado existente que queda en
+  // statuses (no uno nuevo del mismo request); si no, INVALID_ARGUMENT.
+  string move_to_status_id = 2;
+}
+
+// Los estados del proyecto ya guardados, en orden (como ListStatuses).
+message BatchUpdateStatusesResponse {
+  repeated Status statuses = 1;
+}
 
 message ListLabelsRequest {
   string project_id = 1;

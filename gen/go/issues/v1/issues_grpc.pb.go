@@ -1,7 +1,9 @@
 // Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
 // trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
 // estados configurables por proyecto, orden manual, edición, etiquetas,
-// comentarios e historial. Miembros, roles y las piezas de cada metodología
+// comentarios e historial. Después (issues 011 a 013): descartar con motivo,
+// búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
+// los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -32,23 +34,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IssueService_ListProjects_FullMethodName    = "/issues.v1.IssueService/ListProjects"
-	IssueService_CreateProject_FullMethodName   = "/issues.v1.IssueService/CreateProject"
-	IssueService_ListIssues_FullMethodName      = "/issues.v1.IssueService/ListIssues"
-	IssueService_GetIssue_FullMethodName        = "/issues.v1.IssueService/GetIssue"
-	IssueService_CreateIssue_FullMethodName     = "/issues.v1.IssueService/CreateIssue"
-	IssueService_MoveIssue_FullMethodName       = "/issues.v1.IssueService/MoveIssue"
-	IssueService_UpdateIssue_FullMethodName     = "/issues.v1.IssueService/UpdateIssue"
-	IssueService_ListStatuses_FullMethodName    = "/issues.v1.IssueService/ListStatuses"
-	IssueService_CreateStatus_FullMethodName    = "/issues.v1.IssueService/CreateStatus"
-	IssueService_UpdateStatus_FullMethodName    = "/issues.v1.IssueService/UpdateStatus"
-	IssueService_DeleteStatus_FullMethodName    = "/issues.v1.IssueService/DeleteStatus"
-	IssueService_ListLabels_FullMethodName      = "/issues.v1.IssueService/ListLabels"
-	IssueService_CreateLabel_FullMethodName     = "/issues.v1.IssueService/CreateLabel"
-	IssueService_UpdateLabel_FullMethodName     = "/issues.v1.IssueService/UpdateLabel"
-	IssueService_DeleteLabel_FullMethodName     = "/issues.v1.IssueService/DeleteLabel"
-	IssueService_CreateComment_FullMethodName   = "/issues.v1.IssueService/CreateComment"
-	IssueService_ListIssueEvents_FullMethodName = "/issues.v1.IssueService/ListIssueEvents"
+	IssueService_ListProjects_FullMethodName        = "/issues.v1.IssueService/ListProjects"
+	IssueService_CreateProject_FullMethodName       = "/issues.v1.IssueService/CreateProject"
+	IssueService_ListIssues_FullMethodName          = "/issues.v1.IssueService/ListIssues"
+	IssueService_GetIssue_FullMethodName            = "/issues.v1.IssueService/GetIssue"
+	IssueService_CreateIssue_FullMethodName         = "/issues.v1.IssueService/CreateIssue"
+	IssueService_MoveIssue_FullMethodName           = "/issues.v1.IssueService/MoveIssue"
+	IssueService_UpdateIssue_FullMethodName         = "/issues.v1.IssueService/UpdateIssue"
+	IssueService_DiscardIssue_FullMethodName        = "/issues.v1.IssueService/DiscardIssue"
+	IssueService_RestoreIssue_FullMethodName        = "/issues.v1.IssueService/RestoreIssue"
+	IssueService_ListStatuses_FullMethodName        = "/issues.v1.IssueService/ListStatuses"
+	IssueService_CreateStatus_FullMethodName        = "/issues.v1.IssueService/CreateStatus"
+	IssueService_UpdateStatus_FullMethodName        = "/issues.v1.IssueService/UpdateStatus"
+	IssueService_DeleteStatus_FullMethodName        = "/issues.v1.IssueService/DeleteStatus"
+	IssueService_BatchUpdateStatuses_FullMethodName = "/issues.v1.IssueService/BatchUpdateStatuses"
+	IssueService_ListLabels_FullMethodName          = "/issues.v1.IssueService/ListLabels"
+	IssueService_CreateLabel_FullMethodName         = "/issues.v1.IssueService/CreateLabel"
+	IssueService_UpdateLabel_FullMethodName         = "/issues.v1.IssueService/UpdateLabel"
+	IssueService_DeleteLabel_FullMethodName         = "/issues.v1.IssueService/DeleteLabel"
+	IssueService_CreateComment_FullMethodName       = "/issues.v1.IssueService/CreateComment"
+	IssueService_ListIssueEvents_FullMethodName     = "/issues.v1.IssueService/ListIssueEvents"
 )
 
 // IssueServiceClient is the client API for IssueService service.
@@ -74,8 +79,9 @@ type IssueServiceClient interface {
 	// Crea un proyecto. ALREADY_EXISTS si el espacio de trabajo ya tiene uno con
 	// esa key.
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
-	// Lista los issues de un proyecto, opcionalmente filtrados por estado.
-	// Orden: rank ascendente (el orden manual del backlog y de cada columna).
+	// Lista los issues de un proyecto con búsqueda, filtros y orden (ver
+	// ListIssuesRequest). Sin ellos: todos, por rank ascendente (el orden
+	// manual del backlog y de cada columna).
 	ListIssues(ctx context.Context, in *ListIssuesRequest, opts ...grpc.CallOption) (*ListIssuesResponse, error)
 	// Devuelve un issue por su número dentro del proyecto.
 	GetIssue(ctx context.Context, in *GetIssueRequest, opts ...grpc.CallOption) (*GetIssueResponse, error)
@@ -84,10 +90,21 @@ type IssueServiceClient interface {
 	CreateIssue(ctx context.Context, in *CreateIssueRequest, opts ...grpc.CallOption) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero) y,
 	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
+	// Moverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda
+	// ausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit
+	// del estado destino no lo impide: el panel marca la columna excedida.
 	MoveIssue(ctx context.Context, in *MoveIssueRequest, opts ...grpc.CallOption) (*MoveIssueResponse, error)
 	// Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
 	// lo que viene; cada cambio queda en el historial.
 	UpdateIssue(ctx context.Context, in *UpdateIssueRequest, opts ...grpc.CallOption) (*UpdateIssueResponse, error)
+	// Descarta un issue con un motivo: pasa a un estado de categoría CANCELED,
+	// conserva su rank y guarda el motivo en Issue.discard. FAILED_PRECONDITION
+	// si ya está en un estado CANCELED.
+	DiscardIssue(ctx context.Context, in *DiscardIssueRequest, opts ...grpc.CallOption) (*DiscardIssueResponse, error)
+	// Restaura un issue descartado (con o sin motivo): pasa al primer estado de
+	// categoría TODO, al final de esa columna, y borra Issue.discard.
+	// FAILED_PRECONDITION si no está en un estado CANCELED.
+	RestoreIssue(ctx context.Context, in *RestoreIssueRequest, opts ...grpc.CallOption) (*RestoreIssueResponse, error)
 	// Estados del proyecto (las columnas del tablero), en orden. Todo proyecto
 	// nace con cuatro, uno por categoría: Por hacer, En curso, Hecho y
 	// Descartado.
@@ -101,6 +118,11 @@ type IssueServiceClient interface {
 	// Borra un estado y pasa sus issues a move_to_status_id. FAILED_PRECONDITION
 	// si es el último de su categoría, o si tiene issues y no viene destino.
 	DeleteStatus(ctx context.Context, in *DeleteStatusRequest, opts ...grpc.CallOption) (*DeleteStatusResponse, error)
+	// Guarda la lista completa de estados de una vez (Ajustes › Estados):
+	// crea, renombra, reordena, cambia color, WIP o visibilidad y borra en una
+	// sola transacción, todo o nada. Valida las mismas reglas que los RPC
+	// sueltos sobre el resultado final (ver BatchUpdateStatusesRequest).
+	BatchUpdateStatuses(ctx context.Context, in *BatchUpdateStatusesRequest, opts ...grpc.CallOption) (*BatchUpdateStatusesResponse, error)
 	// Etiquetas del proyecto, por nombre.
 	ListLabels(ctx context.Context, in *ListLabelsRequest, opts ...grpc.CallOption) (*ListLabelsResponse, error)
 	// Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
@@ -195,6 +217,26 @@ func (c *issueServiceClient) UpdateIssue(ctx context.Context, in *UpdateIssueReq
 	return out, nil
 }
 
+func (c *issueServiceClient) DiscardIssue(ctx context.Context, in *DiscardIssueRequest, opts ...grpc.CallOption) (*DiscardIssueResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardIssueResponse)
+	err := c.cc.Invoke(ctx, IssueService_DiscardIssue_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) RestoreIssue(ctx context.Context, in *RestoreIssueRequest, opts ...grpc.CallOption) (*RestoreIssueResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreIssueResponse)
+	err := c.cc.Invoke(ctx, IssueService_RestoreIssue_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *issueServiceClient) ListStatuses(ctx context.Context, in *ListStatusesRequest, opts ...grpc.CallOption) (*ListStatusesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListStatusesResponse)
@@ -229,6 +271,16 @@ func (c *issueServiceClient) DeleteStatus(ctx context.Context, in *DeleteStatusR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteStatusResponse)
 	err := c.cc.Invoke(ctx, IssueService_DeleteStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *issueServiceClient) BatchUpdateStatuses(ctx context.Context, in *BatchUpdateStatusesRequest, opts ...grpc.CallOption) (*BatchUpdateStatusesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchUpdateStatusesResponse)
+	err := c.cc.Invoke(ctx, IssueService_BatchUpdateStatuses_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -318,8 +370,9 @@ type IssueServiceServer interface {
 	// Crea un proyecto. ALREADY_EXISTS si el espacio de trabajo ya tiene uno con
 	// esa key.
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
-	// Lista los issues de un proyecto, opcionalmente filtrados por estado.
-	// Orden: rank ascendente (el orden manual del backlog y de cada columna).
+	// Lista los issues de un proyecto con búsqueda, filtros y orden (ver
+	// ListIssuesRequest). Sin ellos: todos, por rank ascendente (el orden
+	// manual del backlog y de cada columna).
 	ListIssues(context.Context, *ListIssuesRequest) (*ListIssuesResponse, error)
 	// Devuelve un issue por su número dentro del proyecto.
 	GetIssue(context.Context, *GetIssueRequest) (*GetIssueResponse, error)
@@ -328,10 +381,21 @@ type IssueServiceServer interface {
 	CreateIssue(context.Context, *CreateIssueRequest) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero) y,
 	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
+	// Moverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda
+	// ausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit
+	// del estado destino no lo impide: el panel marca la columna excedida.
 	MoveIssue(context.Context, *MoveIssueRequest) (*MoveIssueResponse, error)
 	// Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
 	// lo que viene; cada cambio queda en el historial.
 	UpdateIssue(context.Context, *UpdateIssueRequest) (*UpdateIssueResponse, error)
+	// Descarta un issue con un motivo: pasa a un estado de categoría CANCELED,
+	// conserva su rank y guarda el motivo en Issue.discard. FAILED_PRECONDITION
+	// si ya está en un estado CANCELED.
+	DiscardIssue(context.Context, *DiscardIssueRequest) (*DiscardIssueResponse, error)
+	// Restaura un issue descartado (con o sin motivo): pasa al primer estado de
+	// categoría TODO, al final de esa columna, y borra Issue.discard.
+	// FAILED_PRECONDITION si no está en un estado CANCELED.
+	RestoreIssue(context.Context, *RestoreIssueRequest) (*RestoreIssueResponse, error)
 	// Estados del proyecto (las columnas del tablero), en orden. Todo proyecto
 	// nace con cuatro, uno por categoría: Por hacer, En curso, Hecho y
 	// Descartado.
@@ -345,6 +409,11 @@ type IssueServiceServer interface {
 	// Borra un estado y pasa sus issues a move_to_status_id. FAILED_PRECONDITION
 	// si es el último de su categoría, o si tiene issues y no viene destino.
 	DeleteStatus(context.Context, *DeleteStatusRequest) (*DeleteStatusResponse, error)
+	// Guarda la lista completa de estados de una vez (Ajustes › Estados):
+	// crea, renombra, reordena, cambia color, WIP o visibilidad y borra en una
+	// sola transacción, todo o nada. Valida las mismas reglas que los RPC
+	// sueltos sobre el resultado final (ver BatchUpdateStatusesRequest).
+	BatchUpdateStatuses(context.Context, *BatchUpdateStatusesRequest) (*BatchUpdateStatusesResponse, error)
 	// Etiquetas del proyecto, por nombre.
 	ListLabels(context.Context, *ListLabelsRequest) (*ListLabelsResponse, error)
 	// Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
@@ -390,6 +459,12 @@ func (UnimplementedIssueServiceServer) MoveIssue(context.Context, *MoveIssueRequ
 func (UnimplementedIssueServiceServer) UpdateIssue(context.Context, *UpdateIssueRequest) (*UpdateIssueResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateIssue not implemented")
 }
+func (UnimplementedIssueServiceServer) DiscardIssue(context.Context, *DiscardIssueRequest) (*DiscardIssueResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardIssue not implemented")
+}
+func (UnimplementedIssueServiceServer) RestoreIssue(context.Context, *RestoreIssueRequest) (*RestoreIssueResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreIssue not implemented")
+}
 func (UnimplementedIssueServiceServer) ListStatuses(context.Context, *ListStatusesRequest) (*ListStatusesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListStatuses not implemented")
 }
@@ -401,6 +476,9 @@ func (UnimplementedIssueServiceServer) UpdateStatus(context.Context, *UpdateStat
 }
 func (UnimplementedIssueServiceServer) DeleteStatus(context.Context, *DeleteStatusRequest) (*DeleteStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteStatus not implemented")
+}
+func (UnimplementedIssueServiceServer) BatchUpdateStatuses(context.Context, *BatchUpdateStatusesRequest) (*BatchUpdateStatusesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchUpdateStatuses not implemented")
 }
 func (UnimplementedIssueServiceServer) ListLabels(context.Context, *ListLabelsRequest) (*ListLabelsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListLabels not implemented")
@@ -567,6 +645,42 @@ func _IssueService_UpdateIssue_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IssueService_DiscardIssue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardIssueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).DiscardIssue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_DiscardIssue_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).DiscardIssue(ctx, req.(*DiscardIssueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_RestoreIssue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreIssueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).RestoreIssue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_RestoreIssue_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).RestoreIssue(ctx, req.(*RestoreIssueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IssueService_ListStatuses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListStatusesRequest)
 	if err := dec(in); err != nil {
@@ -635,6 +749,24 @@ func _IssueService_DeleteStatus_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IssueServiceServer).DeleteStatus(ctx, req.(*DeleteStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IssueService_BatchUpdateStatuses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchUpdateStatusesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).BatchUpdateStatuses(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_BatchUpdateStatuses_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).BatchUpdateStatuses(ctx, req.(*BatchUpdateStatusesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -783,6 +915,14 @@ var IssueService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _IssueService_UpdateIssue_Handler,
 		},
 		{
+			MethodName: "DiscardIssue",
+			Handler:    _IssueService_DiscardIssue_Handler,
+		},
+		{
+			MethodName: "RestoreIssue",
+			Handler:    _IssueService_RestoreIssue_Handler,
+		},
+		{
 			MethodName: "ListStatuses",
 			Handler:    _IssueService_ListStatuses_Handler,
 		},
@@ -797,6 +937,10 @@ var IssueService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteStatus",
 			Handler:    _IssueService_DeleteStatus_Handler,
+		},
+		{
+			MethodName: "BatchUpdateStatuses",
+			Handler:    _IssueService_BatchUpdateStatuses_Handler,
 		},
 		{
 			MethodName: "ListLabels",
