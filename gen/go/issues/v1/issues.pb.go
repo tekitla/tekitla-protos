@@ -238,7 +238,8 @@ const (
 	IssueOrder_ISSUE_ORDER_RANK IssueOrder = 1
 	// updated_at descendente: lo último que cambió, primero.
 	IssueOrder_ISSUE_ORDER_UPDATED_DESC IssueOrder = 2
-	// Prioridad descendente: URGENT primero.
+	// Prioridad descendente: URGENT primero. Ningún issue guardado tiene
+	// PRIORITY_UNSPECIFIED (CreateIssue lo guarda como MEDIUM).
 	IssueOrder_ISSUE_ORDER_PRIORITY_DESC IssueOrder = 3
 )
 
@@ -402,9 +403,11 @@ type Issue struct {
 	StatusId string `protobuf:"bytes,11,opt,name=status_id,json=statusId,proto3" json:"status_id,omitempty"`
 	// Etiquetas del issue, ordenadas por nombre de etiqueta.
 	LabelIds []string `protobuf:"bytes,12,rep,name=label_ids,json=labelIds,proto3" json:"label_ids,omitempty"`
-	// Motivo del descarte. Presente solo mientras el issue está en un estado
-	// CANCELED al que llegó con DiscardIssue; ausente si se descartó con
-	// MoveIssue (descartado sin motivo) o si no está descartado.
+	// Motivo del descarte: lo pone DiscardIssue. Ausente si se descartó con
+	// MoveIssue (descartado sin motivo) o si no está descartado. Se mantiene
+	// al pasar de un estado CANCELED a otro y se borra cuando el issue sale de
+	// CANCELED por cualquier vía (MoveIssue, RestoreIssue, o DeleteStatus y
+	// BatchUpdateStatuses al mover los issues de un estado borrado).
 	Discard       *DiscardInfo `protobuf:"bytes,13,opt,name=discard,proto3" json:"discard,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -615,7 +618,8 @@ type Status struct {
 	// panel marca la columna como excedida.
 	WipLimit int32 `protobuf:"varint,7,opt,name=wip_limit,json=wipLimit,proto3" json:"wip_limit,omitempty"`
 	// La columna no se muestra en el tablero; sus issues sí salen en
-	// ListIssues. Los estados CANCELED nacen ocultos.
+	// ListIssues. Los estados CANCELED nacen ocultos, y los que existían antes
+	// de este campo (v0.3.0) se migran con hidden = true; los demás, visibles.
 	Hidden        bool `protobuf:"varint,8,opt,name=hidden,proto3" json:"hidden,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1913,9 +1917,11 @@ type ListIssuesRequest struct {
 	// página).
 	Page *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
 	// Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide
-	// con parte del título sin distinguir mayúsculas ni acentos, o con el
-	// número si viene como clave ("TK-12", con la key del proyecto) o solo el
-	// número ("12"). Vacío o solo espacios: sin búsqueda.
+	// con parte del título sin distinguir mayúsculas ni acentos. Si además es
+	// una clave del proyecto ("TK-12" o "tk-12": la key sin distinguir
+	// mayúsculas) o un número ("12"), también trae ese issue: "12" devuelve el
+	// #12 y los títulos que contienen "12". Vacío o solo espacios: sin
+	// búsqueda.
 	Query string `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
 	// Categorías, p. ej. [TODO, IN_PROGRESS] para los activos. UNSPECIFIED
 	// dentro de la lista es INVALID_ARGUMENT.
@@ -3289,6 +3295,8 @@ func (*DeleteStatusResponse) Descriptor() ([]byte, []int) {
 //     nombres únicos (ALREADY_EXISTS).
 //   - Cada issue que pasa de un estado borrado a otro deja su evento
 //     status_changed.
+//   - Sin control de versión: lo que viene pisa lo guardado (como UpdateStatus).
+//     Si otro editó un estado mientras tanto, su cambio se pierde.
 type BatchUpdateStatusesRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`

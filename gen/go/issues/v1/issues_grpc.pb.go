@@ -90,8 +90,9 @@ type IssueServiceClient interface {
 	CreateIssue(ctx context.Context, in *CreateIssueRequest, opts ...grpc.CallOption) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero) y,
 	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
-	// Moverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda
-	// ausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit
+	// Moverlo a CANCELED desde otra categoría lo descarta sin motivo
+	// (Issue.discard queda ausente); entre estados CANCELED, Issue.discard se
+	// mantiene; sacarlo de CANCELED lo borra. Pasarse del wip_limit
 	// del estado destino no lo impide: el panel marca la columna excedida.
 	MoveIssue(ctx context.Context, in *MoveIssueRequest, opts ...grpc.CallOption) (*MoveIssueResponse, error)
 	// Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
@@ -381,8 +382,9 @@ type IssueServiceServer interface {
 	CreateIssue(context.Context, *CreateIssueRequest) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero) y,
 	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
-	// Moverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda
-	// ausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit
+	// Moverlo a CANCELED desde otra categoría lo descarta sin motivo
+	// (Issue.discard queda ausente); entre estados CANCELED, Issue.discard se
+	// mantiene; sacarlo de CANCELED lo borra. Pasarse del wip_limit
 	// del estado destino no lo impide: el panel marca la columna excedida.
 	MoveIssue(context.Context, *MoveIssueRequest) (*MoveIssueResponse, error)
 	// Edita título, descripción, prioridad o etiquetas de un issue. Solo cambia
