@@ -83,7 +83,7 @@
     },
     "/v1/projects/{projectId}/issues": {
       "get": {
-        "summary": "Lista los issues de un proyecto, opcionalmente filtrados por estado.\nOrden: rank ascendente (el orden manual del backlog y de cada columna).",
+        "summary": "Lista los issues de un proyecto con búsqueda, filtros y orden (ver\nListIssuesRequest). Sin ellos: todos, por rank ascendente (el orden\nmanual del backlog y de cada columna).",
         "operationId": "IssueService_ListIssues",
         "responses": {
           "200": {
@@ -102,7 +102,7 @@
           },
           {
             "name": "state",
-            "description": "UNSPECIFIED: todos los estados.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse.",
+            "description": "Una categoría; UNSPECIFIED: todas. Para varias, states. Mandar state y\nstates a la vez es INVALID_ARGUMENT.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse.",
             "in": "query",
             "required": false,
             "type": "string",
@@ -127,6 +127,85 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          },
+          {
+            "name": "query",
+            "description": "Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide\ncon parte del título sin distinguir mayúsculas ni acentos, o con el\nnúmero si viene como clave (\"TK-12\", con la key del proyecto) o solo el\nnúmero (\"12\"). Vacío o solo espacios: sin búsqueda.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "states",
+            "description": "Categorías, p. ej. [TODO, IN_PROGRESS] para los activos. UNSPECIFIED\ndentro de la lista es INVALID_ARGUMENT.\n\n - ISSUE_STATE_TODO: Por hacer.\n - ISSUE_STATE_IN_PROGRESS: En curso.\n - ISSUE_STATE_DONE: Hecho.\n - ISSUE_STATE_CANCELED: Descartado: cerrado sin hacerse.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ISSUE_STATE_UNSPECIFIED",
+                "ISSUE_STATE_TODO",
+                "ISSUE_STATE_IN_PROGRESS",
+                "ISSUE_STATE_DONE",
+                "ISSUE_STATE_CANCELED"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "statusIds",
+            "description": "Estados concretos. Uno de otro proyecto es INVALID_ARGUMENT.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "priorities",
+            "description": "Prioridades. UNSPECIFIED dentro de la lista es INVALID_ARGUMENT.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "PRIORITY_UNSPECIFIED",
+                "PRIORITY_LOW",
+                "PRIORITY_MEDIUM",
+                "PRIORITY_HIGH",
+                "PRIORITY_URGENT"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "labelIds",
+            "description": "Etiquetas: pasa un issue con cualquiera de ellas. Una de otro proyecto\nes INVALID_ARGUMENT.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "orderBy",
+            "description": "UNSPECIFIED: ISSUE_ORDER_RANK.\n\n - ISSUE_ORDER_RANK: rank ascendente: el orden manual del tablero.\n - ISSUE_ORDER_UPDATED_DESC: updated_at descendente: lo último que cambió, primero.\n - ISSUE_ORDER_PRIORITY_DESC: Prioridad descendente: URGENT primero.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "ISSUE_ORDER_UNSPECIFIED",
+              "ISSUE_ORDER_RANK",
+              "ISSUE_ORDER_UPDATED_DESC",
+              "ISSUE_ORDER_PRIORITY_DESC"
+            ],
+            "default": "ISSUE_ORDER_UNSPECIFIED"
           }
         ],
         "tags": [
@@ -320,9 +399,49 @@
         ]
       }
     },
+    "/v1/projects/{projectId}/issues/{number}:discard": {
+      "post": {
+        "summary": "Descarta un issue con un motivo: pasa a un estado de categoría CANCELED,\nconserva su rank y guarda el motivo en Issue.discard. FAILED_PRECONDITION\nsi ya está en un estado CANCELED.",
+        "operationId": "IssueService_DiscardIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DiscardIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceDiscardIssueBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
     "/v1/projects/{projectId}/issues/{number}:move": {
       "post": {
-        "summary": "Cambia el estado de un issue (mover de columna en el tablero) y,\nopcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).",
+        "summary": "Cambia el estado de un issue (mover de columna en el tablero) y,\nopcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).\nMoverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda\nausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit\ndel estado destino no lo impide: el panel marca la columna excedida.",
         "operationId": "IssueService_MoveIssue",
         "responses": {
           "200": {
@@ -352,6 +471,46 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/IssueServiceMoveIssueBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/issues/{number}:restore": {
+      "post": {
+        "summary": "Restaura un issue descartado (con o sin motivo): pasa al primer estado de\ncategoría TODO, al final de esa columna, y borra Issue.discard.\nFAILED_PRECONDITION si no está en un estado CANCELED.",
+        "operationId": "IssueService_RestoreIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RestoreIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceRestoreIssueBody"
             }
           }
         ],
@@ -614,9 +773,63 @@
           "IssueService"
         ]
       }
+    },
+    "/v1/projects/{projectId}/statuses:batchUpdate": {
+      "post": {
+        "summary": "Guarda la lista completa de estados de una vez (Ajustes › Estados):\ncrea, renombra, reordena, cambia color, WIP o visibilidad y borra en una\nsola transacción, todo o nada. Valida las mismas reglas que los RPC\nsueltos sobre el resultado final (ver BatchUpdateStatusesRequest).",
+        "operationId": "IssueService_BatchUpdateStatuses",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BatchUpdateStatusesResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceBatchUpdateStatusesBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
     }
   },
   "definitions": {
+    "IssueServiceBatchUpdateStatusesBody": {
+      "type": "object",
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1StatusSpec"
+          }
+        },
+        "deletions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1StatusDeletion"
+          },
+          "description": "Estados que se borran. Ninguno puede estar también en statuses."
+        }
+      },
+      "description": "La lista completa de estados como debe quedar, en el orden de columnas.\n\n- Un estado del proyecto que no está en statuses ni en deletions es\n  FAILED_PRECONDITION: la vista está vieja (otro lo creó), recargar.\n- Mismas reglas que los RPC sueltos sobre el resultado: máximo 20\n  (FAILED_PRECONDITION), al menos uno por categoría (FAILED_PRECONDITION),\n  nombres únicos (ALREADY_EXISTS).\n- Cada issue que pasa de un estado borrado a otro deja su evento\n  status_changed."
+    },
     "IssueServiceCreateCommentBody": {
       "type": "object",
       "properties": {
@@ -663,6 +876,30 @@
         "afterStatusId": {
           "type": "string",
           "description": "Queda después de este estado; vacío: al final."
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor",
+          "description": "Ver Status.color, Status.wip_limit y Status.hidden. Sin hidden, un\nestado CANCELED nace oculto y los demás visibles."
+        },
+        "wipLimit": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "IssueServiceDiscardIssueBody": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Obligatorio: 1 a 500 caracteres sin contar los espacios de los extremos\n(se guarda sin ellos). Vacío o solo espacios es INVALID_ARGUMENT."
+        },
+        "statusId": {
+          "type": "string",
+          "description": "Estado CANCELED destino, si el proyecto tiene varios. Vacío: el primero\nde esa categoría en el orden de columnas. Uno de otra categoría o de\notro proyecto es INVALID_ARGUMENT."
         }
       }
     },
@@ -687,6 +924,9 @@
           "format": "int32"
         }
       }
+    },
+    "IssueServiceRestoreIssueBody": {
+      "type": "object"
     },
     "IssueServiceUpdateIssueBody": {
       "type": "object",
@@ -729,6 +969,17 @@
         "afterStatusId": {
           "type": "string",
           "description": "Reubica el estado después de este; presente y vacío: al principio."
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor",
+          "description": "Ver Status.color, Status.wip_limit y Status.hidden."
+        },
+        "wipLimit": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "hidden": {
+          "type": "boolean"
         }
       }
     },
@@ -765,14 +1016,40 @@
         },
         "category": {
           "$ref": "#/definitions/v1IssueState",
-          "description": "Categoría: la que ven los clientes que no conocen los estados del\nproyecto (la CLI, los reportes). CANCELED no se muestra en el tablero."
+          "description": "Categoría: la que ven los clientes que no conocen los estados del\nproyecto (la CLI, los reportes)."
         },
         "rank": {
           "type": "string",
           "description": "Posición en el orden de columnas, opaca (como Issue.rank)."
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor",
+          "description": "Tono de la columna. Siempre viene con valor: al crear o actualizar,\nUNSPECIFIED se guarda como el tono de su categoría (TODO: NEUTRAL,\nIN_PROGRESS: INFO, DONE: SUCCESS, CANCELED: DANGER)."
+        },
+        "wipLimit": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Máximo de issues en la columna; 0 = sin límite (negativo es\nINVALID_ARGUMENT). Pasarse avisa, no bloquea: la API mueve igual y el\npanel marca la columna como excedida."
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "La columna no se muestra en el tablero; sus issues sí salen en\nListIssues. Los estados CANCELED nacen ocultos."
         }
       },
       "description": "Estado concreto de un proyecto: una columna del tablero."
+    },
+    "v1BatchUpdateStatusesResponse": {
+      "type": "object",
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/issuesV1Status"
+          }
+        }
+      },
+      "description": "Los estados del proyecto ya guardados, en orden (como ListStatuses)."
     },
     "v1Comment": {
       "type": "object",
@@ -865,6 +1142,32 @@
       "type": "object",
       "description": "La descripción puede ser larga: el evento solo dice que cambió."
     },
+    "v1DiscardInfo": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Sin espacios en los extremos, 1 a 500 caracteres."
+        },
+        "actorId": {
+          "type": "string",
+          "description": "uid de quien lo descartó."
+        },
+        "discardedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Quién descartó un issue con DiscardIssue, cuándo y por qué."
+    },
+    "v1DiscardIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
     "v1GetIssueResponse": {
       "type": "object",
       "properties": {
@@ -922,11 +1225,40 @@
             "type": "string"
           },
           "description": "Etiquetas del issue, ordenadas por nombre de etiqueta."
+        },
+        "discard": {
+          "$ref": "#/definitions/v1DiscardInfo",
+          "description": "Motivo del descarte. Presente solo mientras el issue está en un estado\nCANCELED al que llegó con DiscardIssue; ausente si se descartó con\nMoveIssue (descartado sin motivo) o si no está descartado."
         }
       }
     },
     "v1IssueCreated": {
       "type": "object"
+    },
+    "v1IssueDiscarded": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "fromStatusId": {
+          "type": "string"
+        },
+        "fromStatusName": {
+          "type": "string"
+        },
+        "fromState": {
+          "$ref": "#/definitions/v1IssueState"
+        },
+        "toStatusId": {
+          "type": "string",
+          "description": "Siempre de categoría CANCELED."
+        },
+        "toStatusName": {
+          "type": "string"
+        }
+      },
+      "description": "Descartado con DiscardIssue. Descartar con MoveIssue registra un\nStatusChanged. Los nombres se guardan como en StatusChanged."
     },
     "v1IssueEvent": {
       "type": "object",
@@ -965,9 +1297,46 @@
         },
         "commented": {
           "$ref": "#/definitions/v1Comment"
+        },
+        "discarded": {
+          "$ref": "#/definitions/v1IssueDiscarded"
+        },
+        "restored": {
+          "$ref": "#/definitions/v1IssueRestored"
         }
       },
       "description": "Un cambio en un issue, para su historial. Reordenar dentro de la misma\ncolumna no genera evento."
+    },
+    "v1IssueOrder": {
+      "type": "string",
+      "enum": [
+        "ISSUE_ORDER_UNSPECIFIED",
+        "ISSUE_ORDER_RANK",
+        "ISSUE_ORDER_UPDATED_DESC",
+        "ISSUE_ORDER_PRIORITY_DESC"
+      ],
+      "default": "ISSUE_ORDER_UNSPECIFIED",
+      "description": "Orden de ListIssues. Los empates se resuelven por rank, así el orden es\nestable entre páginas.\n\n - ISSUE_ORDER_RANK: rank ascendente: el orden manual del tablero.\n - ISSUE_ORDER_UPDATED_DESC: updated_at descendente: lo último que cambió, primero.\n - ISSUE_ORDER_PRIORITY_DESC: Prioridad descendente: URGENT primero."
+    },
+    "v1IssueRestored": {
+      "type": "object",
+      "properties": {
+        "fromStatusId": {
+          "type": "string",
+          "description": "Siempre de categoría CANCELED."
+        },
+        "fromStatusName": {
+          "type": "string"
+        },
+        "toStatusId": {
+          "type": "string",
+          "description": "Siempre de categoría TODO."
+        },
+        "toStatusName": {
+          "type": "string"
+        }
+      },
+      "description": "Restaurado con RestoreIssue. Los nombres se guardan como en StatusChanged."
     },
     "v1IssueState": {
       "type": "string",
@@ -994,7 +1363,7 @@
         "LABEL_COLOR_BRAND"
       ],
       "default": "LABEL_COLOR_UNSPECIFIED",
-      "description": "Color de una etiqueta: un tono del design system, no un valor libre.\n\n - LABEL_COLOR_UNSPECIFIED: Se guarda como NEUTRAL."
+      "description": "Tono del design system, no un valor libre: color de una etiqueta (Label)\ny de un estado (Status).\n\n - LABEL_COLOR_UNSPECIFIED: En Label se guarda como NEUTRAL; en Status, como el tono de su categoría."
     },
     "v1LabelIds": {
       "type": "object",
@@ -1195,6 +1564,14 @@
         }
       }
     },
+    "v1RestoreIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
     "v1StatusChanged": {
       "type": "object",
       "properties": {
@@ -1218,6 +1595,46 @@
         }
       },
       "description": "Los nombres se guardan al momento del cambio: el historial se sigue\nleyendo aunque el estado después se renombre o se borre."
+    },
+    "v1StatusDeletion": {
+      "type": "object",
+      "properties": {
+        "statusId": {
+          "type": "string"
+        },
+        "moveToStatusId": {
+          "type": "string",
+          "description": "Estado al que pasan sus issues, como en DeleteStatusRequest: obligatorio\nsi tiene issues. Tiene que ser un estado existente que queda en\nstatuses (no uno nuevo del mismo request); si no, INVALID_ARGUMENT."
+        }
+      }
+    },
+    "v1StatusSpec": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Vacío: estado nuevo. Uno de otro proyecto es INVALID_ARGUMENT."
+        },
+        "name": {
+          "type": "string",
+          "description": "1 a 40 caracteres."
+        },
+        "category": {
+          "$ref": "#/definitions/v1IssueState",
+          "description": "Obligatoria en un estado nuevo. En uno existente no cambia: UNSPECIFIED\no la misma; otra es INVALID_ARGUMENT."
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor"
+        },
+        "wipLimit": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      },
+      "description": "Un estado tal como debe quedar. La posición en la lista define su rank."
     },
     "v1TitleChanged": {
       "type": "object",

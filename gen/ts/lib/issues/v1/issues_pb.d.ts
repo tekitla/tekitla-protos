@@ -1,7 +1,9 @@
 // Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
 // trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
 // estados configurables por proyecto, orden manual, edición, etiquetas,
-// comentarios e historial. Miembros, roles y las piezas de cada metodología
+// comentarios e historial. Después (issues 011 a 013): descartar con motivo,
+// búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
+// los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -151,6 +153,15 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
    * @generated from field: repeated string label_ids = 12;
    */
   labelIds: string[];
+
+  /**
+   * Motivo del descarte. Presente solo mientras el issue está en un estado
+   * CANCELED al que llegó con DiscardIssue; ausente si se descartó con
+   * MoveIssue (descartado sin motivo) o si no está descartado.
+   *
+   * @generated from field: issues.v1.DiscardInfo discard = 13;
+   */
+  discard?: DiscardInfo | undefined;
 };
 
 /**
@@ -158,6 +169,38 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
  * Use `create(IssueSchema)` to create a new message.
  */
 export declare const IssueSchema: GenMessage<Issue>;
+
+/**
+ * Quién descartó un issue con DiscardIssue, cuándo y por qué.
+ *
+ * @generated from message issues.v1.DiscardInfo
+ */
+export declare type DiscardInfo = Message<"issues.v1.DiscardInfo"> & {
+  /**
+   * Sin espacios en los extremos, 1 a 500 caracteres.
+   *
+   * @generated from field: string reason = 1;
+   */
+  reason: string;
+
+  /**
+   * uid de quien lo descartó.
+   *
+   * @generated from field: string actor_id = 2;
+   */
+  actorId: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp discarded_at = 3;
+   */
+  discardedAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message issues.v1.DiscardInfo.
+ * Use `create(DiscardInfoSchema)` to create a new message.
+ */
+export declare const DiscardInfoSchema: GenMessage<DiscardInfo>;
 
 /**
  * Estado concreto de un proyecto: una columna del tablero.
@@ -184,7 +227,7 @@ export declare type Status = Message<"issues.v1.Status"> & {
 
   /**
    * Categoría: la que ven los clientes que no conocen los estados del
-   * proyecto (la CLI, los reportes). CANCELED no se muestra en el tablero.
+   * proyecto (la CLI, los reportes).
    *
    * @generated from field: issues.v1.IssueState category = 4;
    */
@@ -196,6 +239,32 @@ export declare type Status = Message<"issues.v1.Status"> & {
    * @generated from field: string rank = 5;
    */
   rank: string;
+
+  /**
+   * Tono de la columna. Siempre viene con valor: al crear o actualizar,
+   * UNSPECIFIED se guarda como el tono de su categoría (TODO: NEUTRAL,
+   * IN_PROGRESS: INFO, DONE: SUCCESS, CANCELED: DANGER).
+   *
+   * @generated from field: issues.v1.LabelColor color = 6;
+   */
+  color: LabelColor;
+
+  /**
+   * Máximo de issues en la columna; 0 = sin límite (negativo es
+   * INVALID_ARGUMENT). Pasarse avisa, no bloquea: la API mueve igual y el
+   * panel marca la columna como excedida.
+   *
+   * @generated from field: int32 wip_limit = 7;
+   */
+  wipLimit: number;
+
+  /**
+   * La columna no se muestra en el tablero; sus issues sí salen en
+   * ListIssues. Los estados CANCELED nacen ocultos.
+   *
+   * @generated from field: bool hidden = 8;
+   */
+  hidden: boolean;
 };
 
 /**
@@ -352,6 +421,18 @@ export declare type IssueEvent = Message<"issues.v1.IssueEvent"> & {
      */
     value: Comment;
     case: "commented";
+  } | {
+    /**
+     * @generated from field: issues.v1.IssueDiscarded discarded = 12;
+     */
+    value: IssueDiscarded;
+    case: "discarded";
+  } | {
+    /**
+     * @generated from field: issues.v1.IssueRestored restored = 13;
+     */
+    value: IssueRestored;
+    case: "restored";
   } | { case: undefined; value?: undefined };
 };
 
@@ -416,6 +497,89 @@ export declare type StatusChanged = Message<"issues.v1.StatusChanged"> & {
  * Use `create(StatusChangedSchema)` to create a new message.
  */
 export declare const StatusChangedSchema: GenMessage<StatusChanged>;
+
+/**
+ * Descartado con DiscardIssue. Descartar con MoveIssue registra un
+ * StatusChanged. Los nombres se guardan como en StatusChanged.
+ *
+ * @generated from message issues.v1.IssueDiscarded
+ */
+export declare type IssueDiscarded = Message<"issues.v1.IssueDiscarded"> & {
+  /**
+   * @generated from field: string reason = 1;
+   */
+  reason: string;
+
+  /**
+   * @generated from field: string from_status_id = 2;
+   */
+  fromStatusId: string;
+
+  /**
+   * @generated from field: string from_status_name = 3;
+   */
+  fromStatusName: string;
+
+  /**
+   * @generated from field: issues.v1.IssueState from_state = 4;
+   */
+  fromState: IssueState;
+
+  /**
+   * Siempre de categoría CANCELED.
+   *
+   * @generated from field: string to_status_id = 5;
+   */
+  toStatusId: string;
+
+  /**
+   * @generated from field: string to_status_name = 6;
+   */
+  toStatusName: string;
+};
+
+/**
+ * Describes the message issues.v1.IssueDiscarded.
+ * Use `create(IssueDiscardedSchema)` to create a new message.
+ */
+export declare const IssueDiscardedSchema: GenMessage<IssueDiscarded>;
+
+/**
+ * Restaurado con RestoreIssue. Los nombres se guardan como en StatusChanged.
+ *
+ * @generated from message issues.v1.IssueRestored
+ */
+export declare type IssueRestored = Message<"issues.v1.IssueRestored"> & {
+  /**
+   * Siempre de categoría CANCELED.
+   *
+   * @generated from field: string from_status_id = 1;
+   */
+  fromStatusId: string;
+
+  /**
+   * @generated from field: string from_status_name = 2;
+   */
+  fromStatusName: string;
+
+  /**
+   * Siempre de categoría TODO.
+   *
+   * @generated from field: string to_status_id = 3;
+   */
+  toStatusId: string;
+
+  /**
+   * @generated from field: string to_status_name = 4;
+   */
+  toStatusName: string;
+};
+
+/**
+ * Describes the message issues.v1.IssueRestored.
+ * Use `create(IssueRestoredSchema)` to create a new message.
+ */
+export declare const IssueRestoredSchema: GenMessage<IssueRestored>;
 
 /**
  * @generated from message issues.v1.TitleChanged
@@ -648,6 +812,9 @@ export declare type CreateProjectResponse = Message<"issues.v1.CreateProjectResp
 export declare const CreateProjectResponseSchema: GenMessage<CreateProjectResponse>;
 
 /**
+ * Los filtros se combinan con Y; dentro de un filtro repetido, con O. Un
+ * filtro vacío no filtra.
+ *
  * @generated from message issues.v1.ListIssuesRequest
  */
 export declare type ListIssuesRequest = Message<"issues.v1.ListIssuesRequest"> & {
@@ -657,16 +824,68 @@ export declare type ListIssuesRequest = Message<"issues.v1.ListIssuesRequest"> &
   projectId: string;
 
   /**
-   * UNSPECIFIED: todos los estados.
+   * Una categoría; UNSPECIFIED: todas. Para varias, states. Mandar state y
+   * states a la vez es INVALID_ARGUMENT.
    *
    * @generated from field: issues.v1.IssueState state = 2;
    */
   state: IssueState;
 
   /**
+   * Paginación. El cursor codifica orden y filtros: usarlo con otros
+   * filtros u otro orden es INVALID_ARGUMENT (el cliente vuelve a la primera
+   * página).
+   *
    * @generated from field: issues.v1.PageRequest page = 3;
    */
   page?: PageRequest | undefined;
+
+  /**
+   * Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide
+   * con parte del título sin distinguir mayúsculas ni acentos, o con el
+   * número si viene como clave ("TK-12", con la key del proyecto) o solo el
+   * número ("12"). Vacío o solo espacios: sin búsqueda.
+   *
+   * @generated from field: string query = 4;
+   */
+  query: string;
+
+  /**
+   * Categorías, p. ej. [TODO, IN_PROGRESS] para los activos. UNSPECIFIED
+   * dentro de la lista es INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated issues.v1.IssueState states = 5;
+   */
+  states: IssueState[];
+
+  /**
+   * Estados concretos. Uno de otro proyecto es INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated string status_ids = 6;
+   */
+  statusIds: string[];
+
+  /**
+   * Prioridades. UNSPECIFIED dentro de la lista es INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated issues.v1.Priority priorities = 7;
+   */
+  priorities: Priority[];
+
+  /**
+   * Etiquetas: pasa un issue con cualquiera de ellas. Una de otro proyecto
+   * es INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated string label_ids = 8;
+   */
+  labelIds: string[];
+
+  /**
+   * UNSPECIFIED: ISSUE_ORDER_RANK.
+   *
+   * @generated from field: issues.v1.IssueOrder order_by = 9;
+   */
+  orderBy: IssueOrder;
 };
 
 /**
@@ -933,6 +1152,97 @@ export declare type UpdateIssueResponse = Message<"issues.v1.UpdateIssueResponse
 export declare const UpdateIssueResponseSchema: GenMessage<UpdateIssueResponse>;
 
 /**
+ * @generated from message issues.v1.DiscardIssueRequest
+ */
+export declare type DiscardIssueRequest = Message<"issues.v1.DiscardIssueRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int32 number = 2;
+   */
+  number: number;
+
+  /**
+   * Obligatorio: 1 a 500 caracteres sin contar los espacios de los extremos
+   * (se guarda sin ellos). Vacío o solo espacios es INVALID_ARGUMENT.
+   *
+   * @generated from field: string reason = 3;
+   */
+  reason: string;
+
+  /**
+   * Estado CANCELED destino, si el proyecto tiene varios. Vacío: el primero
+   * de esa categoría en el orden de columnas. Uno de otra categoría o de
+   * otro proyecto es INVALID_ARGUMENT.
+   *
+   * @generated from field: string status_id = 4;
+   */
+  statusId: string;
+};
+
+/**
+ * Describes the message issues.v1.DiscardIssueRequest.
+ * Use `create(DiscardIssueRequestSchema)` to create a new message.
+ */
+export declare const DiscardIssueRequestSchema: GenMessage<DiscardIssueRequest>;
+
+/**
+ * @generated from message issues.v1.DiscardIssueResponse
+ */
+export declare type DiscardIssueResponse = Message<"issues.v1.DiscardIssueResponse"> & {
+  /**
+   * @generated from field: issues.v1.Issue issue = 1;
+   */
+  issue?: Issue | undefined;
+};
+
+/**
+ * Describes the message issues.v1.DiscardIssueResponse.
+ * Use `create(DiscardIssueResponseSchema)` to create a new message.
+ */
+export declare const DiscardIssueResponseSchema: GenMessage<DiscardIssueResponse>;
+
+/**
+ * @generated from message issues.v1.RestoreIssueRequest
+ */
+export declare type RestoreIssueRequest = Message<"issues.v1.RestoreIssueRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int32 number = 2;
+   */
+  number: number;
+};
+
+/**
+ * Describes the message issues.v1.RestoreIssueRequest.
+ * Use `create(RestoreIssueRequestSchema)` to create a new message.
+ */
+export declare const RestoreIssueRequestSchema: GenMessage<RestoreIssueRequest>;
+
+/**
+ * @generated from message issues.v1.RestoreIssueResponse
+ */
+export declare type RestoreIssueResponse = Message<"issues.v1.RestoreIssueResponse"> & {
+  /**
+   * @generated from field: issues.v1.Issue issue = 1;
+   */
+  issue?: Issue | undefined;
+};
+
+/**
+ * Describes the message issues.v1.RestoreIssueResponse.
+ * Use `create(RestoreIssueResponseSchema)` to create a new message.
+ */
+export declare const RestoreIssueResponseSchema: GenMessage<RestoreIssueResponse>;
+
+/**
  * @generated from message issues.v1.ListStatusesRequest
  */
 export declare type ListStatusesRequest = Message<"issues.v1.ListStatusesRequest"> & {
@@ -993,6 +1303,24 @@ export declare type CreateStatusRequest = Message<"issues.v1.CreateStatusRequest
    * @generated from field: string after_status_id = 4;
    */
   afterStatusId: string;
+
+  /**
+   * Ver Status.color, Status.wip_limit y Status.hidden. Sin hidden, un
+   * estado CANCELED nace oculto y los demás visibles.
+   *
+   * @generated from field: issues.v1.LabelColor color = 5;
+   */
+  color: LabelColor;
+
+  /**
+   * @generated from field: int32 wip_limit = 6;
+   */
+  wipLimit: number;
+
+  /**
+   * @generated from field: optional bool hidden = 7;
+   */
+  hidden?: boolean | undefined;
 };
 
 /**
@@ -1042,6 +1370,23 @@ export declare type UpdateStatusRequest = Message<"issues.v1.UpdateStatusRequest
    * @generated from field: optional string after_status_id = 4;
    */
   afterStatusId?: string | undefined;
+
+  /**
+   * Ver Status.color, Status.wip_limit y Status.hidden.
+   *
+   * @generated from field: optional issues.v1.LabelColor color = 5;
+   */
+  color?: LabelColor | undefined;
+
+  /**
+   * @generated from field: optional int32 wip_limit = 6;
+   */
+  wipLimit?: number | undefined;
+
+  /**
+   * @generated from field: optional bool hidden = 7;
+   */
+  hidden?: boolean | undefined;
 };
 
 /**
@@ -1107,6 +1452,137 @@ export declare type DeleteStatusResponse = Message<"issues.v1.DeleteStatusRespon
  * Use `create(DeleteStatusResponseSchema)` to create a new message.
  */
 export declare const DeleteStatusResponseSchema: GenMessage<DeleteStatusResponse>;
+
+/**
+ * La lista completa de estados como debe quedar, en el orden de columnas.
+ *
+ * - Un estado del proyecto que no está en statuses ni en deletions es
+ *   FAILED_PRECONDITION: la vista está vieja (otro lo creó), recargar.
+ * - Mismas reglas que los RPC sueltos sobre el resultado: máximo 20
+ *   (FAILED_PRECONDITION), al menos uno por categoría (FAILED_PRECONDITION),
+ *   nombres únicos (ALREADY_EXISTS).
+ * - Cada issue que pasa de un estado borrado a otro deja su evento
+ *   status_changed.
+ *
+ * @generated from message issues.v1.BatchUpdateStatusesRequest
+ */
+export declare type BatchUpdateStatusesRequest = Message<"issues.v1.BatchUpdateStatusesRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: repeated issues.v1.StatusSpec statuses = 2;
+   */
+  statuses: StatusSpec[];
+
+  /**
+   * Estados que se borran. Ninguno puede estar también en statuses.
+   *
+   * @generated from field: repeated issues.v1.StatusDeletion deletions = 3;
+   */
+  deletions: StatusDeletion[];
+};
+
+/**
+ * Describes the message issues.v1.BatchUpdateStatusesRequest.
+ * Use `create(BatchUpdateStatusesRequestSchema)` to create a new message.
+ */
+export declare const BatchUpdateStatusesRequestSchema: GenMessage<BatchUpdateStatusesRequest>;
+
+/**
+ * Un estado tal como debe quedar. La posición en la lista define su rank.
+ *
+ * @generated from message issues.v1.StatusSpec
+ */
+export declare type StatusSpec = Message<"issues.v1.StatusSpec"> & {
+  /**
+   * Vacío: estado nuevo. Uno de otro proyecto es INVALID_ARGUMENT.
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * 1 a 40 caracteres.
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * Obligatoria en un estado nuevo. En uno existente no cambia: UNSPECIFIED
+   * o la misma; otra es INVALID_ARGUMENT.
+   *
+   * @generated from field: issues.v1.IssueState category = 3;
+   */
+  category: IssueState;
+
+  /**
+   * @generated from field: issues.v1.LabelColor color = 4;
+   */
+  color: LabelColor;
+
+  /**
+   * @generated from field: int32 wip_limit = 5;
+   */
+  wipLimit: number;
+
+  /**
+   * @generated from field: bool hidden = 6;
+   */
+  hidden: boolean;
+};
+
+/**
+ * Describes the message issues.v1.StatusSpec.
+ * Use `create(StatusSpecSchema)` to create a new message.
+ */
+export declare const StatusSpecSchema: GenMessage<StatusSpec>;
+
+/**
+ * @generated from message issues.v1.StatusDeletion
+ */
+export declare type StatusDeletion = Message<"issues.v1.StatusDeletion"> & {
+  /**
+   * @generated from field: string status_id = 1;
+   */
+  statusId: string;
+
+  /**
+   * Estado al que pasan sus issues, como en DeleteStatusRequest: obligatorio
+   * si tiene issues. Tiene que ser un estado existente que queda en
+   * statuses (no uno nuevo del mismo request); si no, INVALID_ARGUMENT.
+   *
+   * @generated from field: string move_to_status_id = 2;
+   */
+  moveToStatusId: string;
+};
+
+/**
+ * Describes the message issues.v1.StatusDeletion.
+ * Use `create(StatusDeletionSchema)` to create a new message.
+ */
+export declare const StatusDeletionSchema: GenMessage<StatusDeletion>;
+
+/**
+ * Los estados del proyecto ya guardados, en orden (como ListStatuses).
+ *
+ * @generated from message issues.v1.BatchUpdateStatusesResponse
+ */
+export declare type BatchUpdateStatusesResponse = Message<"issues.v1.BatchUpdateStatusesResponse"> & {
+  /**
+   * @generated from field: repeated issues.v1.Status statuses = 1;
+   */
+  statuses: Status[];
+};
+
+/**
+ * Describes the message issues.v1.BatchUpdateStatusesResponse.
+ * Use `create(BatchUpdateStatusesResponseSchema)` to create a new message.
+ */
+export declare const BatchUpdateStatusesResponseSchema: GenMessage<BatchUpdateStatusesResponse>;
 
 /**
  * @generated from message issues.v1.ListLabelsRequest
@@ -1445,13 +1921,14 @@ export enum Priority {
 export declare const PrioritySchema: GenEnum<Priority>;
 
 /**
- * Color de una etiqueta: un tono del design system, no un valor libre.
+ * Tono del design system, no un valor libre: color de una etiqueta (Label)
+ * y de un estado (Status).
  *
  * @generated from enum issues.v1.LabelColor
  */
 export enum LabelColor {
   /**
-   * Se guarda como NEUTRAL.
+   * En Label se guarda como NEUTRAL; en Status, como el tono de su categoría.
    *
    * @generated from enum value: LABEL_COLOR_UNSPECIFIED = 0;
    */
@@ -1499,6 +1976,45 @@ export enum LabelColor {
 export declare const LabelColorSchema: GenEnum<LabelColor>;
 
 /**
+ * Orden de ListIssues. Los empates se resuelven por rank, así el orden es
+ * estable entre páginas.
+ *
+ * @generated from enum issues.v1.IssueOrder
+ */
+export enum IssueOrder {
+  /**
+   * @generated from enum value: ISSUE_ORDER_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * rank ascendente: el orden manual del tablero.
+   *
+   * @generated from enum value: ISSUE_ORDER_RANK = 1;
+   */
+  RANK = 1,
+
+  /**
+   * updated_at descendente: lo último que cambió, primero.
+   *
+   * @generated from enum value: ISSUE_ORDER_UPDATED_DESC = 2;
+   */
+  UPDATED_DESC = 2,
+
+  /**
+   * Prioridad descendente: URGENT primero.
+   *
+   * @generated from enum value: ISSUE_ORDER_PRIORITY_DESC = 3;
+   */
+  PRIORITY_DESC = 3,
+}
+
+/**
+ * Describes the enum issues.v1.IssueOrder.
+ */
+export declare const IssueOrderSchema: GenEnum<IssueOrder>;
+
+/**
  * IssueService gestiona los proyectos y sus issues.
  *
  * Todo acceso se limita a los espacios de trabajo del usuario autenticado (el
@@ -1538,8 +2054,9 @@ export declare const IssueService: GenService<{
     output: typeof CreateProjectResponseSchema;
   },
   /**
-   * Lista los issues de un proyecto, opcionalmente filtrados por estado.
-   * Orden: rank ascendente (el orden manual del backlog y de cada columna).
+   * Lista los issues de un proyecto con búsqueda, filtros y orden (ver
+   * ListIssuesRequest). Sin ellos: todos, por rank ascendente (el orden
+   * manual del backlog y de cada columna).
    *
    * @generated from rpc issues.v1.IssueService.ListIssues
    */
@@ -1572,6 +2089,9 @@ export declare const IssueService: GenService<{
   /**
    * Cambia el estado de un issue (mover de columna en el tablero) y,
    * opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
+   * Moverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda
+   * ausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit
+   * del estado destino no lo impide: el panel marca la columna excedida.
    *
    * @generated from rpc issues.v1.IssueService.MoveIssue
    */
@@ -1590,6 +2110,30 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof UpdateIssueRequestSchema;
     output: typeof UpdateIssueResponseSchema;
+  },
+  /**
+   * Descarta un issue con un motivo: pasa a un estado de categoría CANCELED,
+   * conserva su rank y guarda el motivo en Issue.discard. FAILED_PRECONDITION
+   * si ya está en un estado CANCELED.
+   *
+   * @generated from rpc issues.v1.IssueService.DiscardIssue
+   */
+  discardIssue: {
+    methodKind: "unary";
+    input: typeof DiscardIssueRequestSchema;
+    output: typeof DiscardIssueResponseSchema;
+  },
+  /**
+   * Restaura un issue descartado (con o sin motivo): pasa al primer estado de
+   * categoría TODO, al final de esa columna, y borra Issue.discard.
+   * FAILED_PRECONDITION si no está en un estado CANCELED.
+   *
+   * @generated from rpc issues.v1.IssueService.RestoreIssue
+   */
+  restoreIssue: {
+    methodKind: "unary";
+    input: typeof RestoreIssueRequestSchema;
+    output: typeof RestoreIssueResponseSchema;
   },
   /**
    * Estados del proyecto (las columnas del tablero), en orden. Todo proyecto
@@ -1635,6 +2179,19 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof DeleteStatusRequestSchema;
     output: typeof DeleteStatusResponseSchema;
+  },
+  /**
+   * Guarda la lista completa de estados de una vez (Ajustes › Estados):
+   * crea, renombra, reordena, cambia color, WIP o visibilidad y borra en una
+   * sola transacción, todo o nada. Valida las mismas reglas que los RPC
+   * sueltos sobre el resultado final (ver BatchUpdateStatusesRequest).
+   *
+   * @generated from rpc issues.v1.IssueService.BatchUpdateStatuses
+   */
+  batchUpdateStatuses: {
+    methodKind: "unary";
+    input: typeof BatchUpdateStatusesRequestSchema;
+    output: typeof BatchUpdateStatusesResponseSchema;
   },
   /**
    * Etiquetas del proyecto, por nombre.

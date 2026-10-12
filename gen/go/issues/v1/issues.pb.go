@@ -1,7 +1,9 @@
 // Contrato de Tekitla (issue 002): proyectos e issues dentro de un espacio de
 // trabajo. Rebanada 1: estados agrupados en categorías fijas. Rebanada 3a:
 // estados configurables por proyecto, orden manual, edición, etiquetas,
-// comentarios e historial. Miembros, roles y las piezas de cada metodología
+// comentarios e historial. Después (issues 011 a 013): descartar con motivo,
+// búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
+// los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 //
 // Reglas (detalle en CLAUDE.md):
@@ -159,11 +161,12 @@ func (Priority) EnumDescriptor() ([]byte, []int) {
 	return file_issues_v1_issues_proto_rawDescGZIP(), []int{1}
 }
 
-// Color de una etiqueta: un tono del design system, no un valor libre.
+// Tono del design system, no un valor libre: color de una etiqueta (Label)
+// y de un estado (Status).
 type LabelColor int32
 
 const (
-	// Se guarda como NEUTRAL.
+	// En Label se guarda como NEUTRAL; en Status, como el tono de su categoría.
 	LabelColor_LABEL_COLOR_UNSPECIFIED LabelColor = 0
 	LabelColor_LABEL_COLOR_NEUTRAL     LabelColor = 1
 	LabelColor_LABEL_COLOR_INFO        LabelColor = 2
@@ -223,6 +226,63 @@ func (x LabelColor) Number() protoreflect.EnumNumber {
 // Deprecated: Use LabelColor.Descriptor instead.
 func (LabelColor) EnumDescriptor() ([]byte, []int) {
 	return file_issues_v1_issues_proto_rawDescGZIP(), []int{2}
+}
+
+// Orden de ListIssues. Los empates se resuelven por rank, así el orden es
+// estable entre páginas.
+type IssueOrder int32
+
+const (
+	IssueOrder_ISSUE_ORDER_UNSPECIFIED IssueOrder = 0
+	// rank ascendente: el orden manual del tablero.
+	IssueOrder_ISSUE_ORDER_RANK IssueOrder = 1
+	// updated_at descendente: lo último que cambió, primero.
+	IssueOrder_ISSUE_ORDER_UPDATED_DESC IssueOrder = 2
+	// Prioridad descendente: URGENT primero.
+	IssueOrder_ISSUE_ORDER_PRIORITY_DESC IssueOrder = 3
+)
+
+// Enum value maps for IssueOrder.
+var (
+	IssueOrder_name = map[int32]string{
+		0: "ISSUE_ORDER_UNSPECIFIED",
+		1: "ISSUE_ORDER_RANK",
+		2: "ISSUE_ORDER_UPDATED_DESC",
+		3: "ISSUE_ORDER_PRIORITY_DESC",
+	}
+	IssueOrder_value = map[string]int32{
+		"ISSUE_ORDER_UNSPECIFIED":   0,
+		"ISSUE_ORDER_RANK":          1,
+		"ISSUE_ORDER_UPDATED_DESC":  2,
+		"ISSUE_ORDER_PRIORITY_DESC": 3,
+	}
+)
+
+func (x IssueOrder) Enum() *IssueOrder {
+	p := new(IssueOrder)
+	*p = x
+	return p
+}
+
+func (x IssueOrder) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (IssueOrder) Descriptor() protoreflect.EnumDescriptor {
+	return file_issues_v1_issues_proto_enumTypes[3].Descriptor()
+}
+
+func (IssueOrder) Type() protoreflect.EnumType {
+	return &file_issues_v1_issues_proto_enumTypes[3]
+}
+
+func (x IssueOrder) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use IssueOrder.Descriptor instead.
+func (IssueOrder) EnumDescriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{3}
 }
 
 type Project struct {
@@ -341,7 +401,11 @@ type Issue struct {
 	// Estado concreto (columna). state es su categoría.
 	StatusId string `protobuf:"bytes,11,opt,name=status_id,json=statusId,proto3" json:"status_id,omitempty"`
 	// Etiquetas del issue, ordenadas por nombre de etiqueta.
-	LabelIds      []string `protobuf:"bytes,12,rep,name=label_ids,json=labelIds,proto3" json:"label_ids,omitempty"`
+	LabelIds []string `protobuf:"bytes,12,rep,name=label_ids,json=labelIds,proto3" json:"label_ids,omitempty"`
+	// Motivo del descarte. Presente solo mientras el issue está en un estado
+	// CANCELED al que llegó con DiscardIssue; ausente si se descartó con
+	// MoveIssue (descartado sin motivo) o si no está descartado.
+	Discard       *DiscardInfo `protobuf:"bytes,13,opt,name=discard,proto3" json:"discard,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -460,6 +524,76 @@ func (x *Issue) GetLabelIds() []string {
 	return nil
 }
 
+func (x *Issue) GetDiscard() *DiscardInfo {
+	if x != nil {
+		return x.Discard
+	}
+	return nil
+}
+
+// Quién descartó un issue con DiscardIssue, cuándo y por qué.
+type DiscardInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Sin espacios en los extremos, 1 a 500 caracteres.
+	Reason string `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	// uid de quien lo descartó.
+	ActorId       string                 `protobuf:"bytes,2,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	DiscardedAt   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=discarded_at,json=discardedAt,proto3" json:"discarded_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscardInfo) Reset() {
+	*x = DiscardInfo{}
+	mi := &file_issues_v1_issues_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscardInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscardInfo) ProtoMessage() {}
+
+func (x *DiscardInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscardInfo.ProtoReflect.Descriptor instead.
+func (*DiscardInfo) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DiscardInfo) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *DiscardInfo) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *DiscardInfo) GetDiscardedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DiscardedAt
+	}
+	return nil
+}
+
 // Estado concreto de un proyecto: una columna del tablero.
 type Status struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
@@ -468,17 +602,28 @@ type Status struct {
 	// Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
 	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// Categoría: la que ven los clientes que no conocen los estados del
-	// proyecto (la CLI, los reportes). CANCELED no se muestra en el tablero.
+	// proyecto (la CLI, los reportes).
 	Category IssueState `protobuf:"varint,4,opt,name=category,proto3,enum=issues.v1.IssueState" json:"category,omitempty"`
 	// Posición en el orden de columnas, opaca (como Issue.rank).
-	Rank          string `protobuf:"bytes,5,opt,name=rank,proto3" json:"rank,omitempty"`
+	Rank string `protobuf:"bytes,5,opt,name=rank,proto3" json:"rank,omitempty"`
+	// Tono de la columna. Siempre viene con valor: al crear o actualizar,
+	// UNSPECIFIED se guarda como el tono de su categoría (TODO: NEUTRAL,
+	// IN_PROGRESS: INFO, DONE: SUCCESS, CANCELED: DANGER).
+	Color LabelColor `protobuf:"varint,6,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
+	// Máximo de issues en la columna; 0 = sin límite (negativo es
+	// INVALID_ARGUMENT). Pasarse avisa, no bloquea: la API mueve igual y el
+	// panel marca la columna como excedida.
+	WipLimit int32 `protobuf:"varint,7,opt,name=wip_limit,json=wipLimit,proto3" json:"wip_limit,omitempty"`
+	// La columna no se muestra en el tablero; sus issues sí salen en
+	// ListIssues. Los estados CANCELED nacen ocultos.
+	Hidden        bool `protobuf:"varint,8,opt,name=hidden,proto3" json:"hidden,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Status) Reset() {
 	*x = Status{}
-	mi := &file_issues_v1_issues_proto_msgTypes[2]
+	mi := &file_issues_v1_issues_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -490,7 +635,7 @@ func (x *Status) String() string {
 func (*Status) ProtoMessage() {}
 
 func (x *Status) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[2]
+	mi := &file_issues_v1_issues_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -503,7 +648,7 @@ func (x *Status) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Status.ProtoReflect.Descriptor instead.
 func (*Status) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{2}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Status) GetId() string {
@@ -541,6 +686,27 @@ func (x *Status) GetRank() string {
 	return ""
 }
 
+func (x *Status) GetColor() LabelColor {
+	if x != nil {
+		return x.Color
+	}
+	return LabelColor_LABEL_COLOR_UNSPECIFIED
+}
+
+func (x *Status) GetWipLimit() int32 {
+	if x != nil {
+		return x.WipLimit
+	}
+	return 0
+}
+
+func (x *Status) GetHidden() bool {
+	if x != nil {
+		return x.Hidden
+	}
+	return false
+}
+
 type Label struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -554,7 +720,7 @@ type Label struct {
 
 func (x *Label) Reset() {
 	*x = Label{}
-	mi := &file_issues_v1_issues_proto_msgTypes[3]
+	mi := &file_issues_v1_issues_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +732,7 @@ func (x *Label) String() string {
 func (*Label) ProtoMessage() {}
 
 func (x *Label) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[3]
+	mi := &file_issues_v1_issues_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +745,7 @@ func (x *Label) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Label.ProtoReflect.Descriptor instead.
 func (*Label) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{3}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Label) GetId() string {
@@ -626,7 +792,7 @@ type Comment struct {
 
 func (x *Comment) Reset() {
 	*x = Comment{}
-	mi := &file_issues_v1_issues_proto_msgTypes[4]
+	mi := &file_issues_v1_issues_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -638,7 +804,7 @@ func (x *Comment) String() string {
 func (*Comment) ProtoMessage() {}
 
 func (x *Comment) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[4]
+	mi := &file_issues_v1_issues_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -651,7 +817,7 @@ func (x *Comment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Comment.ProtoReflect.Descriptor instead.
 func (*Comment) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{4}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Comment) GetId() string {
@@ -707,6 +873,8 @@ type IssueEvent struct {
 	//	*IssueEvent_PriorityChanged
 	//	*IssueEvent_LabelsChanged
 	//	*IssueEvent_Commented
+	//	*IssueEvent_Discarded
+	//	*IssueEvent_Restored
 	Change        isIssueEvent_Change `protobuf_oneof:"change"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -714,7 +882,7 @@ type IssueEvent struct {
 
 func (x *IssueEvent) Reset() {
 	*x = IssueEvent{}
-	mi := &file_issues_v1_issues_proto_msgTypes[5]
+	mi := &file_issues_v1_issues_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -726,7 +894,7 @@ func (x *IssueEvent) String() string {
 func (*IssueEvent) ProtoMessage() {}
 
 func (x *IssueEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[5]
+	mi := &file_issues_v1_issues_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -739,7 +907,7 @@ func (x *IssueEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueEvent.ProtoReflect.Descriptor instead.
 func (*IssueEvent) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{5}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *IssueEvent) GetId() string {
@@ -840,6 +1008,24 @@ func (x *IssueEvent) GetCommented() *Comment {
 	return nil
 }
 
+func (x *IssueEvent) GetDiscarded() *IssueDiscarded {
+	if x != nil {
+		if x, ok := x.Change.(*IssueEvent_Discarded); ok {
+			return x.Discarded
+		}
+	}
+	return nil
+}
+
+func (x *IssueEvent) GetRestored() *IssueRestored {
+	if x != nil {
+		if x, ok := x.Change.(*IssueEvent_Restored); ok {
+			return x.Restored
+		}
+	}
+	return nil
+}
+
 type isIssueEvent_Change interface {
 	isIssueEvent_Change()
 }
@@ -872,6 +1058,14 @@ type IssueEvent_Commented struct {
 	Commented *Comment `protobuf:"bytes,11,opt,name=commented,proto3,oneof"`
 }
 
+type IssueEvent_Discarded struct {
+	Discarded *IssueDiscarded `protobuf:"bytes,12,opt,name=discarded,proto3,oneof"`
+}
+
+type IssueEvent_Restored struct {
+	Restored *IssueRestored `protobuf:"bytes,13,opt,name=restored,proto3,oneof"`
+}
+
 func (*IssueEvent_Created) isIssueEvent_Change() {}
 
 func (*IssueEvent_StatusChanged) isIssueEvent_Change() {}
@@ -886,6 +1080,10 @@ func (*IssueEvent_LabelsChanged) isIssueEvent_Change() {}
 
 func (*IssueEvent_Commented) isIssueEvent_Change() {}
 
+func (*IssueEvent_Discarded) isIssueEvent_Change() {}
+
+func (*IssueEvent_Restored) isIssueEvent_Change() {}
+
 type IssueCreated struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -894,7 +1092,7 @@ type IssueCreated struct {
 
 func (x *IssueCreated) Reset() {
 	*x = IssueCreated{}
-	mi := &file_issues_v1_issues_proto_msgTypes[6]
+	mi := &file_issues_v1_issues_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -906,7 +1104,7 @@ func (x *IssueCreated) String() string {
 func (*IssueCreated) ProtoMessage() {}
 
 func (x *IssueCreated) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[6]
+	mi := &file_issues_v1_issues_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -919,7 +1117,7 @@ func (x *IssueCreated) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueCreated.ProtoReflect.Descriptor instead.
 func (*IssueCreated) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{6}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{7}
 }
 
 // Los nombres se guardan al momento del cambio: el historial se sigue
@@ -938,7 +1136,7 @@ type StatusChanged struct {
 
 func (x *StatusChanged) Reset() {
 	*x = StatusChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[7]
+	mi := &file_issues_v1_issues_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -950,7 +1148,7 @@ func (x *StatusChanged) String() string {
 func (*StatusChanged) ProtoMessage() {}
 
 func (x *StatusChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[7]
+	mi := &file_issues_v1_issues_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -963,7 +1161,7 @@ func (x *StatusChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusChanged.ProtoReflect.Descriptor instead.
 func (*StatusChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{7}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *StatusChanged) GetFromStatusId() string {
@@ -1008,6 +1206,164 @@ func (x *StatusChanged) GetToState() IssueState {
 	return IssueState_ISSUE_STATE_UNSPECIFIED
 }
 
+// Descartado con DiscardIssue. Descartar con MoveIssue registra un
+// StatusChanged. Los nombres se guardan como en StatusChanged.
+type IssueDiscarded struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Reason         string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	FromStatusId   string                 `protobuf:"bytes,2,opt,name=from_status_id,json=fromStatusId,proto3" json:"from_status_id,omitempty"`
+	FromStatusName string                 `protobuf:"bytes,3,opt,name=from_status_name,json=fromStatusName,proto3" json:"from_status_name,omitempty"`
+	FromState      IssueState             `protobuf:"varint,4,opt,name=from_state,json=fromState,proto3,enum=issues.v1.IssueState" json:"from_state,omitempty"`
+	// Siempre de categoría CANCELED.
+	ToStatusId    string `protobuf:"bytes,5,opt,name=to_status_id,json=toStatusId,proto3" json:"to_status_id,omitempty"`
+	ToStatusName  string `protobuf:"bytes,6,opt,name=to_status_name,json=toStatusName,proto3" json:"to_status_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueDiscarded) Reset() {
+	*x = IssueDiscarded{}
+	mi := &file_issues_v1_issues_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueDiscarded) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueDiscarded) ProtoMessage() {}
+
+func (x *IssueDiscarded) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueDiscarded.ProtoReflect.Descriptor instead.
+func (*IssueDiscarded) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *IssueDiscarded) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *IssueDiscarded) GetFromStatusId() string {
+	if x != nil {
+		return x.FromStatusId
+	}
+	return ""
+}
+
+func (x *IssueDiscarded) GetFromStatusName() string {
+	if x != nil {
+		return x.FromStatusName
+	}
+	return ""
+}
+
+func (x *IssueDiscarded) GetFromState() IssueState {
+	if x != nil {
+		return x.FromState
+	}
+	return IssueState_ISSUE_STATE_UNSPECIFIED
+}
+
+func (x *IssueDiscarded) GetToStatusId() string {
+	if x != nil {
+		return x.ToStatusId
+	}
+	return ""
+}
+
+func (x *IssueDiscarded) GetToStatusName() string {
+	if x != nil {
+		return x.ToStatusName
+	}
+	return ""
+}
+
+// Restaurado con RestoreIssue. Los nombres se guardan como en StatusChanged.
+type IssueRestored struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Siempre de categoría CANCELED.
+	FromStatusId   string `protobuf:"bytes,1,opt,name=from_status_id,json=fromStatusId,proto3" json:"from_status_id,omitempty"`
+	FromStatusName string `protobuf:"bytes,2,opt,name=from_status_name,json=fromStatusName,proto3" json:"from_status_name,omitempty"`
+	// Siempre de categoría TODO.
+	ToStatusId    string `protobuf:"bytes,3,opt,name=to_status_id,json=toStatusId,proto3" json:"to_status_id,omitempty"`
+	ToStatusName  string `protobuf:"bytes,4,opt,name=to_status_name,json=toStatusName,proto3" json:"to_status_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueRestored) Reset() {
+	*x = IssueRestored{}
+	mi := &file_issues_v1_issues_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueRestored) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueRestored) ProtoMessage() {}
+
+func (x *IssueRestored) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueRestored.ProtoReflect.Descriptor instead.
+func (*IssueRestored) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *IssueRestored) GetFromStatusId() string {
+	if x != nil {
+		return x.FromStatusId
+	}
+	return ""
+}
+
+func (x *IssueRestored) GetFromStatusName() string {
+	if x != nil {
+		return x.FromStatusName
+	}
+	return ""
+}
+
+func (x *IssueRestored) GetToStatusId() string {
+	if x != nil {
+		return x.ToStatusId
+	}
+	return ""
+}
+
+func (x *IssueRestored) GetToStatusName() string {
+	if x != nil {
+		return x.ToStatusName
+	}
+	return ""
+}
+
 type TitleChanged struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	From          string                 `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
@@ -1018,7 +1374,7 @@ type TitleChanged struct {
 
 func (x *TitleChanged) Reset() {
 	*x = TitleChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[8]
+	mi := &file_issues_v1_issues_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1030,7 +1386,7 @@ func (x *TitleChanged) String() string {
 func (*TitleChanged) ProtoMessage() {}
 
 func (x *TitleChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[8]
+	mi := &file_issues_v1_issues_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1043,7 +1399,7 @@ func (x *TitleChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TitleChanged.ProtoReflect.Descriptor instead.
 func (*TitleChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{8}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TitleChanged) GetFrom() string {
@@ -1069,7 +1425,7 @@ type DescriptionChanged struct {
 
 func (x *DescriptionChanged) Reset() {
 	*x = DescriptionChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[9]
+	mi := &file_issues_v1_issues_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1081,7 +1437,7 @@ func (x *DescriptionChanged) String() string {
 func (*DescriptionChanged) ProtoMessage() {}
 
 func (x *DescriptionChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[9]
+	mi := &file_issues_v1_issues_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1094,7 +1450,7 @@ func (x *DescriptionChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DescriptionChanged.ProtoReflect.Descriptor instead.
 func (*DescriptionChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{9}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{12}
 }
 
 type PriorityChanged struct {
@@ -1107,7 +1463,7 @@ type PriorityChanged struct {
 
 func (x *PriorityChanged) Reset() {
 	*x = PriorityChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[10]
+	mi := &file_issues_v1_issues_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1119,7 +1475,7 @@ func (x *PriorityChanged) String() string {
 func (*PriorityChanged) ProtoMessage() {}
 
 func (x *PriorityChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[10]
+	mi := &file_issues_v1_issues_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1132,7 +1488,7 @@ func (x *PriorityChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriorityChanged.ProtoReflect.Descriptor instead.
 func (*PriorityChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{10}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PriorityChanged) GetFrom() Priority {
@@ -1163,7 +1519,7 @@ type LabelsChanged struct {
 
 func (x *LabelsChanged) Reset() {
 	*x = LabelsChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[11]
+	mi := &file_issues_v1_issues_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1175,7 +1531,7 @@ func (x *LabelsChanged) String() string {
 func (*LabelsChanged) ProtoMessage() {}
 
 func (x *LabelsChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[11]
+	mi := &file_issues_v1_issues_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1188,7 +1544,7 @@ func (x *LabelsChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LabelsChanged.ProtoReflect.Descriptor instead.
 func (*LabelsChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{11}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *LabelsChanged) GetAddedLabelIds() []string {
@@ -1230,7 +1586,7 @@ type PageRequest struct {
 
 func (x *PageRequest) Reset() {
 	*x = PageRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[12]
+	mi := &file_issues_v1_issues_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1242,7 +1598,7 @@ func (x *PageRequest) String() string {
 func (*PageRequest) ProtoMessage() {}
 
 func (x *PageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[12]
+	mi := &file_issues_v1_issues_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1255,7 +1611,7 @@ func (x *PageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageRequest.ProtoReflect.Descriptor instead.
 func (*PageRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{12}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PageRequest) GetCursor() string {
@@ -1283,7 +1639,7 @@ type PageResponse struct {
 
 func (x *PageResponse) Reset() {
 	*x = PageResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[13]
+	mi := &file_issues_v1_issues_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1295,7 +1651,7 @@ func (x *PageResponse) String() string {
 func (*PageResponse) ProtoMessage() {}
 
 func (x *PageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[13]
+	mi := &file_issues_v1_issues_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1308,7 +1664,7 @@ func (x *PageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageResponse.ProtoReflect.Descriptor instead.
 func (*PageResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{13}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PageResponse) GetNextCursor() string {
@@ -1337,7 +1693,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[14]
+	mi := &file_issues_v1_issues_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1349,7 +1705,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[14]
+	mi := &file_issues_v1_issues_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1362,7 +1718,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{14}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListProjectsRequest) GetPage() *PageRequest {
@@ -1389,7 +1745,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[15]
+	mi := &file_issues_v1_issues_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1401,7 +1757,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[15]
+	mi := &file_issues_v1_issues_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1414,7 +1770,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{15}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -1444,7 +1800,7 @@ type CreateProjectRequest struct {
 
 func (x *CreateProjectRequest) Reset() {
 	*x = CreateProjectRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[16]
+	mi := &file_issues_v1_issues_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1456,7 +1812,7 @@ func (x *CreateProjectRequest) String() string {
 func (*CreateProjectRequest) ProtoMessage() {}
 
 func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[16]
+	mi := &file_issues_v1_issues_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1469,7 +1825,7 @@ func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{16}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateProjectRequest) GetKey() string {
@@ -1509,7 +1865,7 @@ type CreateProjectResponse struct {
 
 func (x *CreateProjectResponse) Reset() {
 	*x = CreateProjectResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[17]
+	mi := &file_issues_v1_issues_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1521,7 +1877,7 @@ func (x *CreateProjectResponse) String() string {
 func (*CreateProjectResponse) ProtoMessage() {}
 
 func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[17]
+	mi := &file_issues_v1_issues_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1534,7 +1890,7 @@ func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectResponse.ProtoReflect.Descriptor instead.
 func (*CreateProjectResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{17}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CreateProjectResponse) GetProject() *Project {
@@ -1544,19 +1900,42 @@ func (x *CreateProjectResponse) GetProject() *Project {
 	return nil
 }
 
+// Los filtros se combinan con Y; dentro de un filtro repetido, con O. Un
+// filtro vacío no filtra.
 type ListIssuesRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	// UNSPECIFIED: todos los estados.
-	State         IssueState   `protobuf:"varint,2,opt,name=state,proto3,enum=issues.v1.IssueState" json:"state,omitempty"`
-	Page          *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// Una categoría; UNSPECIFIED: todas. Para varias, states. Mandar state y
+	// states a la vez es INVALID_ARGUMENT.
+	State IssueState `protobuf:"varint,2,opt,name=state,proto3,enum=issues.v1.IssueState" json:"state,omitempty"`
+	// Paginación. El cursor codifica orden y filtros: usarlo con otros
+	// filtros u otro orden es INVALID_ARGUMENT (el cliente vuelve a la primera
+	// página).
+	Page *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide
+	// con parte del título sin distinguir mayúsculas ni acentos, o con el
+	// número si viene como clave ("TK-12", con la key del proyecto) o solo el
+	// número ("12"). Vacío o solo espacios: sin búsqueda.
+	Query string `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	// Categorías, p. ej. [TODO, IN_PROGRESS] para los activos. UNSPECIFIED
+	// dentro de la lista es INVALID_ARGUMENT.
+	States []IssueState `protobuf:"varint,5,rep,packed,name=states,proto3,enum=issues.v1.IssueState" json:"states,omitempty"`
+	// Estados concretos. Uno de otro proyecto es INVALID_ARGUMENT.
+	StatusIds []string `protobuf:"bytes,6,rep,name=status_ids,json=statusIds,proto3" json:"status_ids,omitempty"`
+	// Prioridades. UNSPECIFIED dentro de la lista es INVALID_ARGUMENT.
+	Priorities []Priority `protobuf:"varint,7,rep,packed,name=priorities,proto3,enum=issues.v1.Priority" json:"priorities,omitempty"`
+	// Etiquetas: pasa un issue con cualquiera de ellas. Una de otro proyecto
+	// es INVALID_ARGUMENT.
+	LabelIds []string `protobuf:"bytes,8,rep,name=label_ids,json=labelIds,proto3" json:"label_ids,omitempty"`
+	// UNSPECIFIED: ISSUE_ORDER_RANK.
+	OrderBy       IssueOrder `protobuf:"varint,9,opt,name=order_by,json=orderBy,proto3,enum=issues.v1.IssueOrder" json:"order_by,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListIssuesRequest) Reset() {
 	*x = ListIssuesRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[18]
+	mi := &file_issues_v1_issues_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1568,7 +1947,7 @@ func (x *ListIssuesRequest) String() string {
 func (*ListIssuesRequest) ProtoMessage() {}
 
 func (x *ListIssuesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[18]
+	mi := &file_issues_v1_issues_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1581,7 +1960,7 @@ func (x *ListIssuesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssuesRequest.ProtoReflect.Descriptor instead.
 func (*ListIssuesRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{18}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListIssuesRequest) GetProjectId() string {
@@ -1605,6 +1984,48 @@ func (x *ListIssuesRequest) GetPage() *PageRequest {
 	return nil
 }
 
+func (x *ListIssuesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *ListIssuesRequest) GetStates() []IssueState {
+	if x != nil {
+		return x.States
+	}
+	return nil
+}
+
+func (x *ListIssuesRequest) GetStatusIds() []string {
+	if x != nil {
+		return x.StatusIds
+	}
+	return nil
+}
+
+func (x *ListIssuesRequest) GetPriorities() []Priority {
+	if x != nil {
+		return x.Priorities
+	}
+	return nil
+}
+
+func (x *ListIssuesRequest) GetLabelIds() []string {
+	if x != nil {
+		return x.LabelIds
+	}
+	return nil
+}
+
+func (x *ListIssuesRequest) GetOrderBy() IssueOrder {
+	if x != nil {
+		return x.OrderBy
+	}
+	return IssueOrder_ISSUE_ORDER_UNSPECIFIED
+}
+
 type ListIssuesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Issues        []*Issue               `protobuf:"bytes,1,rep,name=issues,proto3" json:"issues,omitempty"`
@@ -1615,7 +2036,7 @@ type ListIssuesResponse struct {
 
 func (x *ListIssuesResponse) Reset() {
 	*x = ListIssuesResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[19]
+	mi := &file_issues_v1_issues_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1627,7 +2048,7 @@ func (x *ListIssuesResponse) String() string {
 func (*ListIssuesResponse) ProtoMessage() {}
 
 func (x *ListIssuesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[19]
+	mi := &file_issues_v1_issues_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1640,7 +2061,7 @@ func (x *ListIssuesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssuesResponse.ProtoReflect.Descriptor instead.
 func (*ListIssuesResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{19}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListIssuesResponse) GetIssues() []*Issue {
@@ -1667,7 +2088,7 @@ type GetIssueRequest struct {
 
 func (x *GetIssueRequest) Reset() {
 	*x = GetIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[20]
+	mi := &file_issues_v1_issues_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1679,7 +2100,7 @@ func (x *GetIssueRequest) String() string {
 func (*GetIssueRequest) ProtoMessage() {}
 
 func (x *GetIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[20]
+	mi := &file_issues_v1_issues_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1692,7 +2113,7 @@ func (x *GetIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIssueRequest.ProtoReflect.Descriptor instead.
 func (*GetIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{20}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetIssueRequest) GetProjectId() string {
@@ -1718,7 +2139,7 @@ type GetIssueResponse struct {
 
 func (x *GetIssueResponse) Reset() {
 	*x = GetIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[21]
+	mi := &file_issues_v1_issues_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1730,7 +2151,7 @@ func (x *GetIssueResponse) String() string {
 func (*GetIssueResponse) ProtoMessage() {}
 
 func (x *GetIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[21]
+	mi := &file_issues_v1_issues_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1743,7 +2164,7 @@ func (x *GetIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIssueResponse.ProtoReflect.Descriptor instead.
 func (*GetIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{21}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetIssueResponse) GetIssue() *Issue {
@@ -1765,7 +2186,7 @@ type CreateIssueRequest struct {
 
 func (x *CreateIssueRequest) Reset() {
 	*x = CreateIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[22]
+	mi := &file_issues_v1_issues_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1777,7 +2198,7 @@ func (x *CreateIssueRequest) String() string {
 func (*CreateIssueRequest) ProtoMessage() {}
 
 func (x *CreateIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[22]
+	mi := &file_issues_v1_issues_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1790,7 +2211,7 @@ func (x *CreateIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIssueRequest.ProtoReflect.Descriptor instead.
 func (*CreateIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{22}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *CreateIssueRequest) GetProjectId() string {
@@ -1830,7 +2251,7 @@ type CreateIssueResponse struct {
 
 func (x *CreateIssueResponse) Reset() {
 	*x = CreateIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[23]
+	mi := &file_issues_v1_issues_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1842,7 +2263,7 @@ func (x *CreateIssueResponse) String() string {
 func (*CreateIssueResponse) ProtoMessage() {}
 
 func (x *CreateIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[23]
+	mi := &file_issues_v1_issues_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1855,7 +2276,7 @@ func (x *CreateIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIssueResponse.ProtoReflect.Descriptor instead.
 func (*CreateIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{23}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CreateIssueResponse) GetIssue() *Issue {
@@ -1888,7 +2309,7 @@ type MoveIssueRequest struct {
 
 func (x *MoveIssueRequest) Reset() {
 	*x = MoveIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[24]
+	mi := &file_issues_v1_issues_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1900,7 +2321,7 @@ func (x *MoveIssueRequest) String() string {
 func (*MoveIssueRequest) ProtoMessage() {}
 
 func (x *MoveIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[24]
+	mi := &file_issues_v1_issues_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1913,7 +2334,7 @@ func (x *MoveIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveIssueRequest.ProtoReflect.Descriptor instead.
 func (*MoveIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{24}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *MoveIssueRequest) GetProjectId() string {
@@ -1967,7 +2388,7 @@ type MoveIssueResponse struct {
 
 func (x *MoveIssueResponse) Reset() {
 	*x = MoveIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[25]
+	mi := &file_issues_v1_issues_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1979,7 +2400,7 @@ func (x *MoveIssueResponse) String() string {
 func (*MoveIssueResponse) ProtoMessage() {}
 
 func (x *MoveIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[25]
+	mi := &file_issues_v1_issues_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1992,7 +2413,7 @@ func (x *MoveIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveIssueResponse.ProtoReflect.Descriptor instead.
 func (*MoveIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{25}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *MoveIssueResponse) GetIssue() *Issue {
@@ -2020,7 +2441,7 @@ type UpdateIssueRequest struct {
 
 func (x *UpdateIssueRequest) Reset() {
 	*x = UpdateIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[26]
+	mi := &file_issues_v1_issues_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2032,7 +2453,7 @@ func (x *UpdateIssueRequest) String() string {
 func (*UpdateIssueRequest) ProtoMessage() {}
 
 func (x *UpdateIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[26]
+	mi := &file_issues_v1_issues_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2045,7 +2466,7 @@ func (x *UpdateIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateIssueRequest.ProtoReflect.Descriptor instead.
 func (*UpdateIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{26}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *UpdateIssueRequest) GetProjectId() string {
@@ -2101,7 +2522,7 @@ type LabelIds struct {
 
 func (x *LabelIds) Reset() {
 	*x = LabelIds{}
-	mi := &file_issues_v1_issues_proto_msgTypes[27]
+	mi := &file_issues_v1_issues_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2113,7 +2534,7 @@ func (x *LabelIds) String() string {
 func (*LabelIds) ProtoMessage() {}
 
 func (x *LabelIds) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[27]
+	mi := &file_issues_v1_issues_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2126,7 +2547,7 @@ func (x *LabelIds) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LabelIds.ProtoReflect.Descriptor instead.
 func (*LabelIds) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{27}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *LabelIds) GetIds() []string {
@@ -2145,7 +2566,7 @@ type UpdateIssueResponse struct {
 
 func (x *UpdateIssueResponse) Reset() {
 	*x = UpdateIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[28]
+	mi := &file_issues_v1_issues_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2157,7 +2578,7 @@ func (x *UpdateIssueResponse) String() string {
 func (*UpdateIssueResponse) ProtoMessage() {}
 
 func (x *UpdateIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[28]
+	mi := &file_issues_v1_issues_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2170,10 +2591,223 @@ func (x *UpdateIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateIssueResponse.ProtoReflect.Descriptor instead.
 func (*UpdateIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{28}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *UpdateIssueResponse) GetIssue() *Issue {
+	if x != nil {
+		return x.Issue
+	}
+	return nil
+}
+
+type DiscardIssueRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Number    int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
+	// Obligatorio: 1 a 500 caracteres sin contar los espacios de los extremos
+	// (se guarda sin ellos). Vacío o solo espacios es INVALID_ARGUMENT.
+	Reason string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Estado CANCELED destino, si el proyecto tiene varios. Vacío: el primero
+	// de esa categoría en el orden de columnas. Uno de otra categoría o de
+	// otro proyecto es INVALID_ARGUMENT.
+	StatusId      string `protobuf:"bytes,4,opt,name=status_id,json=statusId,proto3" json:"status_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscardIssueRequest) Reset() {
+	*x = DiscardIssueRequest{}
+	mi := &file_issues_v1_issues_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscardIssueRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscardIssueRequest) ProtoMessage() {}
+
+func (x *DiscardIssueRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscardIssueRequest.ProtoReflect.Descriptor instead.
+func (*DiscardIssueRequest) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *DiscardIssueRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *DiscardIssueRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *DiscardIssueRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *DiscardIssueRequest) GetStatusId() string {
+	if x != nil {
+		return x.StatusId
+	}
+	return ""
+}
+
+type DiscardIssueResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Issue         *Issue                 `protobuf:"bytes,1,opt,name=issue,proto3" json:"issue,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscardIssueResponse) Reset() {
+	*x = DiscardIssueResponse{}
+	mi := &file_issues_v1_issues_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscardIssueResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscardIssueResponse) ProtoMessage() {}
+
+func (x *DiscardIssueResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscardIssueResponse.ProtoReflect.Descriptor instead.
+func (*DiscardIssueResponse) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *DiscardIssueResponse) GetIssue() *Issue {
+	if x != nil {
+		return x.Issue
+	}
+	return nil
+}
+
+type RestoreIssueRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Number        int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoreIssueRequest) Reset() {
+	*x = RestoreIssueRequest{}
+	mi := &file_issues_v1_issues_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreIssueRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreIssueRequest) ProtoMessage() {}
+
+func (x *RestoreIssueRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreIssueRequest.ProtoReflect.Descriptor instead.
+func (*RestoreIssueRequest) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *RestoreIssueRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *RestoreIssueRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+type RestoreIssueResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Issue         *Issue                 `protobuf:"bytes,1,opt,name=issue,proto3" json:"issue,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoreIssueResponse) Reset() {
+	*x = RestoreIssueResponse{}
+	mi := &file_issues_v1_issues_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreIssueResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreIssueResponse) ProtoMessage() {}
+
+func (x *RestoreIssueResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreIssueResponse.ProtoReflect.Descriptor instead.
+func (*RestoreIssueResponse) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *RestoreIssueResponse) GetIssue() *Issue {
 	if x != nil {
 		return x.Issue
 	}
@@ -2189,7 +2823,7 @@ type ListStatusesRequest struct {
 
 func (x *ListStatusesRequest) Reset() {
 	*x = ListStatusesRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[29]
+	mi := &file_issues_v1_issues_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2201,7 +2835,7 @@ func (x *ListStatusesRequest) String() string {
 func (*ListStatusesRequest) ProtoMessage() {}
 
 func (x *ListStatusesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[29]
+	mi := &file_issues_v1_issues_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2214,7 +2848,7 @@ func (x *ListStatusesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStatusesRequest.ProtoReflect.Descriptor instead.
 func (*ListStatusesRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{29}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListStatusesRequest) GetProjectId() string {
@@ -2234,7 +2868,7 @@ type ListStatusesResponse struct {
 
 func (x *ListStatusesResponse) Reset() {
 	*x = ListStatusesResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[30]
+	mi := &file_issues_v1_issues_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2246,7 +2880,7 @@ func (x *ListStatusesResponse) String() string {
 func (*ListStatusesResponse) ProtoMessage() {}
 
 func (x *ListStatusesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[30]
+	mi := &file_issues_v1_issues_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2259,7 +2893,7 @@ func (x *ListStatusesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStatusesResponse.ProtoReflect.Descriptor instead.
 func (*ListStatusesResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{30}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListStatusesResponse) GetStatuses() []*Status {
@@ -2277,13 +2911,18 @@ type CreateStatusRequest struct {
 	Category IssueState `protobuf:"varint,3,opt,name=category,proto3,enum=issues.v1.IssueState" json:"category,omitempty"`
 	// Queda después de este estado; vacío: al final.
 	AfterStatusId string `protobuf:"bytes,4,opt,name=after_status_id,json=afterStatusId,proto3" json:"after_status_id,omitempty"`
+	// Ver Status.color, Status.wip_limit y Status.hidden. Sin hidden, un
+	// estado CANCELED nace oculto y los demás visibles.
+	Color         LabelColor `protobuf:"varint,5,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
+	WipLimit      int32      `protobuf:"varint,6,opt,name=wip_limit,json=wipLimit,proto3" json:"wip_limit,omitempty"`
+	Hidden        *bool      `protobuf:"varint,7,opt,name=hidden,proto3,oneof" json:"hidden,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateStatusRequest) Reset() {
 	*x = CreateStatusRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[31]
+	mi := &file_issues_v1_issues_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2295,7 +2934,7 @@ func (x *CreateStatusRequest) String() string {
 func (*CreateStatusRequest) ProtoMessage() {}
 
 func (x *CreateStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[31]
+	mi := &file_issues_v1_issues_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2308,7 +2947,7 @@ func (x *CreateStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateStatusRequest.ProtoReflect.Descriptor instead.
 func (*CreateStatusRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{31}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CreateStatusRequest) GetProjectId() string {
@@ -2339,6 +2978,27 @@ func (x *CreateStatusRequest) GetAfterStatusId() string {
 	return ""
 }
 
+func (x *CreateStatusRequest) GetColor() LabelColor {
+	if x != nil {
+		return x.Color
+	}
+	return LabelColor_LABEL_COLOR_UNSPECIFIED
+}
+
+func (x *CreateStatusRequest) GetWipLimit() int32 {
+	if x != nil {
+		return x.WipLimit
+	}
+	return 0
+}
+
+func (x *CreateStatusRequest) GetHidden() bool {
+	if x != nil && x.Hidden != nil {
+		return *x.Hidden
+	}
+	return false
+}
+
 type CreateStatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        *Status                `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
@@ -2348,7 +3008,7 @@ type CreateStatusResponse struct {
 
 func (x *CreateStatusResponse) Reset() {
 	*x = CreateStatusResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[32]
+	mi := &file_issues_v1_issues_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2360,7 +3020,7 @@ func (x *CreateStatusResponse) String() string {
 func (*CreateStatusResponse) ProtoMessage() {}
 
 func (x *CreateStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[32]
+	mi := &file_issues_v1_issues_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2373,7 +3033,7 @@ func (x *CreateStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateStatusResponse.ProtoReflect.Descriptor instead.
 func (*CreateStatusResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{32}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CreateStatusResponse) GetStatus() *Status {
@@ -2390,13 +3050,17 @@ type UpdateStatusRequest struct {
 	Name      *string                `protobuf:"bytes,3,opt,name=name,proto3,oneof" json:"name,omitempty"`
 	// Reubica el estado después de este; presente y vacío: al principio.
 	AfterStatusId *string `protobuf:"bytes,4,opt,name=after_status_id,json=afterStatusId,proto3,oneof" json:"after_status_id,omitempty"`
+	// Ver Status.color, Status.wip_limit y Status.hidden.
+	Color         *LabelColor `protobuf:"varint,5,opt,name=color,proto3,enum=issues.v1.LabelColor,oneof" json:"color,omitempty"`
+	WipLimit      *int32      `protobuf:"varint,6,opt,name=wip_limit,json=wipLimit,proto3,oneof" json:"wip_limit,omitempty"`
+	Hidden        *bool       `protobuf:"varint,7,opt,name=hidden,proto3,oneof" json:"hidden,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateStatusRequest) Reset() {
 	*x = UpdateStatusRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[33]
+	mi := &file_issues_v1_issues_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2408,7 +3072,7 @@ func (x *UpdateStatusRequest) String() string {
 func (*UpdateStatusRequest) ProtoMessage() {}
 
 func (x *UpdateStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[33]
+	mi := &file_issues_v1_issues_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2421,7 +3085,7 @@ func (x *UpdateStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateStatusRequest.ProtoReflect.Descriptor instead.
 func (*UpdateStatusRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{33}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *UpdateStatusRequest) GetProjectId() string {
@@ -2452,6 +3116,27 @@ func (x *UpdateStatusRequest) GetAfterStatusId() string {
 	return ""
 }
 
+func (x *UpdateStatusRequest) GetColor() LabelColor {
+	if x != nil && x.Color != nil {
+		return *x.Color
+	}
+	return LabelColor_LABEL_COLOR_UNSPECIFIED
+}
+
+func (x *UpdateStatusRequest) GetWipLimit() int32 {
+	if x != nil && x.WipLimit != nil {
+		return *x.WipLimit
+	}
+	return 0
+}
+
+func (x *UpdateStatusRequest) GetHidden() bool {
+	if x != nil && x.Hidden != nil {
+		return *x.Hidden
+	}
+	return false
+}
+
 type UpdateStatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        *Status                `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
@@ -2461,7 +3146,7 @@ type UpdateStatusResponse struct {
 
 func (x *UpdateStatusResponse) Reset() {
 	*x = UpdateStatusResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[34]
+	mi := &file_issues_v1_issues_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2473,7 +3158,7 @@ func (x *UpdateStatusResponse) String() string {
 func (*UpdateStatusResponse) ProtoMessage() {}
 
 func (x *UpdateStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[34]
+	mi := &file_issues_v1_issues_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2486,7 +3171,7 @@ func (x *UpdateStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateStatusResponse.ProtoReflect.Descriptor instead.
 func (*UpdateStatusResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{34}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *UpdateStatusResponse) GetStatus() *Status {
@@ -2510,7 +3195,7 @@ type DeleteStatusRequest struct {
 
 func (x *DeleteStatusRequest) Reset() {
 	*x = DeleteStatusRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[35]
+	mi := &file_issues_v1_issues_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2522,7 +3207,7 @@ func (x *DeleteStatusRequest) String() string {
 func (*DeleteStatusRequest) ProtoMessage() {}
 
 func (x *DeleteStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[35]
+	mi := &file_issues_v1_issues_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2535,7 +3220,7 @@ func (x *DeleteStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteStatusRequest.ProtoReflect.Descriptor instead.
 func (*DeleteStatusRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{35}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *DeleteStatusRequest) GetProjectId() string {
@@ -2567,7 +3252,7 @@ type DeleteStatusResponse struct {
 
 func (x *DeleteStatusResponse) Reset() {
 	*x = DeleteStatusResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[36]
+	mi := &file_issues_v1_issues_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2579,7 +3264,7 @@ func (x *DeleteStatusResponse) String() string {
 func (*DeleteStatusResponse) ProtoMessage() {}
 
 func (x *DeleteStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[36]
+	mi := &file_issues_v1_issues_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2592,7 +3277,266 @@ func (x *DeleteStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteStatusResponse.ProtoReflect.Descriptor instead.
 func (*DeleteStatusResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{36}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{43}
+}
+
+// La lista completa de estados como debe quedar, en el orden de columnas.
+//
+//   - Un estado del proyecto que no está en statuses ni en deletions es
+//     FAILED_PRECONDITION: la vista está vieja (otro lo creó), recargar.
+//   - Mismas reglas que los RPC sueltos sobre el resultado: máximo 20
+//     (FAILED_PRECONDITION), al menos uno por categoría (FAILED_PRECONDITION),
+//     nombres únicos (ALREADY_EXISTS).
+//   - Cada issue que pasa de un estado borrado a otro deja su evento
+//     status_changed.
+type BatchUpdateStatusesRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Statuses  []*StatusSpec          `protobuf:"bytes,2,rep,name=statuses,proto3" json:"statuses,omitempty"`
+	// Estados que se borran. Ninguno puede estar también en statuses.
+	Deletions     []*StatusDeletion `protobuf:"bytes,3,rep,name=deletions,proto3" json:"deletions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchUpdateStatusesRequest) Reset() {
+	*x = BatchUpdateStatusesRequest{}
+	mi := &file_issues_v1_issues_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchUpdateStatusesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchUpdateStatusesRequest) ProtoMessage() {}
+
+func (x *BatchUpdateStatusesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchUpdateStatusesRequest.ProtoReflect.Descriptor instead.
+func (*BatchUpdateStatusesRequest) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *BatchUpdateStatusesRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *BatchUpdateStatusesRequest) GetStatuses() []*StatusSpec {
+	if x != nil {
+		return x.Statuses
+	}
+	return nil
+}
+
+func (x *BatchUpdateStatusesRequest) GetDeletions() []*StatusDeletion {
+	if x != nil {
+		return x.Deletions
+	}
+	return nil
+}
+
+// Un estado tal como debe quedar. La posición en la lista define su rank.
+type StatusSpec struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Vacío: estado nuevo. Uno de otro proyecto es INVALID_ARGUMENT.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 1 a 40 caracteres.
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Obligatoria en un estado nuevo. En uno existente no cambia: UNSPECIFIED
+	// o la misma; otra es INVALID_ARGUMENT.
+	Category      IssueState `protobuf:"varint,3,opt,name=category,proto3,enum=issues.v1.IssueState" json:"category,omitempty"`
+	Color         LabelColor `protobuf:"varint,4,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
+	WipLimit      int32      `protobuf:"varint,5,opt,name=wip_limit,json=wipLimit,proto3" json:"wip_limit,omitempty"`
+	Hidden        bool       `protobuf:"varint,6,opt,name=hidden,proto3" json:"hidden,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusSpec) Reset() {
+	*x = StatusSpec{}
+	mi := &file_issues_v1_issues_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusSpec) ProtoMessage() {}
+
+func (x *StatusSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusSpec.ProtoReflect.Descriptor instead.
+func (*StatusSpec) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *StatusSpec) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *StatusSpec) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StatusSpec) GetCategory() IssueState {
+	if x != nil {
+		return x.Category
+	}
+	return IssueState_ISSUE_STATE_UNSPECIFIED
+}
+
+func (x *StatusSpec) GetColor() LabelColor {
+	if x != nil {
+		return x.Color
+	}
+	return LabelColor_LABEL_COLOR_UNSPECIFIED
+}
+
+func (x *StatusSpec) GetWipLimit() int32 {
+	if x != nil {
+		return x.WipLimit
+	}
+	return 0
+}
+
+func (x *StatusSpec) GetHidden() bool {
+	if x != nil {
+		return x.Hidden
+	}
+	return false
+}
+
+type StatusDeletion struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	StatusId string                 `protobuf:"bytes,1,opt,name=status_id,json=statusId,proto3" json:"status_id,omitempty"`
+	// Estado al que pasan sus issues, como en DeleteStatusRequest: obligatorio
+	// si tiene issues. Tiene que ser un estado existente que queda en
+	// statuses (no uno nuevo del mismo request); si no, INVALID_ARGUMENT.
+	MoveToStatusId string `protobuf:"bytes,2,opt,name=move_to_status_id,json=moveToStatusId,proto3" json:"move_to_status_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StatusDeletion) Reset() {
+	*x = StatusDeletion{}
+	mi := &file_issues_v1_issues_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusDeletion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusDeletion) ProtoMessage() {}
+
+func (x *StatusDeletion) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusDeletion.ProtoReflect.Descriptor instead.
+func (*StatusDeletion) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *StatusDeletion) GetStatusId() string {
+	if x != nil {
+		return x.StatusId
+	}
+	return ""
+}
+
+func (x *StatusDeletion) GetMoveToStatusId() string {
+	if x != nil {
+		return x.MoveToStatusId
+	}
+	return ""
+}
+
+// Los estados del proyecto ya guardados, en orden (como ListStatuses).
+type BatchUpdateStatusesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Statuses      []*Status              `protobuf:"bytes,1,rep,name=statuses,proto3" json:"statuses,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchUpdateStatusesResponse) Reset() {
+	*x = BatchUpdateStatusesResponse{}
+	mi := &file_issues_v1_issues_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchUpdateStatusesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchUpdateStatusesResponse) ProtoMessage() {}
+
+func (x *BatchUpdateStatusesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchUpdateStatusesResponse.ProtoReflect.Descriptor instead.
+func (*BatchUpdateStatusesResponse) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *BatchUpdateStatusesResponse) GetStatuses() []*Status {
+	if x != nil {
+		return x.Statuses
+	}
+	return nil
 }
 
 type ListLabelsRequest struct {
@@ -2604,7 +3548,7 @@ type ListLabelsRequest struct {
 
 func (x *ListLabelsRequest) Reset() {
 	*x = ListLabelsRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[37]
+	mi := &file_issues_v1_issues_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2616,7 +3560,7 @@ func (x *ListLabelsRequest) String() string {
 func (*ListLabelsRequest) ProtoMessage() {}
 
 func (x *ListLabelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[37]
+	mi := &file_issues_v1_issues_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2629,7 +3573,7 @@ func (x *ListLabelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLabelsRequest.ProtoReflect.Descriptor instead.
 func (*ListLabelsRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{37}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ListLabelsRequest) GetProjectId() string {
@@ -2649,7 +3593,7 @@ type ListLabelsResponse struct {
 
 func (x *ListLabelsResponse) Reset() {
 	*x = ListLabelsResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[38]
+	mi := &file_issues_v1_issues_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2661,7 +3605,7 @@ func (x *ListLabelsResponse) String() string {
 func (*ListLabelsResponse) ProtoMessage() {}
 
 func (x *ListLabelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[38]
+	mi := &file_issues_v1_issues_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2674,7 +3618,7 @@ func (x *ListLabelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLabelsResponse.ProtoReflect.Descriptor instead.
 func (*ListLabelsResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{38}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ListLabelsResponse) GetLabels() []*Label {
@@ -2695,7 +3639,7 @@ type CreateLabelRequest struct {
 
 func (x *CreateLabelRequest) Reset() {
 	*x = CreateLabelRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[39]
+	mi := &file_issues_v1_issues_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2707,7 +3651,7 @@ func (x *CreateLabelRequest) String() string {
 func (*CreateLabelRequest) ProtoMessage() {}
 
 func (x *CreateLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[39]
+	mi := &file_issues_v1_issues_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2720,7 +3664,7 @@ func (x *CreateLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLabelRequest.ProtoReflect.Descriptor instead.
 func (*CreateLabelRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{39}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CreateLabelRequest) GetProjectId() string {
@@ -2753,7 +3697,7 @@ type CreateLabelResponse struct {
 
 func (x *CreateLabelResponse) Reset() {
 	*x = CreateLabelResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[40]
+	mi := &file_issues_v1_issues_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2765,7 +3709,7 @@ func (x *CreateLabelResponse) String() string {
 func (*CreateLabelResponse) ProtoMessage() {}
 
 func (x *CreateLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[40]
+	mi := &file_issues_v1_issues_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2778,7 +3722,7 @@ func (x *CreateLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLabelResponse.ProtoReflect.Descriptor instead.
 func (*CreateLabelResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{40}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CreateLabelResponse) GetLabel() *Label {
@@ -2801,7 +3745,7 @@ type UpdateLabelRequest struct {
 
 func (x *UpdateLabelRequest) Reset() {
 	*x = UpdateLabelRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[41]
+	mi := &file_issues_v1_issues_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2813,7 +3757,7 @@ func (x *UpdateLabelRequest) String() string {
 func (*UpdateLabelRequest) ProtoMessage() {}
 
 func (x *UpdateLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[41]
+	mi := &file_issues_v1_issues_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2826,7 +3770,7 @@ func (x *UpdateLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateLabelRequest.ProtoReflect.Descriptor instead.
 func (*UpdateLabelRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{41}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *UpdateLabelRequest) GetProjectId() string {
@@ -2866,7 +3810,7 @@ type UpdateLabelResponse struct {
 
 func (x *UpdateLabelResponse) Reset() {
 	*x = UpdateLabelResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[42]
+	mi := &file_issues_v1_issues_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2878,7 +3822,7 @@ func (x *UpdateLabelResponse) String() string {
 func (*UpdateLabelResponse) ProtoMessage() {}
 
 func (x *UpdateLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[42]
+	mi := &file_issues_v1_issues_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2891,7 +3835,7 @@ func (x *UpdateLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateLabelResponse.ProtoReflect.Descriptor instead.
 func (*UpdateLabelResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{42}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *UpdateLabelResponse) GetLabel() *Label {
@@ -2911,7 +3855,7 @@ type DeleteLabelRequest struct {
 
 func (x *DeleteLabelRequest) Reset() {
 	*x = DeleteLabelRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[43]
+	mi := &file_issues_v1_issues_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2923,7 +3867,7 @@ func (x *DeleteLabelRequest) String() string {
 func (*DeleteLabelRequest) ProtoMessage() {}
 
 func (x *DeleteLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[43]
+	mi := &file_issues_v1_issues_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2936,7 +3880,7 @@ func (x *DeleteLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLabelRequest.ProtoReflect.Descriptor instead.
 func (*DeleteLabelRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{43}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *DeleteLabelRequest) GetProjectId() string {
@@ -2961,7 +3905,7 @@ type DeleteLabelResponse struct {
 
 func (x *DeleteLabelResponse) Reset() {
 	*x = DeleteLabelResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[44]
+	mi := &file_issues_v1_issues_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2973,7 +3917,7 @@ func (x *DeleteLabelResponse) String() string {
 func (*DeleteLabelResponse) ProtoMessage() {}
 
 func (x *DeleteLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[44]
+	mi := &file_issues_v1_issues_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2986,7 +3930,7 @@ func (x *DeleteLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLabelResponse.ProtoReflect.Descriptor instead.
 func (*DeleteLabelResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{44}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{55}
 }
 
 type CreateCommentRequest struct {
@@ -3000,7 +3944,7 @@ type CreateCommentRequest struct {
 
 func (x *CreateCommentRequest) Reset() {
 	*x = CreateCommentRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[45]
+	mi := &file_issues_v1_issues_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3012,7 +3956,7 @@ func (x *CreateCommentRequest) String() string {
 func (*CreateCommentRequest) ProtoMessage() {}
 
 func (x *CreateCommentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[45]
+	mi := &file_issues_v1_issues_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3025,7 +3969,7 @@ func (x *CreateCommentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCommentRequest.ProtoReflect.Descriptor instead.
 func (*CreateCommentRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{45}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *CreateCommentRequest) GetProjectId() string {
@@ -3058,7 +4002,7 @@ type CreateCommentResponse struct {
 
 func (x *CreateCommentResponse) Reset() {
 	*x = CreateCommentResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[46]
+	mi := &file_issues_v1_issues_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3070,7 +4014,7 @@ func (x *CreateCommentResponse) String() string {
 func (*CreateCommentResponse) ProtoMessage() {}
 
 func (x *CreateCommentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[46]
+	mi := &file_issues_v1_issues_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3083,7 +4027,7 @@ func (x *CreateCommentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCommentResponse.ProtoReflect.Descriptor instead.
 func (*CreateCommentResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{46}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *CreateCommentResponse) GetComment() *Comment {
@@ -3104,7 +4048,7 @@ type ListIssueEventsRequest struct {
 
 func (x *ListIssueEventsRequest) Reset() {
 	*x = ListIssueEventsRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[47]
+	mi := &file_issues_v1_issues_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3116,7 +4060,7 @@ func (x *ListIssueEventsRequest) String() string {
 func (*ListIssueEventsRequest) ProtoMessage() {}
 
 func (x *ListIssueEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[47]
+	mi := &file_issues_v1_issues_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3129,7 +4073,7 @@ func (x *ListIssueEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssueEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListIssueEventsRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{47}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListIssueEventsRequest) GetProjectId() string {
@@ -3163,7 +4107,7 @@ type ListIssueEventsResponse struct {
 
 func (x *ListIssueEventsResponse) Reset() {
 	*x = ListIssueEventsResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[48]
+	mi := &file_issues_v1_issues_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3175,7 +4119,7 @@ func (x *ListIssueEventsResponse) String() string {
 func (*ListIssueEventsResponse) ProtoMessage() {}
 
 func (x *ListIssueEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[48]
+	mi := &file_issues_v1_issues_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3188,7 +4132,7 @@ func (x *ListIssueEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssueEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListIssueEventsResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{48}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ListIssueEventsResponse) GetEvents() []*IssueEvent {
@@ -3219,7 +4163,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
-	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\xa8\x03\n" +
+	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\xda\x03\n" +
 	"\x05Issue\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -3236,14 +4180,22 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x04rank\x18\n" +
 	" \x01(\tR\x04rank\x12\x1b\n" +
 	"\tstatus_id\x18\v \x01(\tR\bstatusId\x12\x1b\n" +
-	"\tlabel_ids\x18\f \x03(\tR\blabelIds\"\x92\x01\n" +
+	"\tlabel_ids\x18\f \x03(\tR\blabelIds\x120\n" +
+	"\adiscard\x18\r \x01(\v2\x16.issues.v1.DiscardInfoR\adiscard\"\x7f\n" +
+	"\vDiscardInfo\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\x12\x19\n" +
+	"\bactor_id\x18\x02 \x01(\tR\aactorId\x12=\n" +
+	"\fdiscarded_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vdiscardedAt\"\xf4\x01\n" +
 	"\x06Status\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x121\n" +
 	"\bcategory\x18\x04 \x01(\x0e2\x15.issues.v1.IssueStateR\bcategory\x12\x12\n" +
-	"\x04rank\x18\x05 \x01(\tR\x04rank\"w\n" +
+	"\x04rank\x18\x05 \x01(\tR\x04rank\x12+\n" +
+	"\x05color\x18\x06 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x1b\n" +
+	"\twip_limit\x18\a \x01(\x05R\bwipLimit\x12\x16\n" +
+	"\x06hidden\x18\b \x01(\bR\x06hidden\"w\n" +
 	"\x05Label\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -3256,7 +4208,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\tauthor_id\x18\x03 \x01(\tR\bauthorId\x12\x12\n" +
 	"\x04body\x18\x04 \x01(\tR\x04body\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xe1\x04\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xd4\x05\n" +
 	"\n" +
 	"IssueEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
@@ -3271,7 +4223,9 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x10priority_changed\x18\t \x01(\v2\x1a.issues.v1.PriorityChangedH\x00R\x0fpriorityChanged\x12A\n" +
 	"\x0elabels_changed\x18\n" +
 	" \x01(\v2\x18.issues.v1.LabelsChangedH\x00R\rlabelsChanged\x122\n" +
-	"\tcommented\x18\v \x01(\v2\x12.issues.v1.CommentH\x00R\tcommentedB\b\n" +
+	"\tcommented\x18\v \x01(\v2\x12.issues.v1.CommentH\x00R\tcommented\x129\n" +
+	"\tdiscarded\x18\f \x01(\v2\x19.issues.v1.IssueDiscardedH\x00R\tdiscarded\x126\n" +
+	"\brestored\x18\r \x01(\v2\x18.issues.v1.IssueRestoredH\x00R\brestoredB\b\n" +
 	"\x06change\"\x0e\n" +
 	"\fIssueCreated\"\x8f\x02\n" +
 	"\rStatusChanged\x12$\n" +
@@ -3282,7 +4236,22 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\fto_status_id\x18\x04 \x01(\tR\n" +
 	"toStatusId\x12$\n" +
 	"\x0eto_status_name\x18\x05 \x01(\tR\ftoStatusName\x120\n" +
-	"\bto_state\x18\x06 \x01(\x0e2\x15.issues.v1.IssueStateR\atoState\"2\n" +
+	"\bto_state\x18\x06 \x01(\x0e2\x15.issues.v1.IssueStateR\atoState\"\xf6\x01\n" +
+	"\x0eIssueDiscarded\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\x12$\n" +
+	"\x0efrom_status_id\x18\x02 \x01(\tR\ffromStatusId\x12(\n" +
+	"\x10from_status_name\x18\x03 \x01(\tR\x0efromStatusName\x124\n" +
+	"\n" +
+	"from_state\x18\x04 \x01(\x0e2\x15.issues.v1.IssueStateR\tfromState\x12 \n" +
+	"\fto_status_id\x18\x05 \x01(\tR\n" +
+	"toStatusId\x12$\n" +
+	"\x0eto_status_name\x18\x06 \x01(\tR\ftoStatusName\"\xa7\x01\n" +
+	"\rIssueRestored\x12$\n" +
+	"\x0efrom_status_id\x18\x01 \x01(\tR\ffromStatusId\x12(\n" +
+	"\x10from_status_name\x18\x02 \x01(\tR\x0efromStatusName\x12 \n" +
+	"\fto_status_id\x18\x03 \x01(\tR\n" +
+	"toStatusId\x12$\n" +
+	"\x0eto_status_name\x18\x04 \x01(\tR\ftoStatusName\"2\n" +
 	"\fTitleChanged\x12\x12\n" +
 	"\x04from\x18\x01 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x02 \x01(\tR\x02to\"\x14\n" +
@@ -3314,12 +4283,21 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12!\n" +
 	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\"E\n" +
 	"\x15CreateProjectResponse\x12,\n" +
-	"\aproject\x18\x01 \x01(\v2\x12.issues.v1.ProjectR\aproject\"\x8b\x01\n" +
+	"\aproject\x18\x01 \x01(\v2\x12.issues.v1.ProjectR\aproject\"\xf3\x02\n" +
 	"\x11ListIssuesRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12+\n" +
 	"\x05state\x18\x02 \x01(\x0e2\x15.issues.v1.IssueStateR\x05state\x12*\n" +
-	"\x04page\x18\x03 \x01(\v2\x16.issues.v1.PageRequestR\x04page\"k\n" +
+	"\x04page\x18\x03 \x01(\v2\x16.issues.v1.PageRequestR\x04page\x12\x14\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\x12-\n" +
+	"\x06states\x18\x05 \x03(\x0e2\x15.issues.v1.IssueStateR\x06states\x12\x1d\n" +
+	"\n" +
+	"status_ids\x18\x06 \x03(\tR\tstatusIds\x123\n" +
+	"\n" +
+	"priorities\x18\a \x03(\x0e2\x13.issues.v1.PriorityR\n" +
+	"priorities\x12\x1b\n" +
+	"\tlabel_ids\x18\b \x03(\tR\blabelIds\x120\n" +
+	"\border_by\x18\t \x01(\x0e2\x15.issues.v1.IssueOrderR\aorderBy\"k\n" +
 	"\x12ListIssuesResponse\x12(\n" +
 	"\x06issues\x18\x01 \x03(\v2\x10.issues.v1.IssueR\x06issues\x12+\n" +
 	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page\"H\n" +
@@ -3361,28 +4339,53 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\bLabelIds\x12\x10\n" +
 	"\x03ids\x18\x01 \x03(\tR\x03ids\"=\n" +
 	"\x13UpdateIssueResponse\x12&\n" +
+	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"\x81\x01\n" +
+	"\x13DiscardIssueRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x16\n" +
+	"\x06number\x18\x02 \x01(\x05R\x06number\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x1b\n" +
+	"\tstatus_id\x18\x04 \x01(\tR\bstatusId\">\n" +
+	"\x14DiscardIssueResponse\x12&\n" +
+	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"L\n" +
+	"\x13RestoreIssueRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x16\n" +
+	"\x06number\x18\x02 \x01(\x05R\x06number\">\n" +
+	"\x14RestoreIssueResponse\x12&\n" +
 	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"4\n" +
 	"\x13ListStatusesRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"E\n" +
 	"\x14ListStatusesResponse\x12-\n" +
-	"\bstatuses\x18\x01 \x03(\v2\x11.issues.v1.StatusR\bstatuses\"\xa3\x01\n" +
+	"\bstatuses\x18\x01 \x03(\v2\x11.issues.v1.StatusR\bstatuses\"\x95\x02\n" +
 	"\x13CreateStatusRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x121\n" +
 	"\bcategory\x18\x03 \x01(\x0e2\x15.issues.v1.IssueStateR\bcategory\x12&\n" +
-	"\x0fafter_status_id\x18\x04 \x01(\tR\rafterStatusId\"A\n" +
+	"\x0fafter_status_id\x18\x04 \x01(\tR\rafterStatusId\x12+\n" +
+	"\x05color\x18\x05 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x1b\n" +
+	"\twip_limit\x18\x06 \x01(\x05R\bwipLimit\x12\x1b\n" +
+	"\x06hidden\x18\a \x01(\bH\x00R\x06hidden\x88\x01\x01B\t\n" +
+	"\a_hidden\"A\n" +
 	"\x14CreateStatusResponse\x12)\n" +
-	"\x06status\x18\x01 \x01(\v2\x11.issues.v1.StatusR\x06status\"\xb4\x01\n" +
+	"\x06status\x18\x01 \x01(\v2\x11.issues.v1.StatusR\x06status\"\xc8\x02\n" +
 	"\x13UpdateStatusRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\tstatus_id\x18\x02 \x01(\tR\bstatusId\x12\x17\n" +
 	"\x04name\x18\x03 \x01(\tH\x00R\x04name\x88\x01\x01\x12+\n" +
-	"\x0fafter_status_id\x18\x04 \x01(\tH\x01R\rafterStatusId\x88\x01\x01B\a\n" +
+	"\x0fafter_status_id\x18\x04 \x01(\tH\x01R\rafterStatusId\x88\x01\x01\x120\n" +
+	"\x05color\x18\x05 \x01(\x0e2\x15.issues.v1.LabelColorH\x02R\x05color\x88\x01\x01\x12 \n" +
+	"\twip_limit\x18\x06 \x01(\x05H\x03R\bwipLimit\x88\x01\x01\x12\x1b\n" +
+	"\x06hidden\x18\a \x01(\bH\x04R\x06hidden\x88\x01\x01B\a\n" +
 	"\x05_nameB\x12\n" +
-	"\x10_after_status_id\"A\n" +
+	"\x10_after_status_idB\b\n" +
+	"\x06_colorB\f\n" +
+	"\n" +
+	"_wip_limitB\t\n" +
+	"\a_hidden\"A\n" +
 	"\x14UpdateStatusResponse\x12)\n" +
 	"\x06status\x18\x01 \x01(\v2\x11.issues.v1.StatusR\x06status\"|\n" +
 	"\x13DeleteStatusRequest\x12\x1d\n" +
@@ -3390,7 +4393,25 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1b\n" +
 	"\tstatus_id\x18\x02 \x01(\tR\bstatusId\x12)\n" +
 	"\x11move_to_status_id\x18\x03 \x01(\tR\x0emoveToStatusId\"\x16\n" +
-	"\x14DeleteStatusResponse\"2\n" +
+	"\x14DeleteStatusResponse\"\xa7\x01\n" +
+	"\x1aBatchUpdateStatusesRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x121\n" +
+	"\bstatuses\x18\x02 \x03(\v2\x15.issues.v1.StatusSpecR\bstatuses\x127\n" +
+	"\tdeletions\x18\x03 \x03(\v2\x19.issues.v1.StatusDeletionR\tdeletions\"\xc5\x01\n" +
+	"\n" +
+	"StatusSpec\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x121\n" +
+	"\bcategory\x18\x03 \x01(\x0e2\x15.issues.v1.IssueStateR\bcategory\x12+\n" +
+	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x1b\n" +
+	"\twip_limit\x18\x05 \x01(\x05R\bwipLimit\x12\x16\n" +
+	"\x06hidden\x18\x06 \x01(\bR\x06hidden\"X\n" +
+	"\x0eStatusDeletion\x12\x1b\n" +
+	"\tstatus_id\x18\x01 \x01(\tR\bstatusId\x12)\n" +
+	"\x11move_to_status_id\x18\x02 \x01(\tR\x0emoveToStatusId\"L\n" +
+	"\x1bBatchUpdateStatusesResponse\x12-\n" +
+	"\bstatuses\x18\x01 \x03(\v2\x11.issues.v1.StatusR\bstatuses\"2\n" +
 	"\x11ListLabelsRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\">\n" +
@@ -3455,7 +4476,13 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x13LABEL_COLOR_WARNING\x10\x04\x12\x16\n" +
 	"\x12LABEL_COLOR_DANGER\x10\x05\x12\x16\n" +
 	"\x12LABEL_COLOR_ACCENT\x10\x06\x12\x15\n" +
-	"\x11LABEL_COLOR_BRAND\x10\a2\x8b\x11\n" +
+	"\x11LABEL_COLOR_BRAND\x10\a*|\n" +
+	"\n" +
+	"IssueOrder\x12\x1b\n" +
+	"\x17ISSUE_ORDER_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10ISSUE_ORDER_RANK\x10\x01\x12\x1c\n" +
+	"\x18ISSUE_ORDER_UPDATED_DESC\x10\x02\x12\x1d\n" +
+	"\x19ISSUE_ORDER_PRIORITY_DESC\x10\x032\xcd\x14\n" +
 	"\fIssueService\x12e\n" +
 	"\fListProjects\x12\x1e.issues.v1.ListProjectsRequest\x1a\x1f.issues.v1.ListProjectsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12k\n" +
 	"\rCreateProject\x12\x1f.issues.v1.CreateProjectRequest\x1a .issues.v1.CreateProjectResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12s\n" +
@@ -3464,11 +4491,14 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\bGetIssue\x12\x1a.issues.v1.GetIssueRequest\x1a\x1b.issues.v1.GetIssueResponse\"1\x82\xd3\xe4\x93\x02+\x12)/v1/projects/{project_id}/issues/{number}\x12y\n" +
 	"\vCreateIssue\x12\x1d.issues.v1.CreateIssueRequest\x1a\x1e.issues.v1.CreateIssueResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\" /v1/projects/{project_id}/issues\x12\x81\x01\n" +
 	"\tMoveIssue\x12\x1b.issues.v1.MoveIssueRequest\x1a\x1c.issues.v1.MoveIssueResponse\"9\x82\xd3\xe4\x93\x023:\x01*\"./v1/projects/{project_id}/issues/{number}:move\x12\x82\x01\n" +
-	"\vUpdateIssue\x12\x1d.issues.v1.UpdateIssueRequest\x1a\x1e.issues.v1.UpdateIssueResponse\"4\x82\xd3\xe4\x93\x02.:\x01*2)/v1/projects/{project_id}/issues/{number}\x12{\n" +
+	"\vUpdateIssue\x12\x1d.issues.v1.UpdateIssueRequest\x1a\x1e.issues.v1.UpdateIssueResponse\"4\x82\xd3\xe4\x93\x02.:\x01*2)/v1/projects/{project_id}/issues/{number}\x12\x8d\x01\n" +
+	"\fDiscardIssue\x12\x1e.issues.v1.DiscardIssueRequest\x1a\x1f.issues.v1.DiscardIssueResponse\"<\x82\xd3\xe4\x93\x026:\x01*\"1/v1/projects/{project_id}/issues/{number}:discard\x12\x8d\x01\n" +
+	"\fRestoreIssue\x12\x1e.issues.v1.RestoreIssueRequest\x1a\x1f.issues.v1.RestoreIssueResponse\"<\x82\xd3\xe4\x93\x026:\x01*\"1/v1/projects/{project_id}/issues/{number}:restore\x12{\n" +
 	"\fListStatuses\x12\x1e.issues.v1.ListStatusesRequest\x1a\x1f.issues.v1.ListStatusesResponse\"*\x82\xd3\xe4\x93\x02$\x12\"/v1/projects/{project_id}/statuses\x12~\n" +
 	"\fCreateStatus\x12\x1e.issues.v1.CreateStatusRequest\x1a\x1f.issues.v1.CreateStatusResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/projects/{project_id}/statuses\x12\x8a\x01\n" +
 	"\fUpdateStatus\x12\x1e.issues.v1.UpdateStatusRequest\x1a\x1f.issues.v1.UpdateStatusResponse\"9\x82\xd3\xe4\x93\x023:\x01*2./v1/projects/{project_id}/statuses/{status_id}\x12\x87\x01\n" +
-	"\fDeleteStatus\x12\x1e.issues.v1.DeleteStatusRequest\x1a\x1f.issues.v1.DeleteStatusResponse\"6\x82\xd3\xe4\x93\x020*./v1/projects/{project_id}/statuses/{status_id}\x12s\n" +
+	"\fDeleteStatus\x12\x1e.issues.v1.DeleteStatusRequest\x1a\x1f.issues.v1.DeleteStatusResponse\"6\x82\xd3\xe4\x93\x020*./v1/projects/{project_id}/statuses/{status_id}\x12\x9f\x01\n" +
+	"\x13BatchUpdateStatuses\x12%.issues.v1.BatchUpdateStatusesRequest\x1a&.issues.v1.BatchUpdateStatusesResponse\"9\x82\xd3\xe4\x93\x023:\x01*\"./v1/projects/{project_id}/statuses:batchUpdate\x12s\n" +
 	"\n" +
 	"ListLabels\x12\x1c.issues.v1.ListLabelsRequest\x1a\x1d.issues.v1.ListLabelsResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/projects/{project_id}/labels\x12y\n" +
 	"\vCreateLabel\x12\x1d.issues.v1.CreateLabelRequest\x1a\x1e.issues.v1.CreateLabelResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\" /v1/projects/{project_id}/labels\x12\x84\x01\n" +
@@ -3491,153 +4521,189 @@ func file_issues_v1_issues_proto_rawDescGZIP() []byte {
 	return file_issues_v1_issues_proto_rawDescData
 }
 
-var file_issues_v1_issues_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_issues_v1_issues_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
+var file_issues_v1_issues_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_issues_v1_issues_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_issues_v1_issues_proto_goTypes = []any{
-	(IssueState)(0),                 // 0: issues.v1.IssueState
-	(Priority)(0),                   // 1: issues.v1.Priority
-	(LabelColor)(0),                 // 2: issues.v1.LabelColor
-	(*Project)(nil),                 // 3: issues.v1.Project
-	(*Issue)(nil),                   // 4: issues.v1.Issue
-	(*Status)(nil),                  // 5: issues.v1.Status
-	(*Label)(nil),                   // 6: issues.v1.Label
-	(*Comment)(nil),                 // 7: issues.v1.Comment
-	(*IssueEvent)(nil),              // 8: issues.v1.IssueEvent
-	(*IssueCreated)(nil),            // 9: issues.v1.IssueCreated
-	(*StatusChanged)(nil),           // 10: issues.v1.StatusChanged
-	(*TitleChanged)(nil),            // 11: issues.v1.TitleChanged
-	(*DescriptionChanged)(nil),      // 12: issues.v1.DescriptionChanged
-	(*PriorityChanged)(nil),         // 13: issues.v1.PriorityChanged
-	(*LabelsChanged)(nil),           // 14: issues.v1.LabelsChanged
-	(*PageRequest)(nil),             // 15: issues.v1.PageRequest
-	(*PageResponse)(nil),            // 16: issues.v1.PageResponse
-	(*ListProjectsRequest)(nil),     // 17: issues.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),    // 18: issues.v1.ListProjectsResponse
-	(*CreateProjectRequest)(nil),    // 19: issues.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),   // 20: issues.v1.CreateProjectResponse
-	(*ListIssuesRequest)(nil),       // 21: issues.v1.ListIssuesRequest
-	(*ListIssuesResponse)(nil),      // 22: issues.v1.ListIssuesResponse
-	(*GetIssueRequest)(nil),         // 23: issues.v1.GetIssueRequest
-	(*GetIssueResponse)(nil),        // 24: issues.v1.GetIssueResponse
-	(*CreateIssueRequest)(nil),      // 25: issues.v1.CreateIssueRequest
-	(*CreateIssueResponse)(nil),     // 26: issues.v1.CreateIssueResponse
-	(*MoveIssueRequest)(nil),        // 27: issues.v1.MoveIssueRequest
-	(*MoveIssueResponse)(nil),       // 28: issues.v1.MoveIssueResponse
-	(*UpdateIssueRequest)(nil),      // 29: issues.v1.UpdateIssueRequest
-	(*LabelIds)(nil),                // 30: issues.v1.LabelIds
-	(*UpdateIssueResponse)(nil),     // 31: issues.v1.UpdateIssueResponse
-	(*ListStatusesRequest)(nil),     // 32: issues.v1.ListStatusesRequest
-	(*ListStatusesResponse)(nil),    // 33: issues.v1.ListStatusesResponse
-	(*CreateStatusRequest)(nil),     // 34: issues.v1.CreateStatusRequest
-	(*CreateStatusResponse)(nil),    // 35: issues.v1.CreateStatusResponse
-	(*UpdateStatusRequest)(nil),     // 36: issues.v1.UpdateStatusRequest
-	(*UpdateStatusResponse)(nil),    // 37: issues.v1.UpdateStatusResponse
-	(*DeleteStatusRequest)(nil),     // 38: issues.v1.DeleteStatusRequest
-	(*DeleteStatusResponse)(nil),    // 39: issues.v1.DeleteStatusResponse
-	(*ListLabelsRequest)(nil),       // 40: issues.v1.ListLabelsRequest
-	(*ListLabelsResponse)(nil),      // 41: issues.v1.ListLabelsResponse
-	(*CreateLabelRequest)(nil),      // 42: issues.v1.CreateLabelRequest
-	(*CreateLabelResponse)(nil),     // 43: issues.v1.CreateLabelResponse
-	(*UpdateLabelRequest)(nil),      // 44: issues.v1.UpdateLabelRequest
-	(*UpdateLabelResponse)(nil),     // 45: issues.v1.UpdateLabelResponse
-	(*DeleteLabelRequest)(nil),      // 46: issues.v1.DeleteLabelRequest
-	(*DeleteLabelResponse)(nil),     // 47: issues.v1.DeleteLabelResponse
-	(*CreateCommentRequest)(nil),    // 48: issues.v1.CreateCommentRequest
-	(*CreateCommentResponse)(nil),   // 49: issues.v1.CreateCommentResponse
-	(*ListIssueEventsRequest)(nil),  // 50: issues.v1.ListIssueEventsRequest
-	(*ListIssueEventsResponse)(nil), // 51: issues.v1.ListIssueEventsResponse
-	(*timestamppb.Timestamp)(nil),   // 52: google.protobuf.Timestamp
+	(IssueState)(0),                     // 0: issues.v1.IssueState
+	(Priority)(0),                       // 1: issues.v1.Priority
+	(LabelColor)(0),                     // 2: issues.v1.LabelColor
+	(IssueOrder)(0),                     // 3: issues.v1.IssueOrder
+	(*Project)(nil),                     // 4: issues.v1.Project
+	(*Issue)(nil),                       // 5: issues.v1.Issue
+	(*DiscardInfo)(nil),                 // 6: issues.v1.DiscardInfo
+	(*Status)(nil),                      // 7: issues.v1.Status
+	(*Label)(nil),                       // 8: issues.v1.Label
+	(*Comment)(nil),                     // 9: issues.v1.Comment
+	(*IssueEvent)(nil),                  // 10: issues.v1.IssueEvent
+	(*IssueCreated)(nil),                // 11: issues.v1.IssueCreated
+	(*StatusChanged)(nil),               // 12: issues.v1.StatusChanged
+	(*IssueDiscarded)(nil),              // 13: issues.v1.IssueDiscarded
+	(*IssueRestored)(nil),               // 14: issues.v1.IssueRestored
+	(*TitleChanged)(nil),                // 15: issues.v1.TitleChanged
+	(*DescriptionChanged)(nil),          // 16: issues.v1.DescriptionChanged
+	(*PriorityChanged)(nil),             // 17: issues.v1.PriorityChanged
+	(*LabelsChanged)(nil),               // 18: issues.v1.LabelsChanged
+	(*PageRequest)(nil),                 // 19: issues.v1.PageRequest
+	(*PageResponse)(nil),                // 20: issues.v1.PageResponse
+	(*ListProjectsRequest)(nil),         // 21: issues.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),        // 22: issues.v1.ListProjectsResponse
+	(*CreateProjectRequest)(nil),        // 23: issues.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),       // 24: issues.v1.CreateProjectResponse
+	(*ListIssuesRequest)(nil),           // 25: issues.v1.ListIssuesRequest
+	(*ListIssuesResponse)(nil),          // 26: issues.v1.ListIssuesResponse
+	(*GetIssueRequest)(nil),             // 27: issues.v1.GetIssueRequest
+	(*GetIssueResponse)(nil),            // 28: issues.v1.GetIssueResponse
+	(*CreateIssueRequest)(nil),          // 29: issues.v1.CreateIssueRequest
+	(*CreateIssueResponse)(nil),         // 30: issues.v1.CreateIssueResponse
+	(*MoveIssueRequest)(nil),            // 31: issues.v1.MoveIssueRequest
+	(*MoveIssueResponse)(nil),           // 32: issues.v1.MoveIssueResponse
+	(*UpdateIssueRequest)(nil),          // 33: issues.v1.UpdateIssueRequest
+	(*LabelIds)(nil),                    // 34: issues.v1.LabelIds
+	(*UpdateIssueResponse)(nil),         // 35: issues.v1.UpdateIssueResponse
+	(*DiscardIssueRequest)(nil),         // 36: issues.v1.DiscardIssueRequest
+	(*DiscardIssueResponse)(nil),        // 37: issues.v1.DiscardIssueResponse
+	(*RestoreIssueRequest)(nil),         // 38: issues.v1.RestoreIssueRequest
+	(*RestoreIssueResponse)(nil),        // 39: issues.v1.RestoreIssueResponse
+	(*ListStatusesRequest)(nil),         // 40: issues.v1.ListStatusesRequest
+	(*ListStatusesResponse)(nil),        // 41: issues.v1.ListStatusesResponse
+	(*CreateStatusRequest)(nil),         // 42: issues.v1.CreateStatusRequest
+	(*CreateStatusResponse)(nil),        // 43: issues.v1.CreateStatusResponse
+	(*UpdateStatusRequest)(nil),         // 44: issues.v1.UpdateStatusRequest
+	(*UpdateStatusResponse)(nil),        // 45: issues.v1.UpdateStatusResponse
+	(*DeleteStatusRequest)(nil),         // 46: issues.v1.DeleteStatusRequest
+	(*DeleteStatusResponse)(nil),        // 47: issues.v1.DeleteStatusResponse
+	(*BatchUpdateStatusesRequest)(nil),  // 48: issues.v1.BatchUpdateStatusesRequest
+	(*StatusSpec)(nil),                  // 49: issues.v1.StatusSpec
+	(*StatusDeletion)(nil),              // 50: issues.v1.StatusDeletion
+	(*BatchUpdateStatusesResponse)(nil), // 51: issues.v1.BatchUpdateStatusesResponse
+	(*ListLabelsRequest)(nil),           // 52: issues.v1.ListLabelsRequest
+	(*ListLabelsResponse)(nil),          // 53: issues.v1.ListLabelsResponse
+	(*CreateLabelRequest)(nil),          // 54: issues.v1.CreateLabelRequest
+	(*CreateLabelResponse)(nil),         // 55: issues.v1.CreateLabelResponse
+	(*UpdateLabelRequest)(nil),          // 56: issues.v1.UpdateLabelRequest
+	(*UpdateLabelResponse)(nil),         // 57: issues.v1.UpdateLabelResponse
+	(*DeleteLabelRequest)(nil),          // 58: issues.v1.DeleteLabelRequest
+	(*DeleteLabelResponse)(nil),         // 59: issues.v1.DeleteLabelResponse
+	(*CreateCommentRequest)(nil),        // 60: issues.v1.CreateCommentRequest
+	(*CreateCommentResponse)(nil),       // 61: issues.v1.CreateCommentResponse
+	(*ListIssueEventsRequest)(nil),      // 62: issues.v1.ListIssueEventsRequest
+	(*ListIssueEventsResponse)(nil),     // 63: issues.v1.ListIssueEventsResponse
+	(*timestamppb.Timestamp)(nil),       // 64: google.protobuf.Timestamp
 }
 var file_issues_v1_issues_proto_depIdxs = []int32{
-	52, // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	52, // 1: issues.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
+	64, // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	64, // 1: issues.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: issues.v1.Issue.state:type_name -> issues.v1.IssueState
 	1,  // 3: issues.v1.Issue.priority:type_name -> issues.v1.Priority
-	52, // 4: issues.v1.Issue.created_at:type_name -> google.protobuf.Timestamp
-	52, // 5: issues.v1.Issue.updated_at:type_name -> google.protobuf.Timestamp
-	0,  // 6: issues.v1.Status.category:type_name -> issues.v1.IssueState
-	2,  // 7: issues.v1.Label.color:type_name -> issues.v1.LabelColor
-	52, // 8: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
-	52, // 9: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
-	9,  // 10: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
-	10, // 11: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
-	11, // 12: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
-	12, // 13: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
-	13, // 14: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
-	14, // 15: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
-	7,  // 16: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
-	0,  // 17: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
-	0,  // 18: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
-	1,  // 19: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
-	1,  // 20: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
-	15, // 21: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
-	3,  // 22: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
-	16, // 23: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
-	3,  // 24: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
-	0,  // 25: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
-	15, // 26: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
-	4,  // 27: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
-	16, // 28: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
-	4,  // 29: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
-	1,  // 30: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
-	4,  // 31: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
-	0,  // 32: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
-	4,  // 33: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
-	1,  // 34: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
-	30, // 35: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
-	4,  // 36: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
-	5,  // 37: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
-	0,  // 38: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
-	5,  // 39: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
-	5,  // 40: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
-	6,  // 41: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
-	2,  // 42: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
-	6,  // 43: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
-	2,  // 44: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
-	6,  // 45: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
-	7,  // 46: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
-	15, // 47: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
-	8,  // 48: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
-	16, // 49: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
-	17, // 50: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
-	19, // 51: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
-	21, // 52: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
-	23, // 53: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
-	25, // 54: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
-	27, // 55: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
-	29, // 56: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
-	32, // 57: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
-	34, // 58: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
-	36, // 59: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
-	38, // 60: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
-	40, // 61: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
-	42, // 62: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
-	44, // 63: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
-	46, // 64: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
-	48, // 65: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
-	50, // 66: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
-	18, // 67: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
-	20, // 68: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
-	22, // 69: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
-	24, // 70: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
-	26, // 71: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
-	28, // 72: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
-	31, // 73: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
-	33, // 74: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
-	35, // 75: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
-	37, // 76: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
-	39, // 77: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
-	41, // 78: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
-	43, // 79: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
-	45, // 80: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
-	47, // 81: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
-	49, // 82: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
-	51, // 83: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
-	67, // [67:84] is the sub-list for method output_type
-	50, // [50:67] is the sub-list for method input_type
-	50, // [50:50] is the sub-list for extension type_name
-	50, // [50:50] is the sub-list for extension extendee
-	0,  // [0:50] is the sub-list for field type_name
+	64, // 4: issues.v1.Issue.created_at:type_name -> google.protobuf.Timestamp
+	64, // 5: issues.v1.Issue.updated_at:type_name -> google.protobuf.Timestamp
+	6,  // 6: issues.v1.Issue.discard:type_name -> issues.v1.DiscardInfo
+	64, // 7: issues.v1.DiscardInfo.discarded_at:type_name -> google.protobuf.Timestamp
+	0,  // 8: issues.v1.Status.category:type_name -> issues.v1.IssueState
+	2,  // 9: issues.v1.Status.color:type_name -> issues.v1.LabelColor
+	2,  // 10: issues.v1.Label.color:type_name -> issues.v1.LabelColor
+	64, // 11: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
+	64, // 12: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
+	11, // 13: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
+	12, // 14: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
+	15, // 15: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
+	16, // 16: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
+	17, // 17: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
+	18, // 18: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
+	9,  // 19: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
+	13, // 20: issues.v1.IssueEvent.discarded:type_name -> issues.v1.IssueDiscarded
+	14, // 21: issues.v1.IssueEvent.restored:type_name -> issues.v1.IssueRestored
+	0,  // 22: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
+	0,  // 23: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
+	0,  // 24: issues.v1.IssueDiscarded.from_state:type_name -> issues.v1.IssueState
+	1,  // 25: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
+	1,  // 26: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
+	19, // 27: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
+	4,  // 28: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
+	20, // 29: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
+	4,  // 30: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
+	0,  // 31: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
+	19, // 32: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
+	0,  // 33: issues.v1.ListIssuesRequest.states:type_name -> issues.v1.IssueState
+	1,  // 34: issues.v1.ListIssuesRequest.priorities:type_name -> issues.v1.Priority
+	3,  // 35: issues.v1.ListIssuesRequest.order_by:type_name -> issues.v1.IssueOrder
+	5,  // 36: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
+	20, // 37: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
+	5,  // 38: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
+	1,  // 39: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
+	5,  // 40: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
+	0,  // 41: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
+	5,  // 42: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
+	1,  // 43: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
+	34, // 44: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
+	5,  // 45: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
+	5,  // 46: issues.v1.DiscardIssueResponse.issue:type_name -> issues.v1.Issue
+	5,  // 47: issues.v1.RestoreIssueResponse.issue:type_name -> issues.v1.Issue
+	7,  // 48: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
+	0,  // 49: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
+	2,  // 50: issues.v1.CreateStatusRequest.color:type_name -> issues.v1.LabelColor
+	7,  // 51: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
+	2,  // 52: issues.v1.UpdateStatusRequest.color:type_name -> issues.v1.LabelColor
+	7,  // 53: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
+	49, // 54: issues.v1.BatchUpdateStatusesRequest.statuses:type_name -> issues.v1.StatusSpec
+	50, // 55: issues.v1.BatchUpdateStatusesRequest.deletions:type_name -> issues.v1.StatusDeletion
+	0,  // 56: issues.v1.StatusSpec.category:type_name -> issues.v1.IssueState
+	2,  // 57: issues.v1.StatusSpec.color:type_name -> issues.v1.LabelColor
+	7,  // 58: issues.v1.BatchUpdateStatusesResponse.statuses:type_name -> issues.v1.Status
+	8,  // 59: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
+	2,  // 60: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
+	8,  // 61: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
+	2,  // 62: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
+	8,  // 63: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
+	9,  // 64: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
+	19, // 65: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
+	10, // 66: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
+	20, // 67: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
+	21, // 68: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
+	23, // 69: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
+	25, // 70: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
+	27, // 71: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
+	29, // 72: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
+	31, // 73: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
+	33, // 74: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
+	36, // 75: issues.v1.IssueService.DiscardIssue:input_type -> issues.v1.DiscardIssueRequest
+	38, // 76: issues.v1.IssueService.RestoreIssue:input_type -> issues.v1.RestoreIssueRequest
+	40, // 77: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
+	42, // 78: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
+	44, // 79: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
+	46, // 80: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
+	48, // 81: issues.v1.IssueService.BatchUpdateStatuses:input_type -> issues.v1.BatchUpdateStatusesRequest
+	52, // 82: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
+	54, // 83: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
+	56, // 84: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
+	58, // 85: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
+	60, // 86: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
+	62, // 87: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
+	22, // 88: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
+	24, // 89: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
+	26, // 90: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
+	28, // 91: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
+	30, // 92: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
+	32, // 93: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
+	35, // 94: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
+	37, // 95: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
+	39, // 96: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
+	41, // 97: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
+	43, // 98: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
+	45, // 99: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
+	47, // 100: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
+	51, // 101: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
+	53, // 102: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
+	55, // 103: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
+	57, // 104: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
+	59, // 105: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
+	61, // 106: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
+	63, // 107: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
+	88, // [88:108] is the sub-list for method output_type
+	68, // [68:88] is the sub-list for method input_type
+	68, // [68:68] is the sub-list for extension type_name
+	68, // [68:68] is the sub-list for extension extendee
+	0,  // [0:68] is the sub-list for field type_name
 }
 
 func init() { file_issues_v1_issues_proto_init() }
@@ -3645,7 +4711,7 @@ func file_issues_v1_issues_proto_init() {
 	if File_issues_v1_issues_proto != nil {
 		return
 	}
-	file_issues_v1_issues_proto_msgTypes[5].OneofWrappers = []any{
+	file_issues_v1_issues_proto_msgTypes[6].OneofWrappers = []any{
 		(*IssueEvent_Created)(nil),
 		(*IssueEvent_StatusChanged)(nil),
 		(*IssueEvent_TitleChanged)(nil),
@@ -3653,17 +4719,20 @@ func file_issues_v1_issues_proto_init() {
 		(*IssueEvent_PriorityChanged)(nil),
 		(*IssueEvent_LabelsChanged)(nil),
 		(*IssueEvent_Commented)(nil),
+		(*IssueEvent_Discarded)(nil),
+		(*IssueEvent_Restored)(nil),
 	}
-	file_issues_v1_issues_proto_msgTypes[26].OneofWrappers = []any{}
-	file_issues_v1_issues_proto_msgTypes[33].OneofWrappers = []any{}
-	file_issues_v1_issues_proto_msgTypes[41].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[29].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[38].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[40].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[52].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_issues_v1_issues_proto_rawDesc), len(file_issues_v1_issues_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   49,
+			NumEnums:      4,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
