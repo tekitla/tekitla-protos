@@ -155,9 +155,11 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
   labelIds: string[];
 
   /**
-   * Motivo del descarte. Presente solo mientras el issue está en un estado
-   * CANCELED al que llegó con DiscardIssue; ausente si se descartó con
-   * MoveIssue (descartado sin motivo) o si no está descartado.
+   * Motivo del descarte: lo pone DiscardIssue. Ausente si se descartó con
+   * MoveIssue (descartado sin motivo) o si no está descartado. Se mantiene
+   * al pasar de un estado CANCELED a otro y se borra cuando el issue sale de
+   * CANCELED por cualquier vía (MoveIssue, RestoreIssue, o DeleteStatus y
+   * BatchUpdateStatuses al mover los issues de un estado borrado).
    *
    * @generated from field: issues.v1.DiscardInfo discard = 13;
    */
@@ -260,7 +262,8 @@ export declare type Status = Message<"issues.v1.Status"> & {
 
   /**
    * La columna no se muestra en el tablero; sus issues sí salen en
-   * ListIssues. Los estados CANCELED nacen ocultos.
+   * ListIssues. Los estados CANCELED nacen ocultos, y los que existían antes
+   * de este campo (v0.3.0) se migran con hidden = true; los demás, visibles.
    *
    * @generated from field: bool hidden = 8;
    */
@@ -842,9 +845,11 @@ export declare type ListIssuesRequest = Message<"issues.v1.ListIssuesRequest"> &
 
   /**
    * Texto a buscar, hasta 200 caracteres (más es INVALID_ARGUMENT). Coincide
-   * con parte del título sin distinguir mayúsculas ni acentos, o con el
-   * número si viene como clave ("TK-12", con la key del proyecto) o solo el
-   * número ("12"). Vacío o solo espacios: sin búsqueda.
+   * con parte del título sin distinguir mayúsculas ni acentos. Si además es
+   * una clave del proyecto ("TK-12" o "tk-12": la key sin distinguir
+   * mayúsculas) o un número ("12"), también trae ese issue: "12" devuelve el
+   * #12 y los títulos que contienen "12". Vacío o solo espacios: sin
+   * búsqueda.
    *
    * @generated from field: string query = 4;
    */
@@ -1463,6 +1468,8 @@ export declare const DeleteStatusResponseSchema: GenMessage<DeleteStatusResponse
  *   nombres únicos (ALREADY_EXISTS).
  * - Cada issue que pasa de un estado borrado a otro deja su evento
  *   status_changed.
+ * - Sin control de versión: lo que viene pisa lo guardado (como UpdateStatus).
+ *   Si otro editó un estado mientras tanto, su cambio se pierde.
  *
  * @generated from message issues.v1.BatchUpdateStatusesRequest
  */
@@ -2002,7 +2009,8 @@ export enum IssueOrder {
   UPDATED_DESC = 2,
 
   /**
-   * Prioridad descendente: URGENT primero.
+   * Prioridad descendente: URGENT primero. Ningún issue guardado tiene
+   * PRIORITY_UNSPECIFIED (CreateIssue lo guarda como MEDIUM).
    *
    * @generated from enum value: ISSUE_ORDER_PRIORITY_DESC = 3;
    */
@@ -2089,8 +2097,9 @@ export declare const IssueService: GenService<{
   /**
    * Cambia el estado de un issue (mover de columna en el tablero) y,
    * opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
-   * Moverlo a un estado CANCELED lo descarta sin motivo (Issue.discard queda
-   * ausente); sacarlo de CANCELED borra Issue.discard. Pasarse del wip_limit
+   * Moverlo a CANCELED desde otra categoría lo descarta sin motivo
+   * (Issue.discard queda ausente); entre estados CANCELED, Issue.discard se
+   * mantiene; sacarlo de CANCELED lo borra. Pasarse del wip_limit
    * del estado destino no lo impide: el panel marca la columna excedida.
    *
    * @generated from rpc issues.v1.IssueService.MoveIssue
