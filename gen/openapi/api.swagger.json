@@ -1,13 +1,21 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "issues/v1/issues.proto",
+    "title": "issues/v1/actors.proto",
     "version": "version not set"
   },
   "tags": [
     {
+      "name": "ActorService",
+      "description": "ActorService da de alta y revoca agentes y emite y revoca tokens.\n\nLo usa solo una persona con sesión de Firebase, para sí misma o para sus\nagentes: el gateway expone estas rutas solo con la allowlist (sesión de\nFirebase), nunca con un token de Tekitla, porque un token no crea agentes ni\notros tokens. Si llega un request con x-agent-id, el servicio responde\nPERMISSION_DENIED.\n\nEl actor persona del usuario se crea la primera vez que hace falta (la\nprimera llamada a este servicio, o al asignarse un issue), a partir de\nx-user-id. Un actor o token ajeno responde NOT_FOUND, salvo donde se\nindica PERMISSION_DENIED."
+    },
+    {
       "name": "IssueService",
       "description": "IssueService gestiona los proyectos y sus issues.\n\nTodo acceso se limita a los espacios de trabajo del usuario autenticado (el\ngateway propaga su identidad en la metadata). En la rebanada 1 cada usuario\ntiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant\nde la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no\nvisible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no\nrevelar que existe.\n\nLas opciones google.api.http definen las rutas REST que expone el\napi-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar\nacá: el gateway la expone solo si figura en su routes.yaml."
+    },
+    {
+      "name": "TokenAuthService",
+      "description": "TokenAuthService resuelve un token `tka_…` a la identidad que propaga el\ngateway. Solo interno: no requiere x-user-id (el gateway lo llama antes de\nsaber quién es) y no se expone por REST."
     }
   ],
   "consumes": [
@@ -17,6 +25,126 @@
     "application/json"
   ],
   "paths": {
+    "/v1/actors": {
+      "get": {
+        "summary": "Lista el actor persona del usuario (primero) y sus agentes, por nombre.",
+        "operationId": "ActorService_ListActors",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListActorsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "includeRevoked",
+            "description": "También los revocados.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "ActorService"
+        ]
+      }
+    },
+    "/v1/actors/{actorId}:revoke": {
+      "post": {
+        "summary": "Revoca un actor: uno de sus agentes o la propia persona. Es en cascada:\nrevocar a una persona revoca a sus agentes, y revocar un actor revoca\ntodos sus tokens. No se deshace. Revocar uno ya revocado no cambia nada\n(devuelve el actor tal como está). Los issues asignados a él siguen\nasignados.",
+        "operationId": "ActorService_RevokeActor",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeActorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "actorId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ActorServiceRevokeActorBody"
+            }
+          }
+        ],
+        "tags": [
+          "ActorService"
+        ]
+      }
+    },
+    "/v1/admin/projects/{projectId}/issues:import": {
+      "post": {
+        "summary": "Crea o actualiza un issue importado de otro tracker (p. ej. los markdown\nde Round), conservando su número. Solo para quien importa: administración,\nel gateway no la expone a los clientes normales.",
+        "description": "Idempotente por source_key (única por proyecto):\n- Si ningún issue del proyecto tiene esa source_key, lo crea con number y\n  created_at, al final del orden. ALREADY_EXISTS si number ya es de otro\n  issue (importado con otra clave o creado en Tekitla).\n- Si ya existe, pisa título, descripción, prioridad, categoría y\n  etiquetas con lo que viene (el proyecto es un espejo del origen).\n  number y created_at no cambian: FAILED_PRECONDITION si number no\n  coincide con el guardado.\nCada cambio queda en el historial como en los RPC sueltos. El siguiente\nCreateIssue usa un número mayor que todos los del proyecto, importados\nincluidos.",
+        "operationId": "IssueService_ImportIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ImportIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceImportIssueBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/agents": {
+      "post": {
+        "summary": "Da de alta un agente. PERMISSION_DENIED si owner_actor_id no es el actor\npersona del usuario.",
+        "operationId": "ActorService_CreateAgent",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateAgentResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateAgentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ActorService"
+        ]
+      }
+    },
     "/v1/projects": {
       "get": {
         "summary": "Lista los proyectos visibles para el usuario en todos sus espacios de\ntrabajo (o en uno, con workspace_id), ordenados por nombre.",
@@ -206,6 +334,24 @@
               "ISSUE_ORDER_PRIORITY_DESC"
             ],
             "default": "ISSUE_ORDER_UNSPECIFIED"
+          },
+          {
+            "name": "assigneeActorIds",
+            "description": "Asignados: pasa un issue asignado a cualquiera de estos actores. Un\nactor inexistente no es error: no trae nada.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "unassigned",
+            "description": "Trae también los issues sin asignar. Se combina con O con\nassignee_actor_ids (los de un agente o sin asignar); solo, trae solo los\nsin asignar.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -806,9 +952,106 @@
           "IssueService"
         ]
       }
+    },
+    "/v1/tokens": {
+      "get": {
+        "summary": "Lista los tokens del usuario y de sus agentes, del más nuevo al más\nviejo. Sin el secreto.",
+        "operationId": "ActorService_ListTokens",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListTokensResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "actorId",
+            "description": "Vacío: los del usuario y todos sus agentes. Si no, solo los de ese\nactor.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "includeInactive",
+            "description": "También los revocados y los vencidos.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "ActorService"
+        ]
+      },
+      "post": {
+        "summary": "Emite un token para el usuario o uno de sus agentes. El token en claro\nviene solo en CreateTokenResponse.secret: no se guarda y ninguna otra\nrespuesta lo devuelve, ni a él ni a su hash. FAILED_PRECONDITION si el\nactor está revocado.",
+        "operationId": "ActorService_CreateToken",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateTokenResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateTokenRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ActorService"
+        ]
+      }
+    },
+    "/v1/tokens/{tokenId}:revoke": {
+      "post": {
+        "summary": "Revoca un token. No se deshace. Revocar uno ya revocado no cambia nada.\nEl gateway puede seguir aceptándolo hasta 60 s (su caché).",
+        "operationId": "ActorService_RevokeToken",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeTokenResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tokenId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ActorServiceRevokeTokenBody"
+            }
+          }
+        ],
+        "tags": [
+          "ActorService"
+        ]
+      }
     }
   },
   "definitions": {
+    "ActorServiceRevokeActorBody": {
+      "type": "object"
+    },
+    "ActorServiceRevokeTokenBody": {
+      "type": "object"
+    },
     "IssueServiceBatchUpdateStatusesBody": {
       "type": "object",
       "properties": {
@@ -849,6 +1092,10 @@
         },
         "priority": {
           "$ref": "#/definitions/v1Priority"
+        },
+        "assigneeActorId": {
+          "type": "string",
+          "description": "Vacío: sin asignar. Ver UpdateIssueRequest.assignee_actor_id."
         }
       }
     },
@@ -903,6 +1150,47 @@
         }
       }
     },
+    "IssueServiceImportIssueBody": {
+      "type": "object",
+      "properties": {
+        "sourceKey": {
+          "type": "string",
+          "description": "Clave del issue en el origen, única por proyecto: con ella se reconoce en\nlas corridas siguientes. Para Round, número + slug (el nombre del archivo\nsin .md, p. ej. \"236-claude-md-en-capas\"). Sin espacios en los extremos,\n1 a 200 caracteres."
+        },
+        "number": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Número que conserva el issue (el del origen), desde 1."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Fecha de alta en el origen; ausente: ahora. Solo se usa al crear."
+        },
+        "title": {
+          "type": "string",
+          "description": "Como en CreateIssueRequest: título obligatorio; descripción en markdown."
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/definitions/v1Priority",
+          "description": "UNSPECIFIED se guarda como MEDIUM."
+        },
+        "state": {
+          "$ref": "#/definitions/v1IssueState",
+          "description": "Categoría: el issue va al primer estado de esa categoría (si ya está en\nesa categoría, no cambia de estado). UNSPECIFIED es INVALID_ARGUMENT.\nPasar a CANCELED lo descarta sin motivo, como MoveIssue."
+        },
+        "labelNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Nombres de etiquetas (sin distinguir mayúsculas); las que no existen se\ncrean con color NEUTRAL. Reemplazan las del issue."
+        }
+      }
+    },
     "IssueServiceMoveIssueBody": {
       "type": "object",
       "properties": {
@@ -945,6 +1233,10 @@
         "labels": {
           "$ref": "#/definitions/v1LabelIds",
           "description": "Reemplaza las etiquetas del issue; ausente, no cambian. Una etiqueta de\notro proyecto es INVALID_ARGUMENT."
+        },
+        "assigneeActorId": {
+          "type": "string",
+          "description": "Presente y vacío: lo deja sin asignar. Un actor inexistente, revocado o\nque el usuario no puede ver es INVALID_ARGUMENT. Queda en el historial\ncomo assignee_changed."
         }
       }
     },
@@ -1038,6 +1330,83 @@
       },
       "description": "Estado concreto de un proyecto: una columna del tablero."
     },
+    "v1Actor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/v1ActorKind"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Persona: el nombre que resuelve el servicio (vacío si no lo conoce; el\ncliente lo resuelve con el uid). Agente: el que le puso su dueño, p. ej.\n«Codex PC-01»."
+        },
+        "ownerActorId": {
+          "type": "string",
+          "description": "Solo en agentes: el id del actor persona dueño. Vacío en una persona."
+        },
+        "tool": {
+          "$ref": "#/definitions/v1AgentTool",
+          "description": "Solo en agentes. UNSPECIFIED en una persona."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Ausente si no está revocado."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Solo en personas: su uid de Firebase (el x-user-id que propaga el\ngateway). Vacío en un agente."
+        }
+      },
+      "description": "Quien hace el trabajo: una persona o un agente de una persona."
+    },
+    "v1ActorKind": {
+      "type": "string",
+      "enum": [
+        "ACTOR_KIND_UNSPECIFIED",
+        "ACTOR_KIND_PERSON",
+        "ACTOR_KIND_AGENT"
+      ],
+      "default": "ACTOR_KIND_UNSPECIFIED",
+      "description": "Tipo de actor.\n\n - ACTOR_KIND_PERSON: Una persona, ligada a su uid de Firebase.\n - ACTOR_KIND_AGENT: Un agente: una identidad configurada por su dueño, no una sesión."
+    },
+    "v1AgentTool": {
+      "type": "string",
+      "enum": [
+        "AGENT_TOOL_UNSPECIFIED",
+        "AGENT_TOOL_CLAUDE_CODE",
+        "AGENT_TOOL_CODEX",
+        "AGENT_TOOL_CLOUD",
+        "AGENT_TOOL_OTHER"
+      ],
+      "default": "AGENT_TOOL_UNSPECIFIED",
+      "description": "Herramienta con la que trabaja un agente.\n\n - AGENT_TOOL_CLOUD: Un agente que corre en la nube."
+    },
+    "v1AssigneeChanged": {
+      "type": "object",
+      "properties": {
+        "fromActorId": {
+          "type": "string"
+        },
+        "fromDisplayName": {
+          "type": "string"
+        },
+        "toActorId": {
+          "type": "string"
+        },
+        "toDisplayName": {
+          "type": "string"
+        }
+      },
+      "description": "Cambio de asignado. Vacío: sin asignar. Los nombres se guardan al momento\ndel cambio (ver StatusChanged)."
+    },
     "v1BatchUpdateStatusesResponse": {
       "type": "object",
       "properties": {
@@ -1071,6 +1440,31 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1CreateAgentRequest": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "Sin espacios en los extremos, 1 a 80 caracteres. Único entre los agentes\nno revocados del dueño (sin distinguir mayúsculas): si no,\nALREADY_EXISTS."
+        },
+        "tool": {
+          "$ref": "#/definitions/v1AgentTool",
+          "description": "UNSPECIFIED es INVALID_ARGUMENT."
+        },
+        "ownerActorId": {
+          "type": "string",
+          "description": "Vacío: el actor persona del usuario. Otro es PERMISSION_DENIED."
+        }
+      }
+    },
+    "v1CreateAgentResponse": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "$ref": "#/definitions/v1Actor"
         }
       }
     },
@@ -1132,6 +1526,43 @@
         }
       }
     },
+    "v1CreateTokenRequest": {
+      "type": "object",
+      "properties": {
+        "actorId": {
+          "type": "string",
+          "description": "Vacío: el actor persona del usuario. Si no, uno de sus agentes."
+        },
+        "name": {
+          "type": "string",
+          "description": "0 a 80 caracteres."
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1TokenScope"
+          },
+          "description": "Al menos uno; UNSPECIFIED dentro de la lista es INVALID_ARGUMENT. Los\nrepetidos se guardan una vez."
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Ausente: 30 días desde ahora. Tiene que estar en el futuro y a 90 días\ncomo máximo; si no, INVALID_ARGUMENT."
+        }
+      }
+    },
+    "v1CreateTokenResponse": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "$ref": "#/definitions/v1Token"
+        },
+        "secret": {
+          "type": "string",
+          "description": "El token en claro: \"tka_\" + 32 bytes aleatorios en base64url. Se muestra\nuna sola vez; el servicio guarda solo su SHA-256."
+        }
+      }
+    },
     "v1DeleteLabelResponse": {
       "type": "object"
     },
@@ -1175,6 +1606,28 @@
           "$ref": "#/definitions/v1Issue"
         }
       }
+    },
+    "v1ImportIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1Issue"
+        },
+        "outcome": {
+          "$ref": "#/definitions/v1ImportOutcome"
+        }
+      }
+    },
+    "v1ImportOutcome": {
+      "type": "string",
+      "enum": [
+        "IMPORT_OUTCOME_UNSPECIFIED",
+        "IMPORT_OUTCOME_CREATED",
+        "IMPORT_OUTCOME_UPDATED",
+        "IMPORT_OUTCOME_UNCHANGED"
+      ],
+      "default": "IMPORT_OUTCOME_UNSPECIFIED",
+      "description": "Qué hizo ImportIssue.\n\n - IMPORT_OUTCOME_CREATED: Issue nuevo.\n - IMPORT_OUTCOME_UPDATED: Ya existía y cambió algún campo.\n - IMPORT_OUTCOME_UNCHANGED: Ya existía y no cambió nada (sin eventos nuevos)."
     },
     "v1Issue": {
       "type": "object",
@@ -1229,6 +1682,14 @@
         "discard": {
           "$ref": "#/definitions/v1DiscardInfo",
           "description": "Motivo del descarte: lo pone DiscardIssue. Ausente si se descartó con\nMoveIssue (descartado sin motivo) o si no está descartado. Se mantiene\nal pasar de un estado CANCELED a otro y se borra cuando el issue sale de\nCANCELED por cualquier vía (MoveIssue, RestoreIssue, o DeleteStatus y\nBatchUpdateStatuses al mover los issues de un estado borrado)."
+        },
+        "assigneeActorId": {
+          "type": "string",
+          "description": "Actor asignado (persona o agente, ver actors.proto): quién debería\nhacerlo. Vacío: sin asignar. Puede ser un actor ya revocado."
+        },
+        "sourceKey": {
+          "type": "string",
+          "description": "Clave en el tracker de origen si se importó con ImportIssue (p. ej.\n\"236-claude-md-en-capas\"); vacía si se creó en Tekitla."
         }
       }
     },
@@ -1271,7 +1732,7 @@
         },
         "actorId": {
           "type": "string",
-          "description": "uid de quien hizo el cambio."
+          "description": "uid de quien hizo el cambio: siempre una persona, también cuando lo hizo\nuno de sus agentes (ver agent_id)."
         },
         "createdAt": {
           "type": "string",
@@ -1303,6 +1764,13 @@
         },
         "restored": {
           "$ref": "#/definitions/v1IssueRestored"
+        },
+        "assigneeChanged": {
+          "$ref": "#/definitions/v1AssigneeChanged"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Id del agente (actors.proto) que hizo el cambio a nombre de actor_id.\nVacío si lo hizo la persona misma, y en todos los eventos anteriores a\neste campo (v0.5.0)."
         }
       },
       "description": "Un cambio en un issue, para su historial. Reordenar dentro de la misma\ncolumna no genera evento."
@@ -1407,6 +1875,19 @@
       },
       "description": "Los nombres de las etiquetas se guardan al momento del cambio (ver\nStatusChanged)."
     },
+    "v1ListActorsResponse": {
+      "type": "object",
+      "properties": {
+        "actors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Actor"
+          }
+        }
+      },
+      "description": "Sin paginar: una persona y sus agentes."
+    },
     "v1ListIssueEventsResponse": {
       "type": "object",
       "properties": {
@@ -1477,6 +1958,19 @@
         }
       },
       "description": "Sin paginar: son 20 como máximo."
+    },
+    "v1ListTokensResponse": {
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Token"
+          }
+        }
+      },
+      "description": "Sin paginar: los tokens de una persona y sus agentes."
     },
     "v1MoveIssueResponse": {
       "type": "object",
@@ -1572,6 +2066,22 @@
         }
       }
     },
+    "v1RevokeActorResponse": {
+      "type": "object",
+      "properties": {
+        "actor": {
+          "$ref": "#/definitions/v1Actor"
+        }
+      }
+    },
+    "v1RevokeTokenResponse": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "$ref": "#/definitions/v1Token"
+        }
+      }
+    },
     "v1StatusChanged": {
       "type": "object",
       "properties": {
@@ -1646,6 +2156,59 @@
           "type": "string"
         }
       }
+    },
+    "v1Token": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string",
+          "description": "Actor a cuyo nombre se emitió (persona o agente)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Nombre que le pone quien lo crea, para reconocerlo en la lista."
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1TokenScope"
+          },
+          "description": "Sin repetidos, en el orden del enum."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Siempre viene: el vencimiento es obligatorio."
+        },
+        "lastUsedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Último uso visto por el servicio (ResolveToken). Ausente si nunca se usó.\nAproximado: el gateway guarda en caché el resultado hasta 60 s."
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Ausente si no está revocado. Un token también deja de valer si se revoca\nsu actor (o el dueño de su agente); revoked_at no cambia por eso."
+        }
+      },
+      "description": "Un token de Tekitla, sin el secreto ni su hash."
+    },
+    "v1TokenScope": {
+      "type": "string",
+      "enum": [
+        "TOKEN_SCOPE_UNSPECIFIED",
+        "TOKEN_SCOPE_ISSUES_READ",
+        "TOKEN_SCOPE_ISSUES_WRITE"
+      ],
+      "default": "TOKEN_SCOPE_UNSPECIFIED",
+      "description": "Alcance de un token. Write no implica read: se piden los dos. En el gateway\nse propagan en x-roles como \"issues:read\" e \"issues:write\".\n\n - TOKEN_SCOPE_ISSUES_READ: issues:read: leer proyectos e issues.\n - TOKEN_SCOPE_ISSUES_WRITE: issues:write: crear y cambiar issues."
     },
     "v1UpdateIssueResponse": {
       "type": "object",
