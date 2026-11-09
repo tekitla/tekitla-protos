@@ -5,6 +5,8 @@
 // búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
 // los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
+// Issue 025: asignado (un actor, persona o agente), autoría con agente en el
+// historial e importación desde otro tracker (actors.proto, token_auth.proto).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -54,6 +56,7 @@ const (
 	IssueService_DeleteLabel_FullMethodName         = "/issues.v1.IssueService/DeleteLabel"
 	IssueService_CreateComment_FullMethodName       = "/issues.v1.IssueService/CreateComment"
 	IssueService_ListIssueEvents_FullMethodName     = "/issues.v1.IssueService/ListIssueEvents"
+	IssueService_ImportIssue_FullMethodName         = "/issues.v1.IssueService/ImportIssue"
 )
 
 // IssueServiceClient is the client API for IssueService service.
@@ -138,6 +141,23 @@ type IssueServiceClient interface {
 	CreateComment(ctx context.Context, in *CreateCommentRequest, opts ...grpc.CallOption) (*CreateCommentResponse, error)
 	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
 	ListIssueEvents(ctx context.Context, in *ListIssueEventsRequest, opts ...grpc.CallOption) (*ListIssueEventsResponse, error)
+	// Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
+	// de Round), conservando su número. Solo para quien importa: administración,
+	// el gateway no la expone a los clientes normales.
+	//
+	// Idempotente por source_key (única por proyecto):
+	//   - Si ningún issue del proyecto tiene esa source_key, lo crea con number y
+	//     created_at, al final del orden. ALREADY_EXISTS si number ya es de otro
+	//     issue (importado con otra clave o creado en Tekitla).
+	//   - Si ya existe, pisa título, descripción, prioridad, categoría y
+	//     etiquetas con lo que viene (el proyecto es un espejo del origen).
+	//     number y created_at no cambian: FAILED_PRECONDITION si number no
+	//     coincide con el guardado.
+	//
+	// Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+	// CreateIssue usa un número mayor que todos los del proyecto, importados
+	// incluidos.
+	ImportIssue(ctx context.Context, in *ImportIssueRequest, opts ...grpc.CallOption) (*ImportIssueResponse, error)
 }
 
 type issueServiceClient struct {
@@ -348,6 +368,16 @@ func (c *issueServiceClient) ListIssueEvents(ctx context.Context, in *ListIssueE
 	return out, nil
 }
 
+func (c *issueServiceClient) ImportIssue(ctx context.Context, in *ImportIssueRequest, opts ...grpc.CallOption) (*ImportIssueResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportIssueResponse)
+	err := c.cc.Invoke(ctx, IssueService_ImportIssue_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IssueServiceServer is the server API for IssueService service.
 // All implementations must embed UnimplementedIssueServiceServer
 // for forward compatibility.
@@ -430,6 +460,23 @@ type IssueServiceServer interface {
 	CreateComment(context.Context, *CreateCommentRequest) (*CreateCommentResponse, error)
 	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
 	ListIssueEvents(context.Context, *ListIssueEventsRequest) (*ListIssueEventsResponse, error)
+	// Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
+	// de Round), conservando su número. Solo para quien importa: administración,
+	// el gateway no la expone a los clientes normales.
+	//
+	// Idempotente por source_key (única por proyecto):
+	//   - Si ningún issue del proyecto tiene esa source_key, lo crea con number y
+	//     created_at, al final del orden. ALREADY_EXISTS si number ya es de otro
+	//     issue (importado con otra clave o creado en Tekitla).
+	//   - Si ya existe, pisa título, descripción, prioridad, categoría y
+	//     etiquetas con lo que viene (el proyecto es un espejo del origen).
+	//     number y created_at no cambian: FAILED_PRECONDITION si number no
+	//     coincide con el guardado.
+	//
+	// Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+	// CreateIssue usa un número mayor que todos los del proyecto, importados
+	// incluidos.
+	ImportIssue(context.Context, *ImportIssueRequest) (*ImportIssueResponse, error)
 	mustEmbedUnimplementedIssueServiceServer()
 }
 
@@ -499,6 +546,9 @@ func (UnimplementedIssueServiceServer) CreateComment(context.Context, *CreateCom
 }
 func (UnimplementedIssueServiceServer) ListIssueEvents(context.Context, *ListIssueEventsRequest) (*ListIssueEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListIssueEvents not implemented")
+}
+func (UnimplementedIssueServiceServer) ImportIssue(context.Context, *ImportIssueRequest) (*ImportIssueResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportIssue not implemented")
 }
 func (UnimplementedIssueServiceServer) mustEmbedUnimplementedIssueServiceServer() {}
 func (UnimplementedIssueServiceServer) testEmbeddedByValue()                      {}
@@ -881,6 +931,24 @@ func _IssueService_ListIssueEvents_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IssueService_ImportIssue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportIssueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).ImportIssue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_ImportIssue_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).ImportIssue(ctx, req.(*ImportIssueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IssueService_ServiceDesc is the grpc.ServiceDesc for IssueService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -967,6 +1035,10 @@ var IssueService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListIssueEvents",
 			Handler:    _IssueService_ListIssueEvents_Handler,
+		},
+		{
+			MethodName: "ImportIssue",
+			Handler:    _IssueService_ImportIssue_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

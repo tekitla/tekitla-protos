@@ -1,0 +1,220 @@
+// Actores, agentes y tokens de Tekitla (issue 025, ADR 0009 en el repo docs).
+//
+// Todo trabajo lo hace un actor: una persona (ligada a su uid de Firebase) o
+// un agente (Claude Code, Codex, un agente en la nube...). Todo agente
+// pertenece a una persona. Los tokens (`tka_…`) se emiten a nombre de un actor,
+// con alcance y vencimiento, y el gateway los acepta como segunda credencial
+// junto al ID token de Firebase.
+//
+// Mismas reglas que issues.proto (ver CLAUDE.md): solo cambios aditivos en v1.
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// ActorService da de alta y revoca agentes y emite y revoca tokens.
+//
+// Lo usa solo una persona con sesión de Firebase, para sí misma o para sus
+// agentes: el gateway expone estas rutas solo con la allowlist (sesión de
+// Firebase), nunca con un token de Tekitla, porque un token no crea agentes ni
+// otros tokens. Si llega un request con x-agent-id, el servicio responde
+// PERMISSION_DENIED.
+//
+// El actor persona del usuario se crea la primera vez que hace falta (la
+// primera llamada a este servicio, o al asignarse un issue), a partir de
+// x-user-id. Un actor o token ajeno responde NOT_FOUND, salvo donde se
+// indica PERMISSION_DENIED.
+service ActorService {
+  // Lista el actor persona del usuario (primero) y sus agentes, por nombre.
+  rpc ListActors(ListActorsRequest) returns (ListActorsResponse) {
+    option (google.api.http) = {get: "/v1/actors"};
+  }
+  // Da de alta un agente. PERMISSION_DENIED si owner_actor_id no es el actor
+  // persona del usuario.
+  rpc CreateAgent(CreateAgentRequest) returns (CreateAgentResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents"
+      body: "*"
+    };
+  }
+  // Revoca un actor: uno de sus agentes o la propia persona. Es en cascada:
+  // revocar a una persona revoca a sus agentes, y revocar un actor revoca
+  // todos sus tokens. No se deshace. Revocar uno ya revocado no cambia nada
+  // (devuelve el actor tal como está). Los issues asignados a él siguen
+  // asignados.
+  rpc RevokeActor(RevokeActorRequest) returns (RevokeActorResponse) {
+    option (google.api.http) = {
+      post: "/v1/actors/{actor_id}:revoke"
+      body: "*"
+    };
+  }
+
+  // Emite un token para el usuario o uno de sus agentes. El token en claro
+  // viene solo en CreateTokenResponse.secret: no se guarda y ninguna otra
+  // respuesta lo devuelve, ni a él ni a su hash. FAILED_PRECONDITION si el
+  // actor está revocado.
+  rpc CreateToken(CreateTokenRequest) returns (CreateTokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/tokens"
+      body: "*"
+    };
+  }
+  // Lista los tokens del usuario y de sus agentes, del más nuevo al más
+  // viejo. Sin el secreto.
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {
+    option (google.api.http) = {get: "/v1/tokens"};
+  }
+  // Revoca un token. No se deshace. Revocar uno ya revocado no cambia nada.
+  // El gateway puede seguir aceptándolo hasta 60 s (su caché).
+  rpc RevokeToken(RevokeTokenRequest) returns (RevokeTokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/tokens/{token_id}:revoke"
+      body: "*"
+    };
+  }
+}
+
+// Tipo de actor.
+enum ActorKind {
+  ACTOR_KIND_UNSPECIFIED = 0;
+  // Una persona, ligada a su uid de Firebase.
+  ACTOR_KIND_PERSON = 1;
+  // Un agente: una identidad configurada por su dueño, no una sesión.
+  ACTOR_KIND_AGENT = 2;
+}
+
+// Herramienta con la que trabaja un agente.
+enum AgentTool {
+  AGENT_TOOL_UNSPECIFIED = 0;
+  AGENT_TOOL_CLAUDE_CODE = 1;
+  AGENT_TOOL_CODEX = 2;
+  // Un agente que corre en la nube.
+  AGENT_TOOL_CLOUD = 3;
+  AGENT_TOOL_OTHER = 4;
+}
+
+// Quien hace el trabajo: una persona o un agente de una persona.
+message Actor {
+  string id = 1;
+  ActorKind kind = 2;
+  // Persona: el nombre que resuelve el servicio (vacío si no lo conoce; el
+  // cliente lo resuelve con el uid). Agente: el que le puso su dueño, p. ej.
+  // «Codex PC-01».
+  string display_name = 3;
+  // Solo en agentes: el id del actor persona dueño. Vacío en una persona.
+  string owner_actor_id = 4;
+  // Solo en agentes. UNSPECIFIED en una persona.
+  AgentTool tool = 5;
+  google.protobuf.Timestamp created_at = 6;
+  // Ausente si no está revocado.
+  google.protobuf.Timestamp revoked_at = 7;
+  // Solo en personas: su uid de Firebase (el x-user-id que propaga el
+  // gateway). Vacío en un agente.
+  string user_id = 8;
+}
+
+// Alcance de un token. Write no implica read: se piden los dos. En el gateway
+// se propagan en x-roles como "issues:read" e "issues:write".
+enum TokenScope {
+  TOKEN_SCOPE_UNSPECIFIED = 0;
+  // issues:read: leer proyectos e issues.
+  TOKEN_SCOPE_ISSUES_READ = 1;
+  // issues:write: crear y cambiar issues.
+  TOKEN_SCOPE_ISSUES_WRITE = 2;
+}
+
+// Un token de Tekitla, sin el secreto ni su hash.
+message Token {
+  string id = 1;
+  // Actor a cuyo nombre se emitió (persona o agente).
+  string actor_id = 2;
+  // Nombre que le pone quien lo crea, para reconocerlo en la lista.
+  string name = 3;
+  // Sin repetidos, en el orden del enum.
+  repeated TokenScope scopes = 4;
+  google.protobuf.Timestamp created_at = 5;
+  // Siempre viene: el vencimiento es obligatorio.
+  google.protobuf.Timestamp expires_at = 6;
+  // Último uso visto por el servicio (ResolveToken). Ausente si nunca se usó.
+  // Aproximado: el gateway guarda en caché el resultado hasta 60 s.
+  google.protobuf.Timestamp last_used_at = 7;
+  // Ausente si no está revocado. Un token también deja de valer si se revoca
+  // su actor (o el dueño de su agente); revoked_at no cambia por eso.
+  google.protobuf.Timestamp revoked_at = 8;
+}
+
+message ListActorsRequest {
+  // También los revocados.
+  bool include_revoked = 1;
+}
+
+// Sin paginar: una persona y sus agentes.
+message ListActorsResponse {
+  repeated Actor actors = 1;
+}
+
+message CreateAgentRequest {
+  // Sin espacios en los extremos, 1 a 80 caracteres. Único entre los agentes
+  // no revocados del dueño (sin distinguir mayúsculas): si no,
+  // ALREADY_EXISTS.
+  string display_name = 1;
+  // UNSPECIFIED es INVALID_ARGUMENT.
+  AgentTool tool = 2;
+  // Vacío: el actor persona del usuario. Otro es PERMISSION_DENIED.
+  string owner_actor_id = 3;
+}
+
+message CreateAgentResponse {
+  Actor agent = 1;
+}
+
+message RevokeActorRequest {
+  string actor_id = 1;
+}
+
+message RevokeActorResponse {
+  Actor actor = 1;
+}
+
+message CreateTokenRequest {
+  // Vacío: el actor persona del usuario. Si no, uno de sus agentes.
+  string actor_id = 1;
+  // 0 a 80 caracteres.
+  string name = 2;
+  // Al menos uno; UNSPECIFIED dentro de la lista es INVALID_ARGUMENT. Los
+  // repetidos se guardan una vez.
+  repeated TokenScope scopes = 3;
+  // Ausente: 30 días desde ahora. Tiene que estar en el futuro y a 90 días
+  // como máximo; si no, INVALID_ARGUMENT.
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message CreateTokenResponse {
+  Token token = 1;
+  // El token en claro: "tka_" + 32 bytes aleatorios en base64url. Se muestra
+  // una sola vez; el servicio guarda solo su SHA-256.
+  string secret = 2;
+}
+
+message ListTokensRequest {
+  // Vacío: los del usuario y todos sus agentes. Si no, solo los de ese
+  // actor.
+  string actor_id = 1;
+  // También los revocados y los vencidos.
+  bool include_inactive = 2;
+}
+
+// Sin paginar: los tokens de una persona y sus agentes.
+message ListTokensResponse {
+  repeated Token tokens = 1;
+}
+
+message RevokeTokenRequest {
+  string token_id = 1;
+}
+
+message RevokeTokenResponse {
+  Token token = 1;
+}

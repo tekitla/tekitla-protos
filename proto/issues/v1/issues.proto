@@ -5,6 +5,8 @@
 // búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
 // los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
+// Issue 025: asignado (un actor, persona o agente), autoría con agente en el
+// historial e importación desde otro tracker (actors.proto, token_auth.proto).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -176,6 +178,28 @@ service IssueService {
   rpc ListIssueEvents(ListIssueEventsRequest) returns (ListIssueEventsResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}/events"};
   }
+
+  // Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
+  // de Round), conservando su número. Solo para quien importa: administración,
+  // el gateway no la expone a los clientes normales.
+  //
+  // Idempotente por source_key (única por proyecto):
+  // - Si ningún issue del proyecto tiene esa source_key, lo crea con number y
+  //   created_at, al final del orden. ALREADY_EXISTS si number ya es de otro
+  //   issue (importado con otra clave o creado en Tekitla).
+  // - Si ya existe, pisa título, descripción, prioridad, categoría y
+  //   etiquetas con lo que viene (el proyecto es un espejo del origen).
+  //   number y created_at no cambian: FAILED_PRECONDITION si number no
+  //   coincide con el guardado.
+  // Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+  // CreateIssue usa un número mayor que todos los del proyecto, importados
+  // incluidos.
+  rpc ImportIssue(ImportIssueRequest) returns (ImportIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/projects/{project_id}/issues:import"
+      body: "*"
+    };
+  }
 }
 
 // Categoría del estado de un issue. Es fija y la entienden todos los clientes
@@ -247,6 +271,12 @@ message Issue {
   // CANCELED por cualquier vía (MoveIssue, RestoreIssue, o DeleteStatus y
   // BatchUpdateStatuses al mover los issues de un estado borrado).
   DiscardInfo discard = 13;
+  // Actor asignado (persona o agente, ver actors.proto): quién debería
+  // hacerlo. Vacío: sin asignar. Puede ser un actor ya revocado.
+  string assignee_actor_id = 14;
+  // Clave en el tracker de origen si se importó con ImportIssue (p. ej.
+  // "236-claude-md-en-capas"); vacía si se creó en Tekitla.
+  string source_key = 15;
 }
 
 // Quién descartó un issue con DiscardIssue, cuándo y por qué.
@@ -321,7 +351,8 @@ message Comment {
 message IssueEvent {
   string id = 1;
   string issue_id = 2;
-  // uid de quien hizo el cambio.
+  // uid de quien hizo el cambio: siempre una persona, también cuando lo hizo
+  // uno de sus agentes (ver agent_id).
   string actor_id = 3;
   google.protobuf.Timestamp created_at = 4;
   oneof change {
@@ -334,7 +365,12 @@ message IssueEvent {
     Comment commented = 11;
     IssueDiscarded discarded = 12;
     IssueRestored restored = 13;
+    AssigneeChanged assignee_changed = 14;
   }
+  // Id del agente (actors.proto) que hizo el cambio a nombre de actor_id.
+  // Vacío si lo hizo la persona misma, y en todos los eventos anteriores a
+  // este campo (v0.5.0).
+  string agent_id = 15;
 }
 
 message IssueCreated {}
@@ -375,6 +411,15 @@ message IssueRestored {
 message TitleChanged {
   string from = 1;
   string to = 2;
+}
+
+// Cambio de asignado. Vacío: sin asignar. Los nombres se guardan al momento
+// del cambio (ver StatusChanged).
+message AssigneeChanged {
+  string from_actor_id = 1;
+  string from_display_name = 2;
+  string to_actor_id = 3;
+  string to_display_name = 4;
 }
 
 // La descripción puede ser larga: el evento solo dice que cambió.
@@ -460,6 +505,13 @@ message ListIssuesRequest {
   repeated string label_ids = 8;
   // UNSPECIFIED: ISSUE_ORDER_RANK.
   IssueOrder order_by = 9;
+  // Asignados: pasa un issue asignado a cualquiera de estos actores. Un
+  // actor inexistente no es error: no trae nada.
+  repeated string assignee_actor_ids = 10;
+  // Trae también los issues sin asignar. Se combina con O con
+  // assignee_actor_ids (los de un agente o sin asignar); solo, trae solo los
+  // sin asignar.
+  bool unassigned = 11;
 }
 
 // Orden de ListIssues. Los empates se resuelven por rank, así el orden es
@@ -494,6 +546,8 @@ message CreateIssueRequest {
   string title = 2;
   string description = 3;
   Priority priority = 4;
+  // Vacío: sin asignar. Ver UpdateIssueRequest.assignee_actor_id.
+  string assignee_actor_id = 5;
 }
 
 message CreateIssueResponse {
@@ -533,6 +587,10 @@ message UpdateIssueRequest {
   // Reemplaza las etiquetas del issue; ausente, no cambian. Una etiqueta de
   // otro proyecto es INVALID_ARGUMENT.
   LabelIds labels = 6;
+  // Presente y vacío: lo deja sin asignar. Un actor inexistente, revocado o
+  // que el usuario no puede ver es INVALID_ARGUMENT. Queda en el historial
+  // como assignee_changed.
+  optional string assignee_actor_id = 7;
 }
 
 // Lista de ids de etiquetas, con presencia: un mensaje ausente no es una
@@ -726,4 +784,45 @@ message ListIssueEventsRequest {
 message ListIssueEventsResponse {
   repeated IssueEvent events = 1;
   PageResponse page = 2;
+}
+
+message ImportIssueRequest {
+  string project_id = 1;
+  // Clave del issue en el origen, única por proyecto: con ella se reconoce en
+  // las corridas siguientes. Para Round, número + slug (el nombre del archivo
+  // sin .md, p. ej. "236-claude-md-en-capas"). Sin espacios en los extremos,
+  // 1 a 200 caracteres.
+  string source_key = 2;
+  // Número que conserva el issue (el del origen), desde 1.
+  int32 number = 3;
+  // Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+  google.protobuf.Timestamp created_at = 4;
+  // Como en CreateIssueRequest: título obligatorio; descripción en markdown.
+  string title = 5;
+  string description = 6;
+  // UNSPECIFIED se guarda como MEDIUM.
+  Priority priority = 7;
+  // Categoría: el issue va al primer estado de esa categoría (si ya está en
+  // esa categoría, no cambia de estado). UNSPECIFIED es INVALID_ARGUMENT.
+  // Pasar a CANCELED lo descarta sin motivo, como MoveIssue.
+  IssueState state = 8;
+  // Nombres de etiquetas (sin distinguir mayúsculas); las que no existen se
+  // crean con color NEUTRAL. Reemplazan las del issue.
+  repeated string label_names = 9;
+}
+
+// Qué hizo ImportIssue.
+enum ImportOutcome {
+  IMPORT_OUTCOME_UNSPECIFIED = 0;
+  // Issue nuevo.
+  IMPORT_OUTCOME_CREATED = 1;
+  // Ya existía y cambió algún campo.
+  IMPORT_OUTCOME_UPDATED = 2;
+  // Ya existía y no cambió nada (sin eventos nuevos).
+  IMPORT_OUTCOME_UNCHANGED = 3;
+}
+
+message ImportIssueResponse {
+  Issue issue = 1;
+  ImportOutcome outcome = 2;
 }

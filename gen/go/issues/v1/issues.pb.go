@@ -5,6 +5,8 @@
 // búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
 // los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
+// Issue 025: asignado (un actor, persona o agente), autoría con agente en el
+// historial e importación desde otro tracker (actors.proto, token_auth.proto).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -286,6 +288,62 @@ func (IssueOrder) EnumDescriptor() ([]byte, []int) {
 	return file_issues_v1_issues_proto_rawDescGZIP(), []int{3}
 }
 
+// Qué hizo ImportIssue.
+type ImportOutcome int32
+
+const (
+	ImportOutcome_IMPORT_OUTCOME_UNSPECIFIED ImportOutcome = 0
+	// Issue nuevo.
+	ImportOutcome_IMPORT_OUTCOME_CREATED ImportOutcome = 1
+	// Ya existía y cambió algún campo.
+	ImportOutcome_IMPORT_OUTCOME_UPDATED ImportOutcome = 2
+	// Ya existía y no cambió nada (sin eventos nuevos).
+	ImportOutcome_IMPORT_OUTCOME_UNCHANGED ImportOutcome = 3
+)
+
+// Enum value maps for ImportOutcome.
+var (
+	ImportOutcome_name = map[int32]string{
+		0: "IMPORT_OUTCOME_UNSPECIFIED",
+		1: "IMPORT_OUTCOME_CREATED",
+		2: "IMPORT_OUTCOME_UPDATED",
+		3: "IMPORT_OUTCOME_UNCHANGED",
+	}
+	ImportOutcome_value = map[string]int32{
+		"IMPORT_OUTCOME_UNSPECIFIED": 0,
+		"IMPORT_OUTCOME_CREATED":     1,
+		"IMPORT_OUTCOME_UPDATED":     2,
+		"IMPORT_OUTCOME_UNCHANGED":   3,
+	}
+)
+
+func (x ImportOutcome) Enum() *ImportOutcome {
+	p := new(ImportOutcome)
+	*p = x
+	return p
+}
+
+func (x ImportOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImportOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_issues_v1_issues_proto_enumTypes[4].Descriptor()
+}
+
+func (ImportOutcome) Type() protoreflect.EnumType {
+	return &file_issues_v1_issues_proto_enumTypes[4]
+}
+
+func (x ImportOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImportOutcome.Descriptor instead.
+func (ImportOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{4}
+}
+
 type Project struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -408,7 +466,13 @@ type Issue struct {
 	// al pasar de un estado CANCELED a otro y se borra cuando el issue sale de
 	// CANCELED por cualquier vía (MoveIssue, RestoreIssue, o DeleteStatus y
 	// BatchUpdateStatuses al mover los issues de un estado borrado).
-	Discard       *DiscardInfo `protobuf:"bytes,13,opt,name=discard,proto3" json:"discard,omitempty"`
+	Discard *DiscardInfo `protobuf:"bytes,13,opt,name=discard,proto3" json:"discard,omitempty"`
+	// Actor asignado (persona o agente, ver actors.proto): quién debería
+	// hacerlo. Vacío: sin asignar. Puede ser un actor ya revocado.
+	AssigneeActorId string `protobuf:"bytes,14,opt,name=assignee_actor_id,json=assigneeActorId,proto3" json:"assignee_actor_id,omitempty"`
+	// Clave en el tracker de origen si se importó con ImportIssue (p. ej.
+	// "236-claude-md-en-capas"); vacía si se creó en Tekitla.
+	SourceKey     string `protobuf:"bytes,15,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -532,6 +596,20 @@ func (x *Issue) GetDiscard() *DiscardInfo {
 		return x.Discard
 	}
 	return nil
+}
+
+func (x *Issue) GetAssigneeActorId() string {
+	if x != nil {
+		return x.AssigneeActorId
+	}
+	return ""
+}
+
+func (x *Issue) GetSourceKey() string {
+	if x != nil {
+		return x.SourceKey
+	}
+	return ""
 }
 
 // Quién descartó un issue con DiscardIssue, cuándo y por qué.
@@ -865,7 +943,8 @@ type IssueEvent struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Id      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	IssueId string                 `protobuf:"bytes,2,opt,name=issue_id,json=issueId,proto3" json:"issue_id,omitempty"`
-	// uid de quien hizo el cambio.
+	// uid de quien hizo el cambio: siempre una persona, también cuando lo hizo
+	// uno de sus agentes (ver agent_id).
 	ActorId   string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Types that are valid to be assigned to Change:
@@ -879,7 +958,12 @@ type IssueEvent struct {
 	//	*IssueEvent_Commented
 	//	*IssueEvent_Discarded
 	//	*IssueEvent_Restored
-	Change        isIssueEvent_Change `protobuf_oneof:"change"`
+	//	*IssueEvent_AssigneeChanged
+	Change isIssueEvent_Change `protobuf_oneof:"change"`
+	// Id del agente (actors.proto) que hizo el cambio a nombre de actor_id.
+	// Vacío si lo hizo la persona misma, y en todos los eventos anteriores a
+	// este campo (v0.5.0).
+	AgentId       string `protobuf:"bytes,15,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1030,6 +1114,22 @@ func (x *IssueEvent) GetRestored() *IssueRestored {
 	return nil
 }
 
+func (x *IssueEvent) GetAssigneeChanged() *AssigneeChanged {
+	if x != nil {
+		if x, ok := x.Change.(*IssueEvent_AssigneeChanged); ok {
+			return x.AssigneeChanged
+		}
+	}
+	return nil
+}
+
+func (x *IssueEvent) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
 type isIssueEvent_Change interface {
 	isIssueEvent_Change()
 }
@@ -1070,6 +1170,10 @@ type IssueEvent_Restored struct {
 	Restored *IssueRestored `protobuf:"bytes,13,opt,name=restored,proto3,oneof"`
 }
 
+type IssueEvent_AssigneeChanged struct {
+	AssigneeChanged *AssigneeChanged `protobuf:"bytes,14,opt,name=assignee_changed,json=assigneeChanged,proto3,oneof"`
+}
+
 func (*IssueEvent_Created) isIssueEvent_Change() {}
 
 func (*IssueEvent_StatusChanged) isIssueEvent_Change() {}
@@ -1087,6 +1191,8 @@ func (*IssueEvent_Commented) isIssueEvent_Change() {}
 func (*IssueEvent_Discarded) isIssueEvent_Change() {}
 
 func (*IssueEvent_Restored) isIssueEvent_Change() {}
+
+func (*IssueEvent_AssigneeChanged) isIssueEvent_Change() {}
 
 type IssueCreated struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1420,6 +1526,76 @@ func (x *TitleChanged) GetTo() string {
 	return ""
 }
 
+// Cambio de asignado. Vacío: sin asignar. Los nombres se guardan al momento
+// del cambio (ver StatusChanged).
+type AssigneeChanged struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	FromActorId     string                 `protobuf:"bytes,1,opt,name=from_actor_id,json=fromActorId,proto3" json:"from_actor_id,omitempty"`
+	FromDisplayName string                 `protobuf:"bytes,2,opt,name=from_display_name,json=fromDisplayName,proto3" json:"from_display_name,omitempty"`
+	ToActorId       string                 `protobuf:"bytes,3,opt,name=to_actor_id,json=toActorId,proto3" json:"to_actor_id,omitempty"`
+	ToDisplayName   string                 `protobuf:"bytes,4,opt,name=to_display_name,json=toDisplayName,proto3" json:"to_display_name,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AssigneeChanged) Reset() {
+	*x = AssigneeChanged{}
+	mi := &file_issues_v1_issues_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssigneeChanged) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssigneeChanged) ProtoMessage() {}
+
+func (x *AssigneeChanged) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssigneeChanged.ProtoReflect.Descriptor instead.
+func (*AssigneeChanged) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *AssigneeChanged) GetFromActorId() string {
+	if x != nil {
+		return x.FromActorId
+	}
+	return ""
+}
+
+func (x *AssigneeChanged) GetFromDisplayName() string {
+	if x != nil {
+		return x.FromDisplayName
+	}
+	return ""
+}
+
+func (x *AssigneeChanged) GetToActorId() string {
+	if x != nil {
+		return x.ToActorId
+	}
+	return ""
+}
+
+func (x *AssigneeChanged) GetToDisplayName() string {
+	if x != nil {
+		return x.ToDisplayName
+	}
+	return ""
+}
+
 // La descripción puede ser larga: el evento solo dice que cambió.
 type DescriptionChanged struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1429,7 +1605,7 @@ type DescriptionChanged struct {
 
 func (x *DescriptionChanged) Reset() {
 	*x = DescriptionChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[12]
+	mi := &file_issues_v1_issues_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1441,7 +1617,7 @@ func (x *DescriptionChanged) String() string {
 func (*DescriptionChanged) ProtoMessage() {}
 
 func (x *DescriptionChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[12]
+	mi := &file_issues_v1_issues_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1454,7 +1630,7 @@ func (x *DescriptionChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DescriptionChanged.ProtoReflect.Descriptor instead.
 func (*DescriptionChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{12}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{13}
 }
 
 type PriorityChanged struct {
@@ -1467,7 +1643,7 @@ type PriorityChanged struct {
 
 func (x *PriorityChanged) Reset() {
 	*x = PriorityChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[13]
+	mi := &file_issues_v1_issues_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1479,7 +1655,7 @@ func (x *PriorityChanged) String() string {
 func (*PriorityChanged) ProtoMessage() {}
 
 func (x *PriorityChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[13]
+	mi := &file_issues_v1_issues_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1492,7 +1668,7 @@ func (x *PriorityChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PriorityChanged.ProtoReflect.Descriptor instead.
 func (*PriorityChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{13}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PriorityChanged) GetFrom() Priority {
@@ -1523,7 +1699,7 @@ type LabelsChanged struct {
 
 func (x *LabelsChanged) Reset() {
 	*x = LabelsChanged{}
-	mi := &file_issues_v1_issues_proto_msgTypes[14]
+	mi := &file_issues_v1_issues_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1535,7 +1711,7 @@ func (x *LabelsChanged) String() string {
 func (*LabelsChanged) ProtoMessage() {}
 
 func (x *LabelsChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[14]
+	mi := &file_issues_v1_issues_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1548,7 +1724,7 @@ func (x *LabelsChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LabelsChanged.ProtoReflect.Descriptor instead.
 func (*LabelsChanged) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{14}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *LabelsChanged) GetAddedLabelIds() []string {
@@ -1590,7 +1766,7 @@ type PageRequest struct {
 
 func (x *PageRequest) Reset() {
 	*x = PageRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[15]
+	mi := &file_issues_v1_issues_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1602,7 +1778,7 @@ func (x *PageRequest) String() string {
 func (*PageRequest) ProtoMessage() {}
 
 func (x *PageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[15]
+	mi := &file_issues_v1_issues_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1615,7 +1791,7 @@ func (x *PageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageRequest.ProtoReflect.Descriptor instead.
 func (*PageRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{15}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PageRequest) GetCursor() string {
@@ -1643,7 +1819,7 @@ type PageResponse struct {
 
 func (x *PageResponse) Reset() {
 	*x = PageResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[16]
+	mi := &file_issues_v1_issues_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1655,7 +1831,7 @@ func (x *PageResponse) String() string {
 func (*PageResponse) ProtoMessage() {}
 
 func (x *PageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[16]
+	mi := &file_issues_v1_issues_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1668,7 +1844,7 @@ func (x *PageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PageResponse.ProtoReflect.Descriptor instead.
 func (*PageResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{16}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PageResponse) GetNextCursor() string {
@@ -1697,7 +1873,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[17]
+	mi := &file_issues_v1_issues_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1709,7 +1885,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[17]
+	mi := &file_issues_v1_issues_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1722,7 +1898,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{17}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListProjectsRequest) GetPage() *PageRequest {
@@ -1749,7 +1925,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[18]
+	mi := &file_issues_v1_issues_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1761,7 +1937,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[18]
+	mi := &file_issues_v1_issues_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1774,7 +1950,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{18}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -1804,7 +1980,7 @@ type CreateProjectRequest struct {
 
 func (x *CreateProjectRequest) Reset() {
 	*x = CreateProjectRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[19]
+	mi := &file_issues_v1_issues_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1816,7 +1992,7 @@ func (x *CreateProjectRequest) String() string {
 func (*CreateProjectRequest) ProtoMessage() {}
 
 func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[19]
+	mi := &file_issues_v1_issues_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1829,7 +2005,7 @@ func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{19}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CreateProjectRequest) GetKey() string {
@@ -1869,7 +2045,7 @@ type CreateProjectResponse struct {
 
 func (x *CreateProjectResponse) Reset() {
 	*x = CreateProjectResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[20]
+	mi := &file_issues_v1_issues_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1881,7 +2057,7 @@ func (x *CreateProjectResponse) String() string {
 func (*CreateProjectResponse) ProtoMessage() {}
 
 func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[20]
+	mi := &file_issues_v1_issues_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1894,7 +2070,7 @@ func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectResponse.ProtoReflect.Descriptor instead.
 func (*CreateProjectResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{20}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CreateProjectResponse) GetProject() *Project {
@@ -1934,14 +2110,21 @@ type ListIssuesRequest struct {
 	// es INVALID_ARGUMENT.
 	LabelIds []string `protobuf:"bytes,8,rep,name=label_ids,json=labelIds,proto3" json:"label_ids,omitempty"`
 	// UNSPECIFIED: ISSUE_ORDER_RANK.
-	OrderBy       IssueOrder `protobuf:"varint,9,opt,name=order_by,json=orderBy,proto3,enum=issues.v1.IssueOrder" json:"order_by,omitempty"`
+	OrderBy IssueOrder `protobuf:"varint,9,opt,name=order_by,json=orderBy,proto3,enum=issues.v1.IssueOrder" json:"order_by,omitempty"`
+	// Asignados: pasa un issue asignado a cualquiera de estos actores. Un
+	// actor inexistente no es error: no trae nada.
+	AssigneeActorIds []string `protobuf:"bytes,10,rep,name=assignee_actor_ids,json=assigneeActorIds,proto3" json:"assignee_actor_ids,omitempty"`
+	// Trae también los issues sin asignar. Se combina con O con
+	// assignee_actor_ids (los de un agente o sin asignar); solo, trae solo los
+	// sin asignar.
+	Unassigned    bool `protobuf:"varint,11,opt,name=unassigned,proto3" json:"unassigned,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListIssuesRequest) Reset() {
 	*x = ListIssuesRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[21]
+	mi := &file_issues_v1_issues_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1953,7 +2136,7 @@ func (x *ListIssuesRequest) String() string {
 func (*ListIssuesRequest) ProtoMessage() {}
 
 func (x *ListIssuesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[21]
+	mi := &file_issues_v1_issues_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1966,7 +2149,7 @@ func (x *ListIssuesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssuesRequest.ProtoReflect.Descriptor instead.
 func (*ListIssuesRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{21}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListIssuesRequest) GetProjectId() string {
@@ -2032,6 +2215,20 @@ func (x *ListIssuesRequest) GetOrderBy() IssueOrder {
 	return IssueOrder_ISSUE_ORDER_UNSPECIFIED
 }
 
+func (x *ListIssuesRequest) GetAssigneeActorIds() []string {
+	if x != nil {
+		return x.AssigneeActorIds
+	}
+	return nil
+}
+
+func (x *ListIssuesRequest) GetUnassigned() bool {
+	if x != nil {
+		return x.Unassigned
+	}
+	return false
+}
+
 type ListIssuesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Issues        []*Issue               `protobuf:"bytes,1,rep,name=issues,proto3" json:"issues,omitempty"`
@@ -2042,7 +2239,7 @@ type ListIssuesResponse struct {
 
 func (x *ListIssuesResponse) Reset() {
 	*x = ListIssuesResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[22]
+	mi := &file_issues_v1_issues_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2054,7 +2251,7 @@ func (x *ListIssuesResponse) String() string {
 func (*ListIssuesResponse) ProtoMessage() {}
 
 func (x *ListIssuesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[22]
+	mi := &file_issues_v1_issues_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2067,7 +2264,7 @@ func (x *ListIssuesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssuesResponse.ProtoReflect.Descriptor instead.
 func (*ListIssuesResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{22}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListIssuesResponse) GetIssues() []*Issue {
@@ -2094,7 +2291,7 @@ type GetIssueRequest struct {
 
 func (x *GetIssueRequest) Reset() {
 	*x = GetIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[23]
+	mi := &file_issues_v1_issues_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2106,7 +2303,7 @@ func (x *GetIssueRequest) String() string {
 func (*GetIssueRequest) ProtoMessage() {}
 
 func (x *GetIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[23]
+	mi := &file_issues_v1_issues_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2119,7 +2316,7 @@ func (x *GetIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIssueRequest.ProtoReflect.Descriptor instead.
 func (*GetIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{23}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetIssueRequest) GetProjectId() string {
@@ -2145,7 +2342,7 @@ type GetIssueResponse struct {
 
 func (x *GetIssueResponse) Reset() {
 	*x = GetIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[24]
+	mi := &file_issues_v1_issues_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2157,7 +2354,7 @@ func (x *GetIssueResponse) String() string {
 func (*GetIssueResponse) ProtoMessage() {}
 
 func (x *GetIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[24]
+	mi := &file_issues_v1_issues_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2170,7 +2367,7 @@ func (x *GetIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIssueResponse.ProtoReflect.Descriptor instead.
 func (*GetIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{24}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetIssueResponse) GetIssue() *Issue {
@@ -2181,18 +2378,20 @@ func (x *GetIssueResponse) GetIssue() *Issue {
 }
 
 type CreateIssueRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Priority      Priority               `protobuf:"varint,4,opt,name=priority,proto3,enum=issues.v1.Priority" json:"priority,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId   string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Title       string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Priority    Priority               `protobuf:"varint,4,opt,name=priority,proto3,enum=issues.v1.Priority" json:"priority,omitempty"`
+	// Vacío: sin asignar. Ver UpdateIssueRequest.assignee_actor_id.
+	AssigneeActorId string `protobuf:"bytes,5,opt,name=assignee_actor_id,json=assigneeActorId,proto3" json:"assignee_actor_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateIssueRequest) Reset() {
 	*x = CreateIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[25]
+	mi := &file_issues_v1_issues_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2204,7 +2403,7 @@ func (x *CreateIssueRequest) String() string {
 func (*CreateIssueRequest) ProtoMessage() {}
 
 func (x *CreateIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[25]
+	mi := &file_issues_v1_issues_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2217,7 +2416,7 @@ func (x *CreateIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIssueRequest.ProtoReflect.Descriptor instead.
 func (*CreateIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{25}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CreateIssueRequest) GetProjectId() string {
@@ -2248,6 +2447,13 @@ func (x *CreateIssueRequest) GetPriority() Priority {
 	return Priority_PRIORITY_UNSPECIFIED
 }
 
+func (x *CreateIssueRequest) GetAssigneeActorId() string {
+	if x != nil {
+		return x.AssigneeActorId
+	}
+	return ""
+}
+
 type CreateIssueResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Issue         *Issue                 `protobuf:"bytes,1,opt,name=issue,proto3" json:"issue,omitempty"`
@@ -2257,7 +2463,7 @@ type CreateIssueResponse struct {
 
 func (x *CreateIssueResponse) Reset() {
 	*x = CreateIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[26]
+	mi := &file_issues_v1_issues_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2269,7 +2475,7 @@ func (x *CreateIssueResponse) String() string {
 func (*CreateIssueResponse) ProtoMessage() {}
 
 func (x *CreateIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[26]
+	mi := &file_issues_v1_issues_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2282,7 +2488,7 @@ func (x *CreateIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIssueResponse.ProtoReflect.Descriptor instead.
 func (*CreateIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{26}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CreateIssueResponse) GetIssue() *Issue {
@@ -2315,7 +2521,7 @@ type MoveIssueRequest struct {
 
 func (x *MoveIssueRequest) Reset() {
 	*x = MoveIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[27]
+	mi := &file_issues_v1_issues_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2327,7 +2533,7 @@ func (x *MoveIssueRequest) String() string {
 func (*MoveIssueRequest) ProtoMessage() {}
 
 func (x *MoveIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[27]
+	mi := &file_issues_v1_issues_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2340,7 +2546,7 @@ func (x *MoveIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveIssueRequest.ProtoReflect.Descriptor instead.
 func (*MoveIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{27}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *MoveIssueRequest) GetProjectId() string {
@@ -2394,7 +2600,7 @@ type MoveIssueResponse struct {
 
 func (x *MoveIssueResponse) Reset() {
 	*x = MoveIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[28]
+	mi := &file_issues_v1_issues_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2406,7 +2612,7 @@ func (x *MoveIssueResponse) String() string {
 func (*MoveIssueResponse) ProtoMessage() {}
 
 func (x *MoveIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[28]
+	mi := &file_issues_v1_issues_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2419,7 +2625,7 @@ func (x *MoveIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveIssueResponse.ProtoReflect.Descriptor instead.
 func (*MoveIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{28}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *MoveIssueResponse) GetIssue() *Issue {
@@ -2440,14 +2646,18 @@ type UpdateIssueRequest struct {
 	Priority *Priority `protobuf:"varint,5,opt,name=priority,proto3,enum=issues.v1.Priority,oneof" json:"priority,omitempty"`
 	// Reemplaza las etiquetas del issue; ausente, no cambian. Una etiqueta de
 	// otro proyecto es INVALID_ARGUMENT.
-	Labels        *LabelIds `protobuf:"bytes,6,opt,name=labels,proto3" json:"labels,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Labels *LabelIds `protobuf:"bytes,6,opt,name=labels,proto3" json:"labels,omitempty"`
+	// Presente y vacío: lo deja sin asignar. Un actor inexistente, revocado o
+	// que el usuario no puede ver es INVALID_ARGUMENT. Queda en el historial
+	// como assignee_changed.
+	AssigneeActorId *string `protobuf:"bytes,7,opt,name=assignee_actor_id,json=assigneeActorId,proto3,oneof" json:"assignee_actor_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *UpdateIssueRequest) Reset() {
 	*x = UpdateIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[29]
+	mi := &file_issues_v1_issues_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2459,7 +2669,7 @@ func (x *UpdateIssueRequest) String() string {
 func (*UpdateIssueRequest) ProtoMessage() {}
 
 func (x *UpdateIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[29]
+	mi := &file_issues_v1_issues_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2472,7 +2682,7 @@ func (x *UpdateIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateIssueRequest.ProtoReflect.Descriptor instead.
 func (*UpdateIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{29}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *UpdateIssueRequest) GetProjectId() string {
@@ -2517,6 +2727,13 @@ func (x *UpdateIssueRequest) GetLabels() *LabelIds {
 	return nil
 }
 
+func (x *UpdateIssueRequest) GetAssigneeActorId() string {
+	if x != nil && x.AssigneeActorId != nil {
+		return *x.AssigneeActorId
+	}
+	return ""
+}
+
 // Lista de ids de etiquetas, con presencia: un mensaje ausente no es una
 // lista vacía.
 type LabelIds struct {
@@ -2528,7 +2745,7 @@ type LabelIds struct {
 
 func (x *LabelIds) Reset() {
 	*x = LabelIds{}
-	mi := &file_issues_v1_issues_proto_msgTypes[30]
+	mi := &file_issues_v1_issues_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2540,7 +2757,7 @@ func (x *LabelIds) String() string {
 func (*LabelIds) ProtoMessage() {}
 
 func (x *LabelIds) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[30]
+	mi := &file_issues_v1_issues_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2553,7 +2770,7 @@ func (x *LabelIds) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LabelIds.ProtoReflect.Descriptor instead.
 func (*LabelIds) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{30}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *LabelIds) GetIds() []string {
@@ -2572,7 +2789,7 @@ type UpdateIssueResponse struct {
 
 func (x *UpdateIssueResponse) Reset() {
 	*x = UpdateIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[31]
+	mi := &file_issues_v1_issues_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2584,7 +2801,7 @@ func (x *UpdateIssueResponse) String() string {
 func (*UpdateIssueResponse) ProtoMessage() {}
 
 func (x *UpdateIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[31]
+	mi := &file_issues_v1_issues_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2597,7 +2814,7 @@ func (x *UpdateIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateIssueResponse.ProtoReflect.Descriptor instead.
 func (*UpdateIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{31}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *UpdateIssueResponse) GetIssue() *Issue {
@@ -2624,7 +2841,7 @@ type DiscardIssueRequest struct {
 
 func (x *DiscardIssueRequest) Reset() {
 	*x = DiscardIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[32]
+	mi := &file_issues_v1_issues_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2636,7 +2853,7 @@ func (x *DiscardIssueRequest) String() string {
 func (*DiscardIssueRequest) ProtoMessage() {}
 
 func (x *DiscardIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[32]
+	mi := &file_issues_v1_issues_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2649,7 +2866,7 @@ func (x *DiscardIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardIssueRequest.ProtoReflect.Descriptor instead.
 func (*DiscardIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{32}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *DiscardIssueRequest) GetProjectId() string {
@@ -2689,7 +2906,7 @@ type DiscardIssueResponse struct {
 
 func (x *DiscardIssueResponse) Reset() {
 	*x = DiscardIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[33]
+	mi := &file_issues_v1_issues_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2701,7 +2918,7 @@ func (x *DiscardIssueResponse) String() string {
 func (*DiscardIssueResponse) ProtoMessage() {}
 
 func (x *DiscardIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[33]
+	mi := &file_issues_v1_issues_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2714,7 +2931,7 @@ func (x *DiscardIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardIssueResponse.ProtoReflect.Descriptor instead.
 func (*DiscardIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{33}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *DiscardIssueResponse) GetIssue() *Issue {
@@ -2734,7 +2951,7 @@ type RestoreIssueRequest struct {
 
 func (x *RestoreIssueRequest) Reset() {
 	*x = RestoreIssueRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[34]
+	mi := &file_issues_v1_issues_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2746,7 +2963,7 @@ func (x *RestoreIssueRequest) String() string {
 func (*RestoreIssueRequest) ProtoMessage() {}
 
 func (x *RestoreIssueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[34]
+	mi := &file_issues_v1_issues_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2759,7 +2976,7 @@ func (x *RestoreIssueRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreIssueRequest.ProtoReflect.Descriptor instead.
 func (*RestoreIssueRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{34}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *RestoreIssueRequest) GetProjectId() string {
@@ -2785,7 +3002,7 @@ type RestoreIssueResponse struct {
 
 func (x *RestoreIssueResponse) Reset() {
 	*x = RestoreIssueResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[35]
+	mi := &file_issues_v1_issues_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2797,7 +3014,7 @@ func (x *RestoreIssueResponse) String() string {
 func (*RestoreIssueResponse) ProtoMessage() {}
 
 func (x *RestoreIssueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[35]
+	mi := &file_issues_v1_issues_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2810,7 +3027,7 @@ func (x *RestoreIssueResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreIssueResponse.ProtoReflect.Descriptor instead.
 func (*RestoreIssueResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{35}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *RestoreIssueResponse) GetIssue() *Issue {
@@ -2829,7 +3046,7 @@ type ListStatusesRequest struct {
 
 func (x *ListStatusesRequest) Reset() {
 	*x = ListStatusesRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[36]
+	mi := &file_issues_v1_issues_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2841,7 +3058,7 @@ func (x *ListStatusesRequest) String() string {
 func (*ListStatusesRequest) ProtoMessage() {}
 
 func (x *ListStatusesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[36]
+	mi := &file_issues_v1_issues_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2854,7 +3071,7 @@ func (x *ListStatusesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStatusesRequest.ProtoReflect.Descriptor instead.
 func (*ListStatusesRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{36}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListStatusesRequest) GetProjectId() string {
@@ -2874,7 +3091,7 @@ type ListStatusesResponse struct {
 
 func (x *ListStatusesResponse) Reset() {
 	*x = ListStatusesResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[37]
+	mi := &file_issues_v1_issues_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2886,7 +3103,7 @@ func (x *ListStatusesResponse) String() string {
 func (*ListStatusesResponse) ProtoMessage() {}
 
 func (x *ListStatusesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[37]
+	mi := &file_issues_v1_issues_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2899,7 +3116,7 @@ func (x *ListStatusesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStatusesResponse.ProtoReflect.Descriptor instead.
 func (*ListStatusesResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{37}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListStatusesResponse) GetStatuses() []*Status {
@@ -2928,7 +3145,7 @@ type CreateStatusRequest struct {
 
 func (x *CreateStatusRequest) Reset() {
 	*x = CreateStatusRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[38]
+	mi := &file_issues_v1_issues_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2940,7 +3157,7 @@ func (x *CreateStatusRequest) String() string {
 func (*CreateStatusRequest) ProtoMessage() {}
 
 func (x *CreateStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[38]
+	mi := &file_issues_v1_issues_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2953,7 +3170,7 @@ func (x *CreateStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateStatusRequest.ProtoReflect.Descriptor instead.
 func (*CreateStatusRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{38}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CreateStatusRequest) GetProjectId() string {
@@ -3014,7 +3231,7 @@ type CreateStatusResponse struct {
 
 func (x *CreateStatusResponse) Reset() {
 	*x = CreateStatusResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[39]
+	mi := &file_issues_v1_issues_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3026,7 +3243,7 @@ func (x *CreateStatusResponse) String() string {
 func (*CreateStatusResponse) ProtoMessage() {}
 
 func (x *CreateStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[39]
+	mi := &file_issues_v1_issues_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3039,7 +3256,7 @@ func (x *CreateStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateStatusResponse.ProtoReflect.Descriptor instead.
 func (*CreateStatusResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{39}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *CreateStatusResponse) GetStatus() *Status {
@@ -3066,7 +3283,7 @@ type UpdateStatusRequest struct {
 
 func (x *UpdateStatusRequest) Reset() {
 	*x = UpdateStatusRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[40]
+	mi := &file_issues_v1_issues_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3078,7 +3295,7 @@ func (x *UpdateStatusRequest) String() string {
 func (*UpdateStatusRequest) ProtoMessage() {}
 
 func (x *UpdateStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[40]
+	mi := &file_issues_v1_issues_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3091,7 +3308,7 @@ func (x *UpdateStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateStatusRequest.ProtoReflect.Descriptor instead.
 func (*UpdateStatusRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{40}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *UpdateStatusRequest) GetProjectId() string {
@@ -3152,7 +3369,7 @@ type UpdateStatusResponse struct {
 
 func (x *UpdateStatusResponse) Reset() {
 	*x = UpdateStatusResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[41]
+	mi := &file_issues_v1_issues_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3164,7 +3381,7 @@ func (x *UpdateStatusResponse) String() string {
 func (*UpdateStatusResponse) ProtoMessage() {}
 
 func (x *UpdateStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[41]
+	mi := &file_issues_v1_issues_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3177,7 +3394,7 @@ func (x *UpdateStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateStatusResponse.ProtoReflect.Descriptor instead.
 func (*UpdateStatusResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{41}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *UpdateStatusResponse) GetStatus() *Status {
@@ -3201,7 +3418,7 @@ type DeleteStatusRequest struct {
 
 func (x *DeleteStatusRequest) Reset() {
 	*x = DeleteStatusRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[42]
+	mi := &file_issues_v1_issues_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3213,7 +3430,7 @@ func (x *DeleteStatusRequest) String() string {
 func (*DeleteStatusRequest) ProtoMessage() {}
 
 func (x *DeleteStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[42]
+	mi := &file_issues_v1_issues_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3226,7 +3443,7 @@ func (x *DeleteStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteStatusRequest.ProtoReflect.Descriptor instead.
 func (*DeleteStatusRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{42}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *DeleteStatusRequest) GetProjectId() string {
@@ -3258,7 +3475,7 @@ type DeleteStatusResponse struct {
 
 func (x *DeleteStatusResponse) Reset() {
 	*x = DeleteStatusResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[43]
+	mi := &file_issues_v1_issues_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3270,7 +3487,7 @@ func (x *DeleteStatusResponse) String() string {
 func (*DeleteStatusResponse) ProtoMessage() {}
 
 func (x *DeleteStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[43]
+	mi := &file_issues_v1_issues_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3283,7 +3500,7 @@ func (x *DeleteStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteStatusResponse.ProtoReflect.Descriptor instead.
 func (*DeleteStatusResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{43}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{44}
 }
 
 // La lista completa de estados como debe quedar, en el orden de columnas.
@@ -3309,7 +3526,7 @@ type BatchUpdateStatusesRequest struct {
 
 func (x *BatchUpdateStatusesRequest) Reset() {
 	*x = BatchUpdateStatusesRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[44]
+	mi := &file_issues_v1_issues_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3321,7 +3538,7 @@ func (x *BatchUpdateStatusesRequest) String() string {
 func (*BatchUpdateStatusesRequest) ProtoMessage() {}
 
 func (x *BatchUpdateStatusesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[44]
+	mi := &file_issues_v1_issues_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3334,7 +3551,7 @@ func (x *BatchUpdateStatusesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchUpdateStatusesRequest.ProtoReflect.Descriptor instead.
 func (*BatchUpdateStatusesRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{44}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *BatchUpdateStatusesRequest) GetProjectId() string {
@@ -3377,7 +3594,7 @@ type StatusSpec struct {
 
 func (x *StatusSpec) Reset() {
 	*x = StatusSpec{}
-	mi := &file_issues_v1_issues_proto_msgTypes[45]
+	mi := &file_issues_v1_issues_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3389,7 +3606,7 @@ func (x *StatusSpec) String() string {
 func (*StatusSpec) ProtoMessage() {}
 
 func (x *StatusSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[45]
+	mi := &file_issues_v1_issues_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3402,7 +3619,7 @@ func (x *StatusSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusSpec.ProtoReflect.Descriptor instead.
 func (*StatusSpec) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{45}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *StatusSpec) GetId() string {
@@ -3460,7 +3677,7 @@ type StatusDeletion struct {
 
 func (x *StatusDeletion) Reset() {
 	*x = StatusDeletion{}
-	mi := &file_issues_v1_issues_proto_msgTypes[46]
+	mi := &file_issues_v1_issues_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3472,7 +3689,7 @@ func (x *StatusDeletion) String() string {
 func (*StatusDeletion) ProtoMessage() {}
 
 func (x *StatusDeletion) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[46]
+	mi := &file_issues_v1_issues_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3485,7 +3702,7 @@ func (x *StatusDeletion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusDeletion.ProtoReflect.Descriptor instead.
 func (*StatusDeletion) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{46}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *StatusDeletion) GetStatusId() string {
@@ -3512,7 +3729,7 @@ type BatchUpdateStatusesResponse struct {
 
 func (x *BatchUpdateStatusesResponse) Reset() {
 	*x = BatchUpdateStatusesResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[47]
+	mi := &file_issues_v1_issues_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3524,7 +3741,7 @@ func (x *BatchUpdateStatusesResponse) String() string {
 func (*BatchUpdateStatusesResponse) ProtoMessage() {}
 
 func (x *BatchUpdateStatusesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[47]
+	mi := &file_issues_v1_issues_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3537,7 +3754,7 @@ func (x *BatchUpdateStatusesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchUpdateStatusesResponse.ProtoReflect.Descriptor instead.
 func (*BatchUpdateStatusesResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{47}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *BatchUpdateStatusesResponse) GetStatuses() []*Status {
@@ -3556,7 +3773,7 @@ type ListLabelsRequest struct {
 
 func (x *ListLabelsRequest) Reset() {
 	*x = ListLabelsRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[48]
+	mi := &file_issues_v1_issues_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3568,7 +3785,7 @@ func (x *ListLabelsRequest) String() string {
 func (*ListLabelsRequest) ProtoMessage() {}
 
 func (x *ListLabelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[48]
+	mi := &file_issues_v1_issues_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3581,7 +3798,7 @@ func (x *ListLabelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLabelsRequest.ProtoReflect.Descriptor instead.
 func (*ListLabelsRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{48}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ListLabelsRequest) GetProjectId() string {
@@ -3601,7 +3818,7 @@ type ListLabelsResponse struct {
 
 func (x *ListLabelsResponse) Reset() {
 	*x = ListLabelsResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[49]
+	mi := &file_issues_v1_issues_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3613,7 +3830,7 @@ func (x *ListLabelsResponse) String() string {
 func (*ListLabelsResponse) ProtoMessage() {}
 
 func (x *ListLabelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[49]
+	mi := &file_issues_v1_issues_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3626,7 +3843,7 @@ func (x *ListLabelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLabelsResponse.ProtoReflect.Descriptor instead.
 func (*ListLabelsResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{49}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListLabelsResponse) GetLabels() []*Label {
@@ -3647,7 +3864,7 @@ type CreateLabelRequest struct {
 
 func (x *CreateLabelRequest) Reset() {
 	*x = CreateLabelRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[50]
+	mi := &file_issues_v1_issues_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3659,7 +3876,7 @@ func (x *CreateLabelRequest) String() string {
 func (*CreateLabelRequest) ProtoMessage() {}
 
 func (x *CreateLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[50]
+	mi := &file_issues_v1_issues_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3672,7 +3889,7 @@ func (x *CreateLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLabelRequest.ProtoReflect.Descriptor instead.
 func (*CreateLabelRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{50}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CreateLabelRequest) GetProjectId() string {
@@ -3705,7 +3922,7 @@ type CreateLabelResponse struct {
 
 func (x *CreateLabelResponse) Reset() {
 	*x = CreateLabelResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[51]
+	mi := &file_issues_v1_issues_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3717,7 +3934,7 @@ func (x *CreateLabelResponse) String() string {
 func (*CreateLabelResponse) ProtoMessage() {}
 
 func (x *CreateLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[51]
+	mi := &file_issues_v1_issues_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3730,7 +3947,7 @@ func (x *CreateLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLabelResponse.ProtoReflect.Descriptor instead.
 func (*CreateLabelResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{51}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *CreateLabelResponse) GetLabel() *Label {
@@ -3753,7 +3970,7 @@ type UpdateLabelRequest struct {
 
 func (x *UpdateLabelRequest) Reset() {
 	*x = UpdateLabelRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[52]
+	mi := &file_issues_v1_issues_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3765,7 +3982,7 @@ func (x *UpdateLabelRequest) String() string {
 func (*UpdateLabelRequest) ProtoMessage() {}
 
 func (x *UpdateLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[52]
+	mi := &file_issues_v1_issues_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3778,7 +3995,7 @@ func (x *UpdateLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateLabelRequest.ProtoReflect.Descriptor instead.
 func (*UpdateLabelRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{52}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *UpdateLabelRequest) GetProjectId() string {
@@ -3818,7 +4035,7 @@ type UpdateLabelResponse struct {
 
 func (x *UpdateLabelResponse) Reset() {
 	*x = UpdateLabelResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[53]
+	mi := &file_issues_v1_issues_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3830,7 +4047,7 @@ func (x *UpdateLabelResponse) String() string {
 func (*UpdateLabelResponse) ProtoMessage() {}
 
 func (x *UpdateLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[53]
+	mi := &file_issues_v1_issues_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3843,7 +4060,7 @@ func (x *UpdateLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateLabelResponse.ProtoReflect.Descriptor instead.
 func (*UpdateLabelResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{53}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *UpdateLabelResponse) GetLabel() *Label {
@@ -3863,7 +4080,7 @@ type DeleteLabelRequest struct {
 
 func (x *DeleteLabelRequest) Reset() {
 	*x = DeleteLabelRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[54]
+	mi := &file_issues_v1_issues_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3875,7 +4092,7 @@ func (x *DeleteLabelRequest) String() string {
 func (*DeleteLabelRequest) ProtoMessage() {}
 
 func (x *DeleteLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[54]
+	mi := &file_issues_v1_issues_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3888,7 +4105,7 @@ func (x *DeleteLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLabelRequest.ProtoReflect.Descriptor instead.
 func (*DeleteLabelRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{54}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *DeleteLabelRequest) GetProjectId() string {
@@ -3913,7 +4130,7 @@ type DeleteLabelResponse struct {
 
 func (x *DeleteLabelResponse) Reset() {
 	*x = DeleteLabelResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[55]
+	mi := &file_issues_v1_issues_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3925,7 +4142,7 @@ func (x *DeleteLabelResponse) String() string {
 func (*DeleteLabelResponse) ProtoMessage() {}
 
 func (x *DeleteLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[55]
+	mi := &file_issues_v1_issues_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3938,7 +4155,7 @@ func (x *DeleteLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLabelResponse.ProtoReflect.Descriptor instead.
 func (*DeleteLabelResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{55}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{56}
 }
 
 type CreateCommentRequest struct {
@@ -3952,7 +4169,7 @@ type CreateCommentRequest struct {
 
 func (x *CreateCommentRequest) Reset() {
 	*x = CreateCommentRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[56]
+	mi := &file_issues_v1_issues_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3964,7 +4181,7 @@ func (x *CreateCommentRequest) String() string {
 func (*CreateCommentRequest) ProtoMessage() {}
 
 func (x *CreateCommentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[56]
+	mi := &file_issues_v1_issues_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3977,7 +4194,7 @@ func (x *CreateCommentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCommentRequest.ProtoReflect.Descriptor instead.
 func (*CreateCommentRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{56}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *CreateCommentRequest) GetProjectId() string {
@@ -4010,7 +4227,7 @@ type CreateCommentResponse struct {
 
 func (x *CreateCommentResponse) Reset() {
 	*x = CreateCommentResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[57]
+	mi := &file_issues_v1_issues_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4022,7 +4239,7 @@ func (x *CreateCommentResponse) String() string {
 func (*CreateCommentResponse) ProtoMessage() {}
 
 func (x *CreateCommentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[57]
+	mi := &file_issues_v1_issues_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4035,7 +4252,7 @@ func (x *CreateCommentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCommentResponse.ProtoReflect.Descriptor instead.
 func (*CreateCommentResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{57}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *CreateCommentResponse) GetComment() *Comment {
@@ -4056,7 +4273,7 @@ type ListIssueEventsRequest struct {
 
 func (x *ListIssueEventsRequest) Reset() {
 	*x = ListIssueEventsRequest{}
-	mi := &file_issues_v1_issues_proto_msgTypes[58]
+	mi := &file_issues_v1_issues_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4068,7 +4285,7 @@ func (x *ListIssueEventsRequest) String() string {
 func (*ListIssueEventsRequest) ProtoMessage() {}
 
 func (x *ListIssueEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[58]
+	mi := &file_issues_v1_issues_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4081,7 +4298,7 @@ func (x *ListIssueEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssueEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListIssueEventsRequest) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{58}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ListIssueEventsRequest) GetProjectId() string {
@@ -4115,7 +4332,7 @@ type ListIssueEventsResponse struct {
 
 func (x *ListIssueEventsResponse) Reset() {
 	*x = ListIssueEventsResponse{}
-	mi := &file_issues_v1_issues_proto_msgTypes[59]
+	mi := &file_issues_v1_issues_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4127,7 +4344,7 @@ func (x *ListIssueEventsResponse) String() string {
 func (*ListIssueEventsResponse) ProtoMessage() {}
 
 func (x *ListIssueEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_issues_v1_issues_proto_msgTypes[59]
+	mi := &file_issues_v1_issues_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4140,7 +4357,7 @@ func (x *ListIssueEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIssueEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListIssueEventsResponse) Descriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{59}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListIssueEventsResponse) GetEvents() []*IssueEvent {
@@ -4157,6 +4374,179 @@ func (x *ListIssueEventsResponse) GetPage() *PageResponse {
 	return nil
 }
 
+type ImportIssueRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// Clave del issue en el origen, única por proyecto: con ella se reconoce en
+	// las corridas siguientes. Para Round, número + slug (el nombre del archivo
+	// sin .md, p. ej. "236-claude-md-en-capas"). Sin espacios en los extremos,
+	// 1 a 200 caracteres.
+	SourceKey string `protobuf:"bytes,2,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
+	// Número que conserva el issue (el del origen), desde 1.
+	Number int32 `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	// Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Como en CreateIssueRequest: título obligatorio; descripción en markdown.
+	Title       string `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	Description string `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	// UNSPECIFIED se guarda como MEDIUM.
+	Priority Priority `protobuf:"varint,7,opt,name=priority,proto3,enum=issues.v1.Priority" json:"priority,omitempty"`
+	// Categoría: el issue va al primer estado de esa categoría (si ya está en
+	// esa categoría, no cambia de estado). UNSPECIFIED es INVALID_ARGUMENT.
+	// Pasar a CANCELED lo descarta sin motivo, como MoveIssue.
+	State IssueState `protobuf:"varint,8,opt,name=state,proto3,enum=issues.v1.IssueState" json:"state,omitempty"`
+	// Nombres de etiquetas (sin distinguir mayúsculas); las que no existen se
+	// crean con color NEUTRAL. Reemplazan las del issue.
+	LabelNames    []string `protobuf:"bytes,9,rep,name=label_names,json=labelNames,proto3" json:"label_names,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportIssueRequest) Reset() {
+	*x = ImportIssueRequest{}
+	mi := &file_issues_v1_issues_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportIssueRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportIssueRequest) ProtoMessage() {}
+
+func (x *ImportIssueRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportIssueRequest.ProtoReflect.Descriptor instead.
+func (*ImportIssueRequest) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *ImportIssueRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ImportIssueRequest) GetSourceKey() string {
+	if x != nil {
+		return x.SourceKey
+	}
+	return ""
+}
+
+func (x *ImportIssueRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *ImportIssueRequest) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *ImportIssueRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *ImportIssueRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ImportIssueRequest) GetPriority() Priority {
+	if x != nil {
+		return x.Priority
+	}
+	return Priority_PRIORITY_UNSPECIFIED
+}
+
+func (x *ImportIssueRequest) GetState() IssueState {
+	if x != nil {
+		return x.State
+	}
+	return IssueState_ISSUE_STATE_UNSPECIFIED
+}
+
+func (x *ImportIssueRequest) GetLabelNames() []string {
+	if x != nil {
+		return x.LabelNames
+	}
+	return nil
+}
+
+type ImportIssueResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Issue         *Issue                 `protobuf:"bytes,1,opt,name=issue,proto3" json:"issue,omitempty"`
+	Outcome       ImportOutcome          `protobuf:"varint,2,opt,name=outcome,proto3,enum=issues.v1.ImportOutcome" json:"outcome,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportIssueResponse) Reset() {
+	*x = ImportIssueResponse{}
+	mi := &file_issues_v1_issues_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportIssueResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportIssueResponse) ProtoMessage() {}
+
+func (x *ImportIssueResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportIssueResponse.ProtoReflect.Descriptor instead.
+func (*ImportIssueResponse) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *ImportIssueResponse) GetIssue() *Issue {
+	if x != nil {
+		return x.Issue
+	}
+	return nil
+}
+
+func (x *ImportIssueResponse) GetOutcome() ImportOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return ImportOutcome_IMPORT_OUTCOME_UNSPECIFIED
+}
+
 var File_issues_v1_issues_proto protoreflect.FileDescriptor
 
 const file_issues_v1_issues_proto_rawDesc = "" +
@@ -4171,7 +4561,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
-	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\xda\x03\n" +
+	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\xa5\x04\n" +
 	"\x05Issue\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4189,7 +4579,10 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	" \x01(\tR\x04rank\x12\x1b\n" +
 	"\tstatus_id\x18\v \x01(\tR\bstatusId\x12\x1b\n" +
 	"\tlabel_ids\x18\f \x03(\tR\blabelIds\x120\n" +
-	"\adiscard\x18\r \x01(\v2\x16.issues.v1.DiscardInfoR\adiscard\"\x7f\n" +
+	"\adiscard\x18\r \x01(\v2\x16.issues.v1.DiscardInfoR\adiscard\x12*\n" +
+	"\x11assignee_actor_id\x18\x0e \x01(\tR\x0fassigneeActorId\x12\x1d\n" +
+	"\n" +
+	"source_key\x18\x0f \x01(\tR\tsourceKey\"\x7f\n" +
 	"\vDiscardInfo\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\x12\x19\n" +
 	"\bactor_id\x18\x02 \x01(\tR\aactorId\x12=\n" +
@@ -4216,7 +4609,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\tauthor_id\x18\x03 \x01(\tR\bauthorId\x12\x12\n" +
 	"\x04body\x18\x04 \x01(\tR\x04body\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xd4\x05\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xb8\x06\n" +
 	"\n" +
 	"IssueEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
@@ -4233,7 +4626,9 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	" \x01(\v2\x18.issues.v1.LabelsChangedH\x00R\rlabelsChanged\x122\n" +
 	"\tcommented\x18\v \x01(\v2\x12.issues.v1.CommentH\x00R\tcommented\x129\n" +
 	"\tdiscarded\x18\f \x01(\v2\x19.issues.v1.IssueDiscardedH\x00R\tdiscarded\x126\n" +
-	"\brestored\x18\r \x01(\v2\x18.issues.v1.IssueRestoredH\x00R\brestoredB\b\n" +
+	"\brestored\x18\r \x01(\v2\x18.issues.v1.IssueRestoredH\x00R\brestored\x12G\n" +
+	"\x10assignee_changed\x18\x0e \x01(\v2\x1a.issues.v1.AssigneeChangedH\x00R\x0fassigneeChanged\x12\x19\n" +
+	"\bagent_id\x18\x0f \x01(\tR\aagentIdB\b\n" +
 	"\x06change\"\x0e\n" +
 	"\fIssueCreated\"\x8f\x02\n" +
 	"\rStatusChanged\x12$\n" +
@@ -4262,7 +4657,12 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x0eto_status_name\x18\x04 \x01(\tR\ftoStatusName\"2\n" +
 	"\fTitleChanged\x12\x12\n" +
 	"\x04from\x18\x01 \x01(\tR\x04from\x12\x0e\n" +
-	"\x02to\x18\x02 \x01(\tR\x02to\"\x14\n" +
+	"\x02to\x18\x02 \x01(\tR\x02to\"\xa9\x01\n" +
+	"\x0fAssigneeChanged\x12\"\n" +
+	"\rfrom_actor_id\x18\x01 \x01(\tR\vfromActorId\x12*\n" +
+	"\x11from_display_name\x18\x02 \x01(\tR\x0ffromDisplayName\x12\x1e\n" +
+	"\vto_actor_id\x18\x03 \x01(\tR\ttoActorId\x12&\n" +
+	"\x0fto_display_name\x18\x04 \x01(\tR\rtoDisplayName\"\x14\n" +
 	"\x12DescriptionChanged\"_\n" +
 	"\x0fPriorityChanged\x12'\n" +
 	"\x04from\x18\x01 \x01(\x0e2\x13.issues.v1.PriorityR\x04from\x12#\n" +
@@ -4291,7 +4691,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12!\n" +
 	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\"E\n" +
 	"\x15CreateProjectResponse\x12,\n" +
-	"\aproject\x18\x01 \x01(\v2\x12.issues.v1.ProjectR\aproject\"\xf3\x02\n" +
+	"\aproject\x18\x01 \x01(\v2\x12.issues.v1.ProjectR\aproject\"\xc1\x03\n" +
 	"\x11ListIssuesRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12+\n" +
@@ -4305,7 +4705,12 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"priorities\x18\a \x03(\x0e2\x13.issues.v1.PriorityR\n" +
 	"priorities\x12\x1b\n" +
 	"\tlabel_ids\x18\b \x03(\tR\blabelIds\x120\n" +
-	"\border_by\x18\t \x01(\x0e2\x15.issues.v1.IssueOrderR\aorderBy\"k\n" +
+	"\border_by\x18\t \x01(\x0e2\x15.issues.v1.IssueOrderR\aorderBy\x12,\n" +
+	"\x12assignee_actor_ids\x18\n" +
+	" \x03(\tR\x10assigneeActorIds\x12\x1e\n" +
+	"\n" +
+	"unassigned\x18\v \x01(\bR\n" +
+	"unassigned\"k\n" +
 	"\x12ListIssuesResponse\x12(\n" +
 	"\x06issues\x18\x01 \x03(\v2\x10.issues.v1.IssueR\x06issues\x12+\n" +
 	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page\"H\n" +
@@ -4314,13 +4719,14 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\x05R\x06number\":\n" +
 	"\x10GetIssueResponse\x12&\n" +
-	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"\x9c\x01\n" +
+	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"\xc8\x01\n" +
 	"\x12CreateIssueRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12/\n" +
-	"\bpriority\x18\x04 \x01(\x0e2\x13.issues.v1.PriorityR\bpriority\"=\n" +
+	"\bpriority\x18\x04 \x01(\x0e2\x13.issues.v1.PriorityR\bpriority\x12*\n" +
+	"\x11assignee_actor_id\x18\x05 \x01(\tR\x0fassigneeActorId\"=\n" +
 	"\x13CreateIssueResponse\x12&\n" +
 	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"\xdb\x01\n" +
 	"\x10MoveIssueRequest\x12\x1d\n" +
@@ -4332,7 +4738,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\rbefore_number\x18\x05 \x01(\x05R\fbeforeNumber\x12!\n" +
 	"\fafter_number\x18\x06 \x01(\x05R\vafterNumber\";\n" +
 	"\x11MoveIssueResponse\x12&\n" +
-	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"\x97\x02\n" +
+	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\"\xde\x02\n" +
 	"\x12UpdateIssueRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x16\n" +
@@ -4340,10 +4746,12 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x05title\x18\x03 \x01(\tH\x00R\x05title\x88\x01\x01\x12%\n" +
 	"\vdescription\x18\x04 \x01(\tH\x01R\vdescription\x88\x01\x01\x124\n" +
 	"\bpriority\x18\x05 \x01(\x0e2\x13.issues.v1.PriorityH\x02R\bpriority\x88\x01\x01\x12+\n" +
-	"\x06labels\x18\x06 \x01(\v2\x13.issues.v1.LabelIdsR\x06labelsB\b\n" +
+	"\x06labels\x18\x06 \x01(\v2\x13.issues.v1.LabelIdsR\x06labels\x12/\n" +
+	"\x11assignee_actor_id\x18\a \x01(\tH\x03R\x0fassigneeActorId\x88\x01\x01B\b\n" +
 	"\x06_titleB\x0e\n" +
 	"\f_descriptionB\v\n" +
-	"\t_priority\"\x1c\n" +
+	"\t_priorityB\x14\n" +
+	"\x12_assignee_actor_id\"\x1c\n" +
 	"\bLabelIds\x12\x10\n" +
 	"\x03ids\x18\x01 \x03(\tR\x03ids\"=\n" +
 	"\x13UpdateIssueResponse\x12&\n" +
@@ -4461,7 +4869,24 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x04page\x18\x03 \x01(\v2\x16.issues.v1.PageRequestR\x04page\"u\n" +
 	"\x17ListIssueEventsResponse\x12-\n" +
 	"\x06events\x18\x01 \x03(\v2\x15.issues.v1.IssueEventR\x06events\x12+\n" +
-	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page*\x8c\x01\n" +
+	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page\"\xdc\x02\n" +
+	"\x12ImportIssueRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
+	"\n" +
+	"source_key\x18\x02 \x01(\tR\tsourceKey\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\x05R\x06number\x129\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12 \n" +
+	"\vdescription\x18\x06 \x01(\tR\vdescription\x12/\n" +
+	"\bpriority\x18\a \x01(\x0e2\x13.issues.v1.PriorityR\bpriority\x12+\n" +
+	"\x05state\x18\b \x01(\x0e2\x15.issues.v1.IssueStateR\x05state\x12\x1f\n" +
+	"\vlabel_names\x18\t \x03(\tR\n" +
+	"labelNames\"q\n" +
+	"\x13ImportIssueResponse\x12&\n" +
+	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\x122\n" +
+	"\aoutcome\x18\x02 \x01(\x0e2\x18.issues.v1.ImportOutcomeR\aoutcome*\x8c\x01\n" +
 	"\n" +
 	"IssueState\x12\x1b\n" +
 	"\x17ISSUE_STATE_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -4490,7 +4915,12 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x17ISSUE_ORDER_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ISSUE_ORDER_RANK\x10\x01\x12\x1c\n" +
 	"\x18ISSUE_ORDER_UPDATED_DESC\x10\x02\x12\x1d\n" +
-	"\x19ISSUE_ORDER_PRIORITY_DESC\x10\x032\xcd\x14\n" +
+	"\x19ISSUE_ORDER_PRIORITY_DESC\x10\x03*\x85\x01\n" +
+	"\rImportOutcome\x12\x1e\n" +
+	"\x1aIMPORT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16IMPORT_OUTCOME_CREATED\x10\x01\x12\x1a\n" +
+	"\x16IMPORT_OUTCOME_UPDATED\x10\x02\x12\x1c\n" +
+	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xd6\x15\n" +
 	"\fIssueService\x12e\n" +
 	"\fListProjects\x12\x1e.issues.v1.ListProjectsRequest\x1a\x1f.issues.v1.ListProjectsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12k\n" +
 	"\rCreateProject\x12\x1f.issues.v1.CreateProjectRequest\x1a .issues.v1.CreateProjectResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12s\n" +
@@ -4513,7 +4943,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\vUpdateLabel\x12\x1d.issues.v1.UpdateLabelRequest\x1a\x1e.issues.v1.UpdateLabelResponse\"6\x82\xd3\xe4\x93\x020:\x01*2+/v1/projects/{project_id}/labels/{label_id}\x12\x81\x01\n" +
 	"\vDeleteLabel\x12\x1d.issues.v1.DeleteLabelRequest\x1a\x1e.issues.v1.DeleteLabelResponse\"3\x82\xd3\xe4\x93\x02-*+/v1/projects/{project_id}/labels/{label_id}\x12\x91\x01\n" +
 	"\rCreateComment\x12\x1f.issues.v1.CreateCommentRequest\x1a .issues.v1.CreateCommentResponse\"=\x82\xd3\xe4\x93\x027:\x01*\"2/v1/projects/{project_id}/issues/{number}/comments\x12\x92\x01\n" +
-	"\x0fListIssueEvents\x12!.issues.v1.ListIssueEventsRequest\x1a\".issues.v1.ListIssueEventsResponse\"8\x82\xd3\xe4\x93\x022\x120/v1/projects/{project_id}/issues/{number}/eventsB\x9e\x01\n" +
+	"\x0fListIssueEvents\x12!.issues.v1.ListIssueEventsRequest\x1a\".issues.v1.ListIssueEventsResponse\"8\x82\xd3\xe4\x93\x022\x120/v1/projects/{project_id}/issues/{number}/events\x12\x86\x01\n" +
+	"\vImportIssue\x12\x1d.issues.v1.ImportIssueRequest\x1a\x1e.issues.v1.ImportIssueResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/issues:importB\x9e\x01\n" +
 	"\rcom.issues.v1B\vIssuesProtoP\x01Z;github.com/tekitla/tekitla-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
 	"Issues::V1b\x06proto3"
 
@@ -4529,189 +4960,201 @@ func file_issues_v1_issues_proto_rawDescGZIP() []byte {
 	return file_issues_v1_issues_proto_rawDescData
 }
 
-var file_issues_v1_issues_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_issues_v1_issues_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
+var file_issues_v1_issues_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_issues_v1_issues_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_issues_v1_issues_proto_goTypes = []any{
 	(IssueState)(0),                     // 0: issues.v1.IssueState
 	(Priority)(0),                       // 1: issues.v1.Priority
 	(LabelColor)(0),                     // 2: issues.v1.LabelColor
 	(IssueOrder)(0),                     // 3: issues.v1.IssueOrder
-	(*Project)(nil),                     // 4: issues.v1.Project
-	(*Issue)(nil),                       // 5: issues.v1.Issue
-	(*DiscardInfo)(nil),                 // 6: issues.v1.DiscardInfo
-	(*Status)(nil),                      // 7: issues.v1.Status
-	(*Label)(nil),                       // 8: issues.v1.Label
-	(*Comment)(nil),                     // 9: issues.v1.Comment
-	(*IssueEvent)(nil),                  // 10: issues.v1.IssueEvent
-	(*IssueCreated)(nil),                // 11: issues.v1.IssueCreated
-	(*StatusChanged)(nil),               // 12: issues.v1.StatusChanged
-	(*IssueDiscarded)(nil),              // 13: issues.v1.IssueDiscarded
-	(*IssueRestored)(nil),               // 14: issues.v1.IssueRestored
-	(*TitleChanged)(nil),                // 15: issues.v1.TitleChanged
-	(*DescriptionChanged)(nil),          // 16: issues.v1.DescriptionChanged
-	(*PriorityChanged)(nil),             // 17: issues.v1.PriorityChanged
-	(*LabelsChanged)(nil),               // 18: issues.v1.LabelsChanged
-	(*PageRequest)(nil),                 // 19: issues.v1.PageRequest
-	(*PageResponse)(nil),                // 20: issues.v1.PageResponse
-	(*ListProjectsRequest)(nil),         // 21: issues.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),        // 22: issues.v1.ListProjectsResponse
-	(*CreateProjectRequest)(nil),        // 23: issues.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),       // 24: issues.v1.CreateProjectResponse
-	(*ListIssuesRequest)(nil),           // 25: issues.v1.ListIssuesRequest
-	(*ListIssuesResponse)(nil),          // 26: issues.v1.ListIssuesResponse
-	(*GetIssueRequest)(nil),             // 27: issues.v1.GetIssueRequest
-	(*GetIssueResponse)(nil),            // 28: issues.v1.GetIssueResponse
-	(*CreateIssueRequest)(nil),          // 29: issues.v1.CreateIssueRequest
-	(*CreateIssueResponse)(nil),         // 30: issues.v1.CreateIssueResponse
-	(*MoveIssueRequest)(nil),            // 31: issues.v1.MoveIssueRequest
-	(*MoveIssueResponse)(nil),           // 32: issues.v1.MoveIssueResponse
-	(*UpdateIssueRequest)(nil),          // 33: issues.v1.UpdateIssueRequest
-	(*LabelIds)(nil),                    // 34: issues.v1.LabelIds
-	(*UpdateIssueResponse)(nil),         // 35: issues.v1.UpdateIssueResponse
-	(*DiscardIssueRequest)(nil),         // 36: issues.v1.DiscardIssueRequest
-	(*DiscardIssueResponse)(nil),        // 37: issues.v1.DiscardIssueResponse
-	(*RestoreIssueRequest)(nil),         // 38: issues.v1.RestoreIssueRequest
-	(*RestoreIssueResponse)(nil),        // 39: issues.v1.RestoreIssueResponse
-	(*ListStatusesRequest)(nil),         // 40: issues.v1.ListStatusesRequest
-	(*ListStatusesResponse)(nil),        // 41: issues.v1.ListStatusesResponse
-	(*CreateStatusRequest)(nil),         // 42: issues.v1.CreateStatusRequest
-	(*CreateStatusResponse)(nil),        // 43: issues.v1.CreateStatusResponse
-	(*UpdateStatusRequest)(nil),         // 44: issues.v1.UpdateStatusRequest
-	(*UpdateStatusResponse)(nil),        // 45: issues.v1.UpdateStatusResponse
-	(*DeleteStatusRequest)(nil),         // 46: issues.v1.DeleteStatusRequest
-	(*DeleteStatusResponse)(nil),        // 47: issues.v1.DeleteStatusResponse
-	(*BatchUpdateStatusesRequest)(nil),  // 48: issues.v1.BatchUpdateStatusesRequest
-	(*StatusSpec)(nil),                  // 49: issues.v1.StatusSpec
-	(*StatusDeletion)(nil),              // 50: issues.v1.StatusDeletion
-	(*BatchUpdateStatusesResponse)(nil), // 51: issues.v1.BatchUpdateStatusesResponse
-	(*ListLabelsRequest)(nil),           // 52: issues.v1.ListLabelsRequest
-	(*ListLabelsResponse)(nil),          // 53: issues.v1.ListLabelsResponse
-	(*CreateLabelRequest)(nil),          // 54: issues.v1.CreateLabelRequest
-	(*CreateLabelResponse)(nil),         // 55: issues.v1.CreateLabelResponse
-	(*UpdateLabelRequest)(nil),          // 56: issues.v1.UpdateLabelRequest
-	(*UpdateLabelResponse)(nil),         // 57: issues.v1.UpdateLabelResponse
-	(*DeleteLabelRequest)(nil),          // 58: issues.v1.DeleteLabelRequest
-	(*DeleteLabelResponse)(nil),         // 59: issues.v1.DeleteLabelResponse
-	(*CreateCommentRequest)(nil),        // 60: issues.v1.CreateCommentRequest
-	(*CreateCommentResponse)(nil),       // 61: issues.v1.CreateCommentResponse
-	(*ListIssueEventsRequest)(nil),      // 62: issues.v1.ListIssueEventsRequest
-	(*ListIssueEventsResponse)(nil),     // 63: issues.v1.ListIssueEventsResponse
-	(*timestamppb.Timestamp)(nil),       // 64: google.protobuf.Timestamp
+	(ImportOutcome)(0),                  // 4: issues.v1.ImportOutcome
+	(*Project)(nil),                     // 5: issues.v1.Project
+	(*Issue)(nil),                       // 6: issues.v1.Issue
+	(*DiscardInfo)(nil),                 // 7: issues.v1.DiscardInfo
+	(*Status)(nil),                      // 8: issues.v1.Status
+	(*Label)(nil),                       // 9: issues.v1.Label
+	(*Comment)(nil),                     // 10: issues.v1.Comment
+	(*IssueEvent)(nil),                  // 11: issues.v1.IssueEvent
+	(*IssueCreated)(nil),                // 12: issues.v1.IssueCreated
+	(*StatusChanged)(nil),               // 13: issues.v1.StatusChanged
+	(*IssueDiscarded)(nil),              // 14: issues.v1.IssueDiscarded
+	(*IssueRestored)(nil),               // 15: issues.v1.IssueRestored
+	(*TitleChanged)(nil),                // 16: issues.v1.TitleChanged
+	(*AssigneeChanged)(nil),             // 17: issues.v1.AssigneeChanged
+	(*DescriptionChanged)(nil),          // 18: issues.v1.DescriptionChanged
+	(*PriorityChanged)(nil),             // 19: issues.v1.PriorityChanged
+	(*LabelsChanged)(nil),               // 20: issues.v1.LabelsChanged
+	(*PageRequest)(nil),                 // 21: issues.v1.PageRequest
+	(*PageResponse)(nil),                // 22: issues.v1.PageResponse
+	(*ListProjectsRequest)(nil),         // 23: issues.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),        // 24: issues.v1.ListProjectsResponse
+	(*CreateProjectRequest)(nil),        // 25: issues.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),       // 26: issues.v1.CreateProjectResponse
+	(*ListIssuesRequest)(nil),           // 27: issues.v1.ListIssuesRequest
+	(*ListIssuesResponse)(nil),          // 28: issues.v1.ListIssuesResponse
+	(*GetIssueRequest)(nil),             // 29: issues.v1.GetIssueRequest
+	(*GetIssueResponse)(nil),            // 30: issues.v1.GetIssueResponse
+	(*CreateIssueRequest)(nil),          // 31: issues.v1.CreateIssueRequest
+	(*CreateIssueResponse)(nil),         // 32: issues.v1.CreateIssueResponse
+	(*MoveIssueRequest)(nil),            // 33: issues.v1.MoveIssueRequest
+	(*MoveIssueResponse)(nil),           // 34: issues.v1.MoveIssueResponse
+	(*UpdateIssueRequest)(nil),          // 35: issues.v1.UpdateIssueRequest
+	(*LabelIds)(nil),                    // 36: issues.v1.LabelIds
+	(*UpdateIssueResponse)(nil),         // 37: issues.v1.UpdateIssueResponse
+	(*DiscardIssueRequest)(nil),         // 38: issues.v1.DiscardIssueRequest
+	(*DiscardIssueResponse)(nil),        // 39: issues.v1.DiscardIssueResponse
+	(*RestoreIssueRequest)(nil),         // 40: issues.v1.RestoreIssueRequest
+	(*RestoreIssueResponse)(nil),        // 41: issues.v1.RestoreIssueResponse
+	(*ListStatusesRequest)(nil),         // 42: issues.v1.ListStatusesRequest
+	(*ListStatusesResponse)(nil),        // 43: issues.v1.ListStatusesResponse
+	(*CreateStatusRequest)(nil),         // 44: issues.v1.CreateStatusRequest
+	(*CreateStatusResponse)(nil),        // 45: issues.v1.CreateStatusResponse
+	(*UpdateStatusRequest)(nil),         // 46: issues.v1.UpdateStatusRequest
+	(*UpdateStatusResponse)(nil),        // 47: issues.v1.UpdateStatusResponse
+	(*DeleteStatusRequest)(nil),         // 48: issues.v1.DeleteStatusRequest
+	(*DeleteStatusResponse)(nil),        // 49: issues.v1.DeleteStatusResponse
+	(*BatchUpdateStatusesRequest)(nil),  // 50: issues.v1.BatchUpdateStatusesRequest
+	(*StatusSpec)(nil),                  // 51: issues.v1.StatusSpec
+	(*StatusDeletion)(nil),              // 52: issues.v1.StatusDeletion
+	(*BatchUpdateStatusesResponse)(nil), // 53: issues.v1.BatchUpdateStatusesResponse
+	(*ListLabelsRequest)(nil),           // 54: issues.v1.ListLabelsRequest
+	(*ListLabelsResponse)(nil),          // 55: issues.v1.ListLabelsResponse
+	(*CreateLabelRequest)(nil),          // 56: issues.v1.CreateLabelRequest
+	(*CreateLabelResponse)(nil),         // 57: issues.v1.CreateLabelResponse
+	(*UpdateLabelRequest)(nil),          // 58: issues.v1.UpdateLabelRequest
+	(*UpdateLabelResponse)(nil),         // 59: issues.v1.UpdateLabelResponse
+	(*DeleteLabelRequest)(nil),          // 60: issues.v1.DeleteLabelRequest
+	(*DeleteLabelResponse)(nil),         // 61: issues.v1.DeleteLabelResponse
+	(*CreateCommentRequest)(nil),        // 62: issues.v1.CreateCommentRequest
+	(*CreateCommentResponse)(nil),       // 63: issues.v1.CreateCommentResponse
+	(*ListIssueEventsRequest)(nil),      // 64: issues.v1.ListIssueEventsRequest
+	(*ListIssueEventsResponse)(nil),     // 65: issues.v1.ListIssueEventsResponse
+	(*ImportIssueRequest)(nil),          // 66: issues.v1.ImportIssueRequest
+	(*ImportIssueResponse)(nil),         // 67: issues.v1.ImportIssueResponse
+	(*timestamppb.Timestamp)(nil),       // 68: google.protobuf.Timestamp
 }
 var file_issues_v1_issues_proto_depIdxs = []int32{
-	64, // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	64, // 1: issues.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
+	68, // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	68, // 1: issues.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: issues.v1.Issue.state:type_name -> issues.v1.IssueState
 	1,  // 3: issues.v1.Issue.priority:type_name -> issues.v1.Priority
-	64, // 4: issues.v1.Issue.created_at:type_name -> google.protobuf.Timestamp
-	64, // 5: issues.v1.Issue.updated_at:type_name -> google.protobuf.Timestamp
-	6,  // 6: issues.v1.Issue.discard:type_name -> issues.v1.DiscardInfo
-	64, // 7: issues.v1.DiscardInfo.discarded_at:type_name -> google.protobuf.Timestamp
+	68, // 4: issues.v1.Issue.created_at:type_name -> google.protobuf.Timestamp
+	68, // 5: issues.v1.Issue.updated_at:type_name -> google.protobuf.Timestamp
+	7,  // 6: issues.v1.Issue.discard:type_name -> issues.v1.DiscardInfo
+	68, // 7: issues.v1.DiscardInfo.discarded_at:type_name -> google.protobuf.Timestamp
 	0,  // 8: issues.v1.Status.category:type_name -> issues.v1.IssueState
 	2,  // 9: issues.v1.Status.color:type_name -> issues.v1.LabelColor
 	2,  // 10: issues.v1.Label.color:type_name -> issues.v1.LabelColor
-	64, // 11: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
-	64, // 12: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
-	11, // 13: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
-	12, // 14: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
-	15, // 15: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
-	16, // 16: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
-	17, // 17: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
-	18, // 18: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
-	9,  // 19: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
-	13, // 20: issues.v1.IssueEvent.discarded:type_name -> issues.v1.IssueDiscarded
-	14, // 21: issues.v1.IssueEvent.restored:type_name -> issues.v1.IssueRestored
-	0,  // 22: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
-	0,  // 23: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
-	0,  // 24: issues.v1.IssueDiscarded.from_state:type_name -> issues.v1.IssueState
-	1,  // 25: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
-	1,  // 26: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
-	19, // 27: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
-	4,  // 28: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
-	20, // 29: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
-	4,  // 30: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
-	0,  // 31: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
-	19, // 32: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
-	0,  // 33: issues.v1.ListIssuesRequest.states:type_name -> issues.v1.IssueState
-	1,  // 34: issues.v1.ListIssuesRequest.priorities:type_name -> issues.v1.Priority
-	3,  // 35: issues.v1.ListIssuesRequest.order_by:type_name -> issues.v1.IssueOrder
-	5,  // 36: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
-	20, // 37: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
-	5,  // 38: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
-	1,  // 39: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
-	5,  // 40: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
-	0,  // 41: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
-	5,  // 42: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
-	1,  // 43: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
-	34, // 44: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
-	5,  // 45: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
-	5,  // 46: issues.v1.DiscardIssueResponse.issue:type_name -> issues.v1.Issue
-	5,  // 47: issues.v1.RestoreIssueResponse.issue:type_name -> issues.v1.Issue
-	7,  // 48: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
-	0,  // 49: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
-	2,  // 50: issues.v1.CreateStatusRequest.color:type_name -> issues.v1.LabelColor
-	7,  // 51: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
-	2,  // 52: issues.v1.UpdateStatusRequest.color:type_name -> issues.v1.LabelColor
-	7,  // 53: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
-	49, // 54: issues.v1.BatchUpdateStatusesRequest.statuses:type_name -> issues.v1.StatusSpec
-	50, // 55: issues.v1.BatchUpdateStatusesRequest.deletions:type_name -> issues.v1.StatusDeletion
-	0,  // 56: issues.v1.StatusSpec.category:type_name -> issues.v1.IssueState
-	2,  // 57: issues.v1.StatusSpec.color:type_name -> issues.v1.LabelColor
-	7,  // 58: issues.v1.BatchUpdateStatusesResponse.statuses:type_name -> issues.v1.Status
-	8,  // 59: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
-	2,  // 60: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
-	8,  // 61: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
-	2,  // 62: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
-	8,  // 63: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
-	9,  // 64: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
-	19, // 65: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
-	10, // 66: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
-	20, // 67: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
-	21, // 68: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
-	23, // 69: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
-	25, // 70: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
-	27, // 71: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
-	29, // 72: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
-	31, // 73: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
-	33, // 74: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
-	36, // 75: issues.v1.IssueService.DiscardIssue:input_type -> issues.v1.DiscardIssueRequest
-	38, // 76: issues.v1.IssueService.RestoreIssue:input_type -> issues.v1.RestoreIssueRequest
-	40, // 77: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
-	42, // 78: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
-	44, // 79: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
-	46, // 80: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
-	48, // 81: issues.v1.IssueService.BatchUpdateStatuses:input_type -> issues.v1.BatchUpdateStatusesRequest
-	52, // 82: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
-	54, // 83: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
-	56, // 84: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
-	58, // 85: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
-	60, // 86: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
-	62, // 87: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
-	22, // 88: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
-	24, // 89: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
-	26, // 90: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
-	28, // 91: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
-	30, // 92: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
-	32, // 93: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
-	35, // 94: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
-	37, // 95: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
-	39, // 96: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
-	41, // 97: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
-	43, // 98: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
-	45, // 99: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
-	47, // 100: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
-	51, // 101: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
-	53, // 102: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
-	55, // 103: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
-	57, // 104: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
-	59, // 105: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
-	61, // 106: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
-	63, // 107: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
-	88, // [88:108] is the sub-list for method output_type
-	68, // [68:88] is the sub-list for method input_type
-	68, // [68:68] is the sub-list for extension type_name
-	68, // [68:68] is the sub-list for extension extendee
-	0,  // [0:68] is the sub-list for field type_name
+	68, // 11: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
+	68, // 12: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
+	12, // 13: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
+	13, // 14: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
+	16, // 15: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
+	18, // 16: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
+	19, // 17: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
+	20, // 18: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
+	10, // 19: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
+	14, // 20: issues.v1.IssueEvent.discarded:type_name -> issues.v1.IssueDiscarded
+	15, // 21: issues.v1.IssueEvent.restored:type_name -> issues.v1.IssueRestored
+	17, // 22: issues.v1.IssueEvent.assignee_changed:type_name -> issues.v1.AssigneeChanged
+	0,  // 23: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
+	0,  // 24: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
+	0,  // 25: issues.v1.IssueDiscarded.from_state:type_name -> issues.v1.IssueState
+	1,  // 26: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
+	1,  // 27: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
+	21, // 28: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
+	5,  // 29: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
+	22, // 30: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
+	5,  // 31: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
+	0,  // 32: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
+	21, // 33: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
+	0,  // 34: issues.v1.ListIssuesRequest.states:type_name -> issues.v1.IssueState
+	1,  // 35: issues.v1.ListIssuesRequest.priorities:type_name -> issues.v1.Priority
+	3,  // 36: issues.v1.ListIssuesRequest.order_by:type_name -> issues.v1.IssueOrder
+	6,  // 37: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
+	22, // 38: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
+	6,  // 39: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
+	1,  // 40: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
+	6,  // 41: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
+	0,  // 42: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
+	6,  // 43: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
+	1,  // 44: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
+	36, // 45: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
+	6,  // 46: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
+	6,  // 47: issues.v1.DiscardIssueResponse.issue:type_name -> issues.v1.Issue
+	6,  // 48: issues.v1.RestoreIssueResponse.issue:type_name -> issues.v1.Issue
+	8,  // 49: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
+	0,  // 50: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
+	2,  // 51: issues.v1.CreateStatusRequest.color:type_name -> issues.v1.LabelColor
+	8,  // 52: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
+	2,  // 53: issues.v1.UpdateStatusRequest.color:type_name -> issues.v1.LabelColor
+	8,  // 54: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
+	51, // 55: issues.v1.BatchUpdateStatusesRequest.statuses:type_name -> issues.v1.StatusSpec
+	52, // 56: issues.v1.BatchUpdateStatusesRequest.deletions:type_name -> issues.v1.StatusDeletion
+	0,  // 57: issues.v1.StatusSpec.category:type_name -> issues.v1.IssueState
+	2,  // 58: issues.v1.StatusSpec.color:type_name -> issues.v1.LabelColor
+	8,  // 59: issues.v1.BatchUpdateStatusesResponse.statuses:type_name -> issues.v1.Status
+	9,  // 60: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
+	2,  // 61: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
+	9,  // 62: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
+	2,  // 63: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
+	9,  // 64: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
+	10, // 65: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
+	21, // 66: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
+	11, // 67: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
+	22, // 68: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
+	68, // 69: issues.v1.ImportIssueRequest.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 70: issues.v1.ImportIssueRequest.priority:type_name -> issues.v1.Priority
+	0,  // 71: issues.v1.ImportIssueRequest.state:type_name -> issues.v1.IssueState
+	6,  // 72: issues.v1.ImportIssueResponse.issue:type_name -> issues.v1.Issue
+	4,  // 73: issues.v1.ImportIssueResponse.outcome:type_name -> issues.v1.ImportOutcome
+	23, // 74: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
+	25, // 75: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
+	27, // 76: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
+	29, // 77: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
+	31, // 78: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
+	33, // 79: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
+	35, // 80: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
+	38, // 81: issues.v1.IssueService.DiscardIssue:input_type -> issues.v1.DiscardIssueRequest
+	40, // 82: issues.v1.IssueService.RestoreIssue:input_type -> issues.v1.RestoreIssueRequest
+	42, // 83: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
+	44, // 84: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
+	46, // 85: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
+	48, // 86: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
+	50, // 87: issues.v1.IssueService.BatchUpdateStatuses:input_type -> issues.v1.BatchUpdateStatusesRequest
+	54, // 88: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
+	56, // 89: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
+	58, // 90: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
+	60, // 91: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
+	62, // 92: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
+	64, // 93: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
+	66, // 94: issues.v1.IssueService.ImportIssue:input_type -> issues.v1.ImportIssueRequest
+	24, // 95: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
+	26, // 96: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
+	28, // 97: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
+	30, // 98: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
+	32, // 99: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
+	34, // 100: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
+	37, // 101: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
+	39, // 102: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
+	41, // 103: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
+	43, // 104: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
+	45, // 105: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
+	47, // 106: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
+	49, // 107: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
+	53, // 108: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
+	55, // 109: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
+	57, // 110: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
+	59, // 111: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
+	61, // 112: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
+	63, // 113: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
+	65, // 114: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
+	67, // 115: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
+	95, // [95:116] is the sub-list for method output_type
+	74, // [74:95] is the sub-list for method input_type
+	74, // [74:74] is the sub-list for extension type_name
+	74, // [74:74] is the sub-list for extension extendee
+	0,  // [0:74] is the sub-list for field type_name
 }
 
 func init() { file_issues_v1_issues_proto_init() }
@@ -4729,18 +5172,19 @@ func file_issues_v1_issues_proto_init() {
 		(*IssueEvent_Commented)(nil),
 		(*IssueEvent_Discarded)(nil),
 		(*IssueEvent_Restored)(nil),
+		(*IssueEvent_AssigneeChanged)(nil),
 	}
-	file_issues_v1_issues_proto_msgTypes[29].OneofWrappers = []any{}
-	file_issues_v1_issues_proto_msgTypes[38].OneofWrappers = []any{}
-	file_issues_v1_issues_proto_msgTypes[40].OneofWrappers = []any{}
-	file_issues_v1_issues_proto_msgTypes[52].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[30].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[39].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[41].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[53].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_issues_v1_issues_proto_rawDesc), len(file_issues_v1_issues_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   60,
+			NumEnums:      5,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

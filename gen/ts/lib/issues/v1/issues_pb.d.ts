@@ -5,6 +5,8 @@
 // búsqueda y filtros en la lista, y color, límite WIP y columnas ocultas en
 // los estados. Miembros, roles y las piezas de cada metodología
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
+// Issue 025: asignado (un actor, persona o agente), autoría con agente en el
+// historial e importación desde otro tracker (actors.proto, token_auth.proto).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -164,6 +166,22 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
    * @generated from field: issues.v1.DiscardInfo discard = 13;
    */
   discard?: DiscardInfo | undefined;
+
+  /**
+   * Actor asignado (persona o agente, ver actors.proto): quién debería
+   * hacerlo. Vacío: sin asignar. Puede ser un actor ya revocado.
+   *
+   * @generated from field: string assignee_actor_id = 14;
+   */
+  assigneeActorId: string;
+
+  /**
+   * Clave en el tracker de origen si se importó con ImportIssue (p. ej.
+   * "236-claude-md-en-capas"); vacía si se creó en Tekitla.
+   *
+   * @generated from field: string source_key = 15;
+   */
+  sourceKey: string;
 };
 
 /**
@@ -368,7 +386,8 @@ export declare type IssueEvent = Message<"issues.v1.IssueEvent"> & {
   issueId: string;
 
   /**
-   * uid de quien hizo el cambio.
+   * uid de quien hizo el cambio: siempre una persona, también cuando lo hizo
+   * uno de sus agentes (ver agent_id).
    *
    * @generated from field: string actor_id = 3;
    */
@@ -436,7 +455,22 @@ export declare type IssueEvent = Message<"issues.v1.IssueEvent"> & {
      */
     value: IssueRestored;
     case: "restored";
+  } | {
+    /**
+     * @generated from field: issues.v1.AssigneeChanged assignee_changed = 14;
+     */
+    value: AssigneeChanged;
+    case: "assigneeChanged";
   } | { case: undefined; value?: undefined };
+
+  /**
+   * Id del agente (actors.proto) que hizo el cambio a nombre de actor_id.
+   * Vacío si lo hizo la persona misma, y en todos los eventos anteriores a
+   * este campo (v0.5.0).
+   *
+   * @generated from field: string agent_id = 15;
+   */
+  agentId: string;
 };
 
 /**
@@ -604,6 +638,40 @@ export declare type TitleChanged = Message<"issues.v1.TitleChanged"> & {
  * Use `create(TitleChangedSchema)` to create a new message.
  */
 export declare const TitleChangedSchema: GenMessage<TitleChanged>;
+
+/**
+ * Cambio de asignado. Vacío: sin asignar. Los nombres se guardan al momento
+ * del cambio (ver StatusChanged).
+ *
+ * @generated from message issues.v1.AssigneeChanged
+ */
+export declare type AssigneeChanged = Message<"issues.v1.AssigneeChanged"> & {
+  /**
+   * @generated from field: string from_actor_id = 1;
+   */
+  fromActorId: string;
+
+  /**
+   * @generated from field: string from_display_name = 2;
+   */
+  fromDisplayName: string;
+
+  /**
+   * @generated from field: string to_actor_id = 3;
+   */
+  toActorId: string;
+
+  /**
+   * @generated from field: string to_display_name = 4;
+   */
+  toDisplayName: string;
+};
+
+/**
+ * Describes the message issues.v1.AssigneeChanged.
+ * Use `create(AssigneeChangedSchema)` to create a new message.
+ */
+export declare const AssigneeChangedSchema: GenMessage<AssigneeChanged>;
 
 /**
  * La descripción puede ser larga: el evento solo dice que cambió.
@@ -891,6 +959,23 @@ export declare type ListIssuesRequest = Message<"issues.v1.ListIssuesRequest"> &
    * @generated from field: issues.v1.IssueOrder order_by = 9;
    */
   orderBy: IssueOrder;
+
+  /**
+   * Asignados: pasa un issue asignado a cualquiera de estos actores. Un
+   * actor inexistente no es error: no trae nada.
+   *
+   * @generated from field: repeated string assignee_actor_ids = 10;
+   */
+  assigneeActorIds: string[];
+
+  /**
+   * Trae también los issues sin asignar. Se combina con O con
+   * assignee_actor_ids (los de un agente o sin asignar); solo, trae solo los
+   * sin asignar.
+   *
+   * @generated from field: bool unassigned = 11;
+   */
+  unassigned: boolean;
 };
 
 /**
@@ -980,6 +1065,13 @@ export declare type CreateIssueRequest = Message<"issues.v1.CreateIssueRequest">
    * @generated from field: issues.v1.Priority priority = 4;
    */
   priority: Priority;
+
+  /**
+   * Vacío: sin asignar. Ver UpdateIssueRequest.assignee_actor_id.
+   *
+   * @generated from field: string assignee_actor_id = 5;
+   */
+  assigneeActorId: string;
 };
 
 /**
@@ -1113,6 +1205,15 @@ export declare type UpdateIssueRequest = Message<"issues.v1.UpdateIssueRequest">
    * @generated from field: issues.v1.LabelIds labels = 6;
    */
   labels?: LabelIds | undefined;
+
+  /**
+   * Presente y vacío: lo deja sin asignar. Un actor inexistente, revocado o
+   * que el usuario no puede ver es INVALID_ARGUMENT. Queda en el historial
+   * como assignee_changed.
+   *
+   * @generated from field: optional string assignee_actor_id = 7;
+   */
+  assigneeActorId?: string | undefined;
 };
 
 /**
@@ -1839,6 +1940,103 @@ export declare type ListIssueEventsResponse = Message<"issues.v1.ListIssueEvents
 export declare const ListIssueEventsResponseSchema: GenMessage<ListIssueEventsResponse>;
 
 /**
+ * @generated from message issues.v1.ImportIssueRequest
+ */
+export declare type ImportIssueRequest = Message<"issues.v1.ImportIssueRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * Clave del issue en el origen, única por proyecto: con ella se reconoce en
+   * las corridas siguientes. Para Round, número + slug (el nombre del archivo
+   * sin .md, p. ej. "236-claude-md-en-capas"). Sin espacios en los extremos,
+   * 1 a 200 caracteres.
+   *
+   * @generated from field: string source_key = 2;
+   */
+  sourceKey: string;
+
+  /**
+   * Número que conserva el issue (el del origen), desde 1.
+   *
+   * @generated from field: int32 number = 3;
+   */
+  number: number;
+
+  /**
+   * Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+   *
+   * @generated from field: google.protobuf.Timestamp created_at = 4;
+   */
+  createdAt?: Timestamp | undefined;
+
+  /**
+   * Como en CreateIssueRequest: título obligatorio; descripción en markdown.
+   *
+   * @generated from field: string title = 5;
+   */
+  title: string;
+
+  /**
+   * @generated from field: string description = 6;
+   */
+  description: string;
+
+  /**
+   * UNSPECIFIED se guarda como MEDIUM.
+   *
+   * @generated from field: issues.v1.Priority priority = 7;
+   */
+  priority: Priority;
+
+  /**
+   * Categoría: el issue va al primer estado de esa categoría (si ya está en
+   * esa categoría, no cambia de estado). UNSPECIFIED es INVALID_ARGUMENT.
+   * Pasar a CANCELED lo descarta sin motivo, como MoveIssue.
+   *
+   * @generated from field: issues.v1.IssueState state = 8;
+   */
+  state: IssueState;
+
+  /**
+   * Nombres de etiquetas (sin distinguir mayúsculas); las que no existen se
+   * crean con color NEUTRAL. Reemplazan las del issue.
+   *
+   * @generated from field: repeated string label_names = 9;
+   */
+  labelNames: string[];
+};
+
+/**
+ * Describes the message issues.v1.ImportIssueRequest.
+ * Use `create(ImportIssueRequestSchema)` to create a new message.
+ */
+export declare const ImportIssueRequestSchema: GenMessage<ImportIssueRequest>;
+
+/**
+ * @generated from message issues.v1.ImportIssueResponse
+ */
+export declare type ImportIssueResponse = Message<"issues.v1.ImportIssueResponse"> & {
+  /**
+   * @generated from field: issues.v1.Issue issue = 1;
+   */
+  issue?: Issue | undefined;
+
+  /**
+   * @generated from field: issues.v1.ImportOutcome outcome = 2;
+   */
+  outcome: ImportOutcome;
+};
+
+/**
+ * Describes the message issues.v1.ImportIssueResponse.
+ * Use `create(ImportIssueResponseSchema)` to create a new message.
+ */
+export declare const ImportIssueResponseSchema: GenMessage<ImportIssueResponse>;
+
+/**
  * Categoría del estado de un issue. Es fija y la entienden todos los clientes
  * sin importar la metodología del proyecto: `tk start` mueve a IN_PROGRESS,
  * los reportes cuentan como cerrados DONE y CANCELED.
@@ -2021,6 +2219,44 @@ export enum IssueOrder {
  * Describes the enum issues.v1.IssueOrder.
  */
 export declare const IssueOrderSchema: GenEnum<IssueOrder>;
+
+/**
+ * Qué hizo ImportIssue.
+ *
+ * @generated from enum issues.v1.ImportOutcome
+ */
+export enum ImportOutcome {
+  /**
+   * @generated from enum value: IMPORT_OUTCOME_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Issue nuevo.
+   *
+   * @generated from enum value: IMPORT_OUTCOME_CREATED = 1;
+   */
+  CREATED = 1,
+
+  /**
+   * Ya existía y cambió algún campo.
+   *
+   * @generated from enum value: IMPORT_OUTCOME_UPDATED = 2;
+   */
+  UPDATED = 2,
+
+  /**
+   * Ya existía y no cambió nada (sin eventos nuevos).
+   *
+   * @generated from enum value: IMPORT_OUTCOME_UNCHANGED = 3;
+   */
+  UNCHANGED = 3,
+}
+
+/**
+ * Describes the enum issues.v1.ImportOutcome.
+ */
+export declare const ImportOutcomeSchema: GenEnum<ImportOutcome>;
 
 /**
  * IssueService gestiona los proyectos y sus issues.
@@ -2263,6 +2499,30 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof ListIssueEventsRequestSchema;
     output: typeof ListIssueEventsResponseSchema;
+  },
+  /**
+   * Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
+   * de Round), conservando su número. Solo para quien importa: administración,
+   * el gateway no la expone a los clientes normales.
+   *
+   * Idempotente por source_key (única por proyecto):
+   * - Si ningún issue del proyecto tiene esa source_key, lo crea con number y
+   *   created_at, al final del orden. ALREADY_EXISTS si number ya es de otro
+   *   issue (importado con otra clave o creado en Tekitla).
+   * - Si ya existe, pisa título, descripción, prioridad, categoría y
+   *   etiquetas con lo que viene (el proyecto es un espejo del origen).
+   *   number y created_at no cambian: FAILED_PRECONDITION si number no
+   *   coincide con el guardado.
+   * Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+   * CreateIssue usa un número mayor que todos los del proyecto, importados
+   * incluidos.
+   *
+   * @generated from rpc issues.v1.IssueService.ImportIssue
+   */
+  importIssue: {
+    methodKind: "unary";
+    input: typeof ImportIssueRequestSchema;
+    output: typeof ImportIssueResponseSchema;
   },
 }>;
 

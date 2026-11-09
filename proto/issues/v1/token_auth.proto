@@ -1,0 +1,45 @@
+// Validación de tokens de Tekitla para el gateway (issue 025, ADR 0009).
+//
+// Servicio interno: ningún RPC lleva google.api.http, así que no hay ruta REST
+// que exponer. Lo llama solo tekitla-gateway, por la red interna.
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/protobuf/timestamp.proto";
+import "issues/v1/actors.proto";
+
+// TokenAuthService resuelve un token `tka_…` a la identidad que propaga el
+// gateway. Solo interno: no requiere x-user-id (el gateway lo llama antes de
+// saber quién es) y no se expone por REST.
+service TokenAuthService {
+  // Resuelve un token. UNAUTHENTICATED si no existe, venció, está revocado o
+  // su actor (o el dueño de su agente) está revocado; el mensaje de error no
+  // dice cuál de esos casos fue. Actualiza Token.last_used_at. El gateway
+  // guarda el resultado en caché 60 s como máximo.
+  rpc ResolveToken(ResolveTokenRequest) returns (ResolveTokenResponse);
+}
+
+message ResolveTokenRequest {
+  // El token en claro, tal como vino en `Authorization: Bearer`. Nunca se
+  // registra en logs.
+  string token = 1;
+}
+
+message ResolveTokenResponse {
+  // uid de Firebase de la persona responsable: la dueña del token o del
+  // agente. El gateway lo propaga en x-user-id.
+  string user_id = 1;
+  // Id del agente si el token es de un agente; vacío si es de una persona.
+  // El gateway lo propaga en x-agent-id.
+  string agent_id = 2;
+  // Alcance del token; el gateway lo propaga en x-roles.
+  repeated TokenScope scopes = 3;
+  // Vencimiento del token: el gateway no lo guarda en caché más allá de
+  // esta fecha.
+  google.protobuf.Timestamp expires_at = 4;
+  // Id del token, para la auditoría (nunca el token ni su hash).
+  string token_id = 5;
+  // Id del actor persona responsable (el de user_id).
+  string person_actor_id = 6;
+}
