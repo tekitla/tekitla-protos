@@ -84,10 +84,44 @@
         ]
       }
     },
+    "/v1/admin/projects/{projectId}/events:import": {
+      "post": {
+        "summary": "Agrega al historial de un issue importado eventos con su fecha en el\norigen (p. ej. los cambios de Estado reconstruidos de git, issue 036).\nSolo para quien importa, como ImportIssue: una persona, no un agente.",
+        "description": "Idempotente por (issue, source_ref): un evento cuya source_ref ya está\nen el historial del issue se omite sin tocarlo, así una segunda corrida\nno agrega nada. No cambia el estado actual del issue (eso lo hace\nImportIssue): solo escribe historial.",
+        "operationId": "IssueService_ImportIssueEvents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ImportIssueEventsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceImportIssueEventsBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
     "/v1/admin/projects/{projectId}/issues:import": {
       "post": {
         "summary": "Crea o actualiza un issue importado de otro tracker (p. ej. los markdown\nde Round), conservando su número. Solo para quien importa: administración,\nel gateway no la expone a los clientes normales.",
-        "description": "Idempotente por source_key (única por proyecto):\n- Si ningún issue del proyecto tiene esa source_key, lo crea con number y\n  created_at, al final del orden. ALREADY_EXISTS si number ya es de otro\n  issue (importado con otra clave o creado en Tekitla).\n- Si ya existe, pisa título, descripción, prioridad, categoría y\n  etiquetas con lo que viene (el proyecto es un espejo del origen).\n  number y created_at no cambian: FAILED_PRECONDITION si number no\n  coincide con el guardado.\nCada cambio queda en el historial como en los RPC sueltos. El siguiente\nCreateIssue usa un número mayor que todos los del proyecto, importados\nincluidos.",
+        "description": "Idempotente por source_key (única por proyecto):\n- Si ningún issue del proyecto tiene esa source_key, lo crea con number y\n  created_at, al final del orden. ALREADY_EXISTS si number ya es de otro\n  issue (importado con otra clave o creado en Tekitla).\n- Si ya existe, pisa título, descripción, prioridad, categoría y\n  etiquetas con lo que viene (el proyecto es un espejo del origen).\n  number y created_at no cambian: FAILED_PRECONDITION si number no\n  coincide con el guardado.\nCada cambio queda en el historial como en los RPC sueltos, con source\nEVENT_SOURCE_IMPORT_SYNC (v0.6.0). El siguiente\nCreateIssue usa un número mayor que todos los del proyecto, importados\nincluidos.",
         "operationId": "IssueService_ImportIssue",
         "responses": {
           "200": {
@@ -502,7 +536,7 @@
     },
     "/v1/projects/{projectId}/issues/{number}/events": {
       "get": {
-        "summary": "Historial de un issue (cambios y comentarios), del más viejo al más nuevo.",
+        "summary": "Historial de un issue (cambios y comentarios), del más viejo al más nuevo\npor created_at, con el orden de registro como desempate: un evento\nimportado con ImportIssueEvents aparece en su fecha del origen, no al\nfinal.",
         "operationId": "IssueService_ListIssueEvents",
         "responses": {
           "200": {
@@ -1188,6 +1222,27 @@
             "type": "string"
           },
           "description": "Nombres de etiquetas (sin distinguir mayúsculas); las que no existen se\ncrean con color NEUTRAL. Reemplazan las del issue."
+        },
+        "overrideCreatedAt": {
+          "type": "boolean",
+          "description": "Si el issue ya existe, corrige su created_at con el que viene (p. ej.\nuna fecha de alta más vieja que se conoció después, issue 036). Sin\nevento en el historial; cuenta como UPDATED si cambia. Sin created_at,\nINVALID_ARGUMENT. Al crear no hace nada distinto."
+        }
+      }
+    },
+    "IssueServiceImportIssueEventsBody": {
+      "type": "object",
+      "properties": {
+        "sourceKey": {
+          "type": "string",
+          "description": "Clave de origen del issue (la de ImportIssue). NOT_FOUND si ningún\nissue del proyecto la tiene."
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ImportedEvent"
+          },
+          "description": "1 a 500 eventos. Dos con la misma source_ref en un pedido:\nINVALID_ARGUMENT."
         }
       }
     },
@@ -1599,11 +1654,38 @@
         }
       }
     },
+    "v1EventSource": {
+      "type": "string",
+      "enum": [
+        "EVENT_SOURCE_UNSPECIFIED",
+        "EVENT_SOURCE_LIVE",
+        "EVENT_SOURCE_IMPORT_HISTORY",
+        "EVENT_SOURCE_IMPORT_FILE",
+        "EVENT_SOURCE_IMPORT_SYNC"
+      ],
+      "default": "EVENT_SOURCE_UNSPECIFIED",
+      "description": "De dónde sale un evento del historial (issue 036). Las métricas lo usan\npara decir qué tan confiable es cada número.\n\n - EVENT_SOURCE_UNSPECIFIED: No lo envía el servidor; si llega, se trata como LIVE.\n - EVENT_SOURCE_LIVE: Registrado por Tekitla al momento del cambio.\n - EVENT_SOURCE_IMPORT_HISTORY: Reconstruido del historial del origen, p. ej. un commit que cambió el\nEstado de un issue de Round: la fecha es la del commit.\n - EVENT_SOURCE_IMPORT_FILE: Tomado de una fecha escrita en el archivo de origen (p. ej. «Fecha\nresuelto») que ningún commit marca. Sin hora: medianoche UTC.\n - EVENT_SOURCE_IMPORT_SYNC: Registrado por ImportIssue al reflejar el origen (alta, cambios de\nestado, título, etiquetas): la fecha es la de la corrida, no la del\ncambio en el origen. Las métricas de flujo no lo cuentan como\ntransición si el issue tiene histórico importado. Los eventos de\nImportIssue anteriores a v0.6.0 pueden figurar como LIVE."
+    },
     "v1GetIssueResponse": {
       "type": "object",
       "properties": {
         "issue": {
           "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
+    "v1ImportIssueEventsResponse": {
+      "type": "object",
+      "properties": {
+        "created": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Eventos nuevos en el historial."
+        },
+        "skipped": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Eventos cuya source_ref ya estaba: no se tocaron."
         }
       }
     },
@@ -1628,6 +1710,48 @@
       ],
       "default": "IMPORT_OUTCOME_UNSPECIFIED",
       "description": "Qué hizo ImportIssue.\n\n - IMPORT_OUTCOME_CREATED: Issue nuevo.\n - IMPORT_OUTCOME_UPDATED: Ya existía y cambió algún campo.\n - IMPORT_OUTCOME_UNCHANGED: Ya existía y no cambió nada (sin eventos nuevos)."
+    },
+    "v1ImportedEvent": {
+      "type": "object",
+      "properties": {
+        "sourceRef": {
+          "type": "string",
+          "description": "Única por issue: reconoce el evento en las corridas siguientes. P. ej.\nel sha del commit o \"archivo:resuelto\". Sin espacios en los extremos, 1\na 200 caracteres."
+        },
+        "source": {
+          "$ref": "#/definitions/v1EventSource",
+          "description": "EVENT_SOURCE_IMPORT_HISTORY o EVENT_SOURCE_IMPORT_FILE; otro valor es\nINVALID_ARGUMENT."
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Fecha del evento en el origen; queda como created_at del IssueEvent.\nObligatoria y no en el futuro."
+        },
+        "statusChanged": {
+          "$ref": "#/definitions/v1ImportedStatusChange"
+        }
+      },
+      "description": "Un evento con su fecha en el origen."
+    },
+    "v1ImportedStatusChange": {
+      "type": "object",
+      "properties": {
+        "fromState": {
+          "$ref": "#/definitions/v1IssueState",
+          "description": "Categorías antes y después; UNSPECIFIED es INVALID_ARGUMENT. Pueden ser\niguales (cambió el valor del origen, no la categoría)."
+        },
+        "toState": {
+          "$ref": "#/definitions/v1IssueState"
+        },
+        "fromName": {
+          "type": "string",
+          "description": "Valores en el origen (p. ej. \"open\", \"in-progress\"), 0 a 100\ncaracteres: van como from_status_name y to_status_name."
+        },
+        "toName": {
+          "type": "string"
+        }
+      },
+      "description": "Cambio de estado importado: queda como un StatusChanged sin ids de estado."
     },
     "v1Issue": {
       "type": "object",
@@ -1771,6 +1895,14 @@
         "agentId": {
           "type": "string",
           "description": "Id del agente (actors.proto) que hizo el cambio a nombre de actor_id.\nVacío si lo hizo la persona misma, y en todos los eventos anteriores a\neste campo (v0.5.0)."
+        },
+        "source": {
+          "$ref": "#/definitions/v1EventSource",
+          "description": "De dónde sale el evento (v0.6.0). Los registrados en vivo, también los\nanteriores a este campo, son EVENT_SOURCE_LIVE; los de ImportIssue,\nEVENT_SOURCE_IMPORT_SYNC."
+        },
+        "sourceRef": {
+          "type": "string",
+          "description": "Referencia del evento en el origen si se importó con ImportIssueEvents\n(p. ej. el sha del commit); vacío en los demás."
         }
       },
       "description": "Un cambio en un issue, para su historial. Reordenar dentro de la misma\ncolumna no genera evento."
@@ -2104,7 +2236,7 @@
           "$ref": "#/definitions/v1IssueState"
         }
       },
-      "description": "Los nombres se guardan al momento del cambio: el historial se sigue\nleyendo aunque el estado después se renombre o se borre."
+      "description": "Los nombres se guardan al momento del cambio: el historial se sigue\nleyendo aunque el estado después se renombre o se borre. En un evento\nimportado (source distinto de LIVE) los ids van vacíos y los nombres son\nlos valores del origen (p. ej. \"in-progress\")."
     },
     "v1StatusDeletion": {
       "type": "object",

@@ -174,7 +174,10 @@ service IssueService {
       body: "*"
     };
   }
-  // Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+  // Historial de un issue (cambios y comentarios), del más viejo al más nuevo
+  // por created_at, con el orden de registro como desempate: un evento
+  // importado con ImportIssueEvents aparece en su fecha del origen, no al
+  // final.
   rpc ListIssueEvents(ListIssueEventsRequest) returns (ListIssueEventsResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}/events"};
   }
@@ -191,12 +194,28 @@ service IssueService {
   //   etiquetas con lo que viene (el proyecto es un espejo del origen).
   //   number y created_at no cambian: FAILED_PRECONDITION si number no
   //   coincide con el guardado.
-  // Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+  // Cada cambio queda en el historial como en los RPC sueltos, con source
+  // EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El siguiente
   // CreateIssue usa un número mayor que todos los del proyecto, importados
   // incluidos.
   rpc ImportIssue(ImportIssueRequest) returns (ImportIssueResponse) {
     option (google.api.http) = {
       post: "/v1/admin/projects/{project_id}/issues:import"
+      body: "*"
+    };
+  }
+
+  // Agrega al historial de un issue importado eventos con su fecha en el
+  // origen (p. ej. los cambios de Estado reconstruidos de git, issue 036).
+  // Solo para quien importa, como ImportIssue: una persona, no un agente.
+  //
+  // Idempotente por (issue, source_ref): un evento cuya source_ref ya está
+  // en el historial del issue se omite sin tocarlo, así una segunda corrida
+  // no agrega nada. No cambia el estado actual del issue (eso lo hace
+  // ImportIssue): solo escribe historial.
+  rpc ImportIssueEvents(ImportIssueEventsRequest) returns (ImportIssueEventsResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/projects/{project_id}/events:import"
       body: "*"
     };
   }
@@ -371,12 +390,42 @@ message IssueEvent {
   // Vacío si lo hizo la persona misma, y en todos los eventos anteriores a
   // este campo (v0.5.0).
   string agent_id = 15;
+  // De dónde sale el evento (v0.6.0). Los registrados en vivo, también los
+  // anteriores a este campo, son EVENT_SOURCE_LIVE; los de ImportIssue,
+  // EVENT_SOURCE_IMPORT_SYNC.
+  EventSource source = 16;
+  // Referencia del evento en el origen si se importó con ImportIssueEvents
+  // (p. ej. el sha del commit); vacío en los demás.
+  string source_ref = 17;
+}
+
+// De dónde sale un evento del historial (issue 036). Las métricas lo usan
+// para decir qué tan confiable es cada número.
+enum EventSource {
+  // No lo envía el servidor; si llega, se trata como LIVE.
+  EVENT_SOURCE_UNSPECIFIED = 0;
+  // Registrado por Tekitla al momento del cambio.
+  EVENT_SOURCE_LIVE = 1;
+  // Reconstruido del historial del origen, p. ej. un commit que cambió el
+  // Estado de un issue de Round: la fecha es la del commit.
+  EVENT_SOURCE_IMPORT_HISTORY = 2;
+  // Tomado de una fecha escrita en el archivo de origen (p. ej. «Fecha
+  // resuelto») que ningún commit marca. Sin hora: medianoche UTC.
+  EVENT_SOURCE_IMPORT_FILE = 3;
+  // Registrado por ImportIssue al reflejar el origen (alta, cambios de
+  // estado, título, etiquetas): la fecha es la de la corrida, no la del
+  // cambio en el origen. Las métricas de flujo no lo cuentan como
+  // transición si el issue tiene histórico importado. Los eventos de
+  // ImportIssue anteriores a v0.6.0 pueden figurar como LIVE.
+  EVENT_SOURCE_IMPORT_SYNC = 4;
 }
 
 message IssueCreated {}
 
 // Los nombres se guardan al momento del cambio: el historial se sigue
-// leyendo aunque el estado después se renombre o se borre.
+// leyendo aunque el estado después se renombre o se borre. En un evento
+// importado (source distinto de LIVE) los ids van vacíos y los nombres son
+// los valores del origen (p. ej. "in-progress").
 message StatusChanged {
   string from_status_id = 1;
   string from_status_name = 2;
@@ -809,6 +858,11 @@ message ImportIssueRequest {
   // Nombres de etiquetas (sin distinguir mayúsculas); las que no existen se
   // crean con color NEUTRAL. Reemplazan las del issue.
   repeated string label_names = 9;
+  // Si el issue ya existe, corrige su created_at con el que viene (p. ej.
+  // una fecha de alta más vieja que se conoció después, issue 036). Sin
+  // evento en el historial; cuenta como UPDATED si cambia. Sin created_at,
+  // INVALID_ARGUMENT. Al crear no hace nada distinto.
+  bool override_created_at = 10;
 }
 
 // Qué hizo ImportIssue.
@@ -825,4 +879,51 @@ enum ImportOutcome {
 message ImportIssueResponse {
   Issue issue = 1;
   ImportOutcome outcome = 2;
+}
+
+message ImportIssueEventsRequest {
+  string project_id = 1;
+  // Clave de origen del issue (la de ImportIssue). NOT_FOUND si ningún
+  // issue del proyecto la tiene.
+  string source_key = 2;
+  // 1 a 500 eventos. Dos con la misma source_ref en un pedido:
+  // INVALID_ARGUMENT.
+  repeated ImportedEvent events = 3;
+}
+
+// Un evento con su fecha en el origen.
+message ImportedEvent {
+  // Única por issue: reconoce el evento en las corridas siguientes. P. ej.
+  // el sha del commit o "archivo:resuelto". Sin espacios en los extremos, 1
+  // a 200 caracteres.
+  string source_ref = 1;
+  // EVENT_SOURCE_IMPORT_HISTORY o EVENT_SOURCE_IMPORT_FILE; otro valor es
+  // INVALID_ARGUMENT.
+  EventSource source = 2;
+  // Fecha del evento en el origen; queda como created_at del IssueEvent.
+  // Obligatoria y no en el futuro.
+  google.protobuf.Timestamp occurred_at = 3;
+  // Qué cambió. Sin change: INVALID_ARGUMENT.
+  oneof change {
+    ImportedStatusChange status_changed = 4;
+  }
+}
+
+// Cambio de estado importado: queda como un StatusChanged sin ids de estado.
+message ImportedStatusChange {
+  // Categorías antes y después; UNSPECIFIED es INVALID_ARGUMENT. Pueden ser
+  // iguales (cambió el valor del origen, no la categoría).
+  IssueState from_state = 1;
+  IssueState to_state = 2;
+  // Valores en el origen (p. ej. "open", "in-progress"), 0 a 100
+  // caracteres: van como from_status_name y to_status_name.
+  string from_name = 3;
+  string to_name = 4;
+}
+
+message ImportIssueEventsResponse {
+  // Eventos nuevos en el historial.
+  int32 created = 1;
+  // Eventos cuya source_ref ya estaba: no se tocaron.
+  int32 skipped = 2;
 }
