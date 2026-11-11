@@ -230,6 +230,76 @@ func (LabelColor) EnumDescriptor() ([]byte, []int) {
 	return file_issues_v1_issues_proto_rawDescGZIP(), []int{2}
 }
 
+// De dónde sale un evento del historial (issue 036). Las métricas lo usan
+// para decir qué tan confiable es cada número.
+type EventSource int32
+
+const (
+	// En IssueEvent no lo envía el servidor (un cliente que lo recibe lo trata
+	// como LIVE). En ImportedEvent es INVALID_ARGUMENT.
+	EventSource_EVENT_SOURCE_UNSPECIFIED EventSource = 0
+	// Registrado por Tekitla al momento del cambio.
+	EventSource_EVENT_SOURCE_LIVE EventSource = 1
+	// Reconstruido del historial del origen, p. ej. un commit que cambió el
+	// Estado de un issue de Round: la fecha es la del commit.
+	EventSource_EVENT_SOURCE_IMPORT_HISTORY EventSource = 2
+	// Tomado de una fecha escrita en el archivo de origen (p. ej. «Fecha
+	// resuelto») que ningún commit marca. Sin hora: medianoche UTC.
+	EventSource_EVENT_SOURCE_IMPORT_FILE EventSource = 3
+	// Registrado por ImportIssue al reflejar el origen (alta, cambios de
+	// estado, título, etiquetas): la fecha es la de la corrida, no la del
+	// cambio en el origen. Las métricas de flujo no lo cuentan como
+	// transición si el issue tiene histórico importado. Los eventos de
+	// ImportIssue anteriores a v0.6.0 pueden figurar como LIVE: la migración
+	// que agrega source en tekitla-issues decide su backfill.
+	EventSource_EVENT_SOURCE_IMPORT_SYNC EventSource = 4
+)
+
+// Enum value maps for EventSource.
+var (
+	EventSource_name = map[int32]string{
+		0: "EVENT_SOURCE_UNSPECIFIED",
+		1: "EVENT_SOURCE_LIVE",
+		2: "EVENT_SOURCE_IMPORT_HISTORY",
+		3: "EVENT_SOURCE_IMPORT_FILE",
+		4: "EVENT_SOURCE_IMPORT_SYNC",
+	}
+	EventSource_value = map[string]int32{
+		"EVENT_SOURCE_UNSPECIFIED":    0,
+		"EVENT_SOURCE_LIVE":           1,
+		"EVENT_SOURCE_IMPORT_HISTORY": 2,
+		"EVENT_SOURCE_IMPORT_FILE":    3,
+		"EVENT_SOURCE_IMPORT_SYNC":    4,
+	}
+)
+
+func (x EventSource) Enum() *EventSource {
+	p := new(EventSource)
+	*p = x
+	return p
+}
+
+func (x EventSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EventSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_issues_v1_issues_proto_enumTypes[3].Descriptor()
+}
+
+func (EventSource) Type() protoreflect.EnumType {
+	return &file_issues_v1_issues_proto_enumTypes[3]
+}
+
+func (x EventSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EventSource.Descriptor instead.
+func (EventSource) EnumDescriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{3}
+}
+
 // Orden de ListIssues. Los empates se resuelven por rank, así el orden es
 // estable entre páginas.
 type IssueOrder int32
@@ -272,11 +342,11 @@ func (x IssueOrder) String() string {
 }
 
 func (IssueOrder) Descriptor() protoreflect.EnumDescriptor {
-	return file_issues_v1_issues_proto_enumTypes[3].Descriptor()
+	return file_issues_v1_issues_proto_enumTypes[4].Descriptor()
 }
 
 func (IssueOrder) Type() protoreflect.EnumType {
-	return &file_issues_v1_issues_proto_enumTypes[3]
+	return &file_issues_v1_issues_proto_enumTypes[4]
 }
 
 func (x IssueOrder) Number() protoreflect.EnumNumber {
@@ -285,7 +355,7 @@ func (x IssueOrder) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use IssueOrder.Descriptor instead.
 func (IssueOrder) EnumDescriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{3}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{4}
 }
 
 // Qué hizo ImportIssue.
@@ -328,11 +398,11 @@ func (x ImportOutcome) String() string {
 }
 
 func (ImportOutcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_issues_v1_issues_proto_enumTypes[4].Descriptor()
+	return file_issues_v1_issues_proto_enumTypes[5].Descriptor()
 }
 
 func (ImportOutcome) Type() protoreflect.EnumType {
-	return &file_issues_v1_issues_proto_enumTypes[4]
+	return &file_issues_v1_issues_proto_enumTypes[5]
 }
 
 func (x ImportOutcome) Number() protoreflect.EnumNumber {
@@ -341,7 +411,7 @@ func (x ImportOutcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ImportOutcome.Descriptor instead.
 func (ImportOutcome) EnumDescriptor() ([]byte, []int) {
-	return file_issues_v1_issues_proto_rawDescGZIP(), []int{4}
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{5}
 }
 
 type Project struct {
@@ -963,7 +1033,14 @@ type IssueEvent struct {
 	// Id del agente (actors.proto) que hizo el cambio a nombre de actor_id.
 	// Vacío si lo hizo la persona misma, y en todos los eventos anteriores a
 	// este campo (v0.5.0).
-	AgentId       string `protobuf:"bytes,15,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	AgentId string `protobuf:"bytes,15,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	// De dónde sale el evento (v0.6.0). Los registrados en vivo, también los
+	// anteriores a este campo, son EVENT_SOURCE_LIVE; los de ImportIssue,
+	// EVENT_SOURCE_IMPORT_SYNC.
+	Source EventSource `protobuf:"varint,16,opt,name=source,proto3,enum=issues.v1.EventSource" json:"source,omitempty"`
+	// Referencia del evento en el origen si se importó con ImportIssueEvents
+	// (p. ej. el sha del commit); vacío en los demás.
+	SourceRef     string `protobuf:"bytes,17,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1130,6 +1207,20 @@ func (x *IssueEvent) GetAgentId() string {
 	return ""
 }
 
+func (x *IssueEvent) GetSource() EventSource {
+	if x != nil {
+		return x.Source
+	}
+	return EventSource_EVENT_SOURCE_UNSPECIFIED
+}
+
+func (x *IssueEvent) GetSourceRef() string {
+	if x != nil {
+		return x.SourceRef
+	}
+	return ""
+}
+
 type isIssueEvent_Change interface {
 	isIssueEvent_Change()
 }
@@ -1231,7 +1322,9 @@ func (*IssueCreated) Descriptor() ([]byte, []int) {
 }
 
 // Los nombres se guardan al momento del cambio: el historial se sigue
-// leyendo aunque el estado después se renombre o se borre.
+// leyendo aunque el estado después se renombre o se borre. En un evento
+// importado (source distinto de LIVE) los ids van vacíos y los nombres son
+// los valores del origen (p. ej. "in-progress").
 type StatusChanged struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	FromStatusId   string                 `protobuf:"bytes,1,opt,name=from_status_id,json=fromStatusId,proto3" json:"from_status_id,omitempty"`
@@ -4384,7 +4477,8 @@ type ImportIssueRequest struct {
 	SourceKey string `protobuf:"bytes,2,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
 	// Número que conserva el issue (el del origen), desde 1.
 	Number int32 `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
-	// Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+	// Fecha de alta en el origen; ausente: ahora. Solo se usa al crear, salvo
+	// con override_created_at.
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Como en CreateIssueRequest: título obligatorio; descripción en markdown.
 	Title       string `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
@@ -4397,9 +4491,15 @@ type ImportIssueRequest struct {
 	State IssueState `protobuf:"varint,8,opt,name=state,proto3,enum=issues.v1.IssueState" json:"state,omitempty"`
 	// Nombres de etiquetas (sin distinguir mayúsculas); las que no existen se
 	// crean con color NEUTRAL. Reemplazan las del issue.
-	LabelNames    []string `protobuf:"bytes,9,rep,name=label_names,json=labelNames,proto3" json:"label_names,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	LabelNames []string `protobuf:"bytes,9,rep,name=label_names,json=labelNames,proto3" json:"label_names,omitempty"`
+	// Si el issue ya existe, corrige su created_at con el que viene (p. ej.
+	// una fecha de alta más vieja que se conoció después, issue 036), y
+	// también la fecha de su evento IssueCreated. Sin evento nuevo; cuenta
+	// como UPDATED si cambia. true sin created_at: INVALID_ARGUMENT. Al crear
+	// no hace nada distinto.
+	OverrideCreatedAt bool `protobuf:"varint,10,opt,name=override_created_at,json=overrideCreatedAt,proto3" json:"override_created_at,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ImportIssueRequest) Reset() {
@@ -4495,6 +4595,13 @@ func (x *ImportIssueRequest) GetLabelNames() []string {
 	return nil
 }
 
+func (x *ImportIssueRequest) GetOverrideCreatedAt() bool {
+	if x != nil {
+		return x.OverrideCreatedAt
+	}
+	return false
+}
+
 type ImportIssueResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Issue         *Issue                 `protobuf:"bytes,1,opt,name=issue,proto3" json:"issue,omitempty"`
@@ -4545,6 +4652,319 @@ func (x *ImportIssueResponse) GetOutcome() ImportOutcome {
 		return x.Outcome
 	}
 	return ImportOutcome_IMPORT_OUTCOME_UNSPECIFIED
+}
+
+type ImportIssueEventsRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// Clave de origen del issue (la de ImportIssue). NOT_FOUND si ningún
+	// issue del proyecto la tiene.
+	SourceKey string `protobuf:"bytes,2,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
+	// 1 a 500 eventos. Dos con la misma source_ref en un pedido:
+	// INVALID_ARGUMENT.
+	Events []*ImportedEvent `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
+	// Reescribir (fecha y cambio) los eventos cuya source_ref ya está, en
+	// lugar de omitirlos. Para corregir una importación equivocada.
+	Overwrite     bool `protobuf:"varint,4,opt,name=overwrite,proto3" json:"overwrite,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportIssueEventsRequest) Reset() {
+	*x = ImportIssueEventsRequest{}
+	mi := &file_issues_v1_issues_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportIssueEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportIssueEventsRequest) ProtoMessage() {}
+
+func (x *ImportIssueEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportIssueEventsRequest.ProtoReflect.Descriptor instead.
+func (*ImportIssueEventsRequest) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *ImportIssueEventsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *ImportIssueEventsRequest) GetSourceKey() string {
+	if x != nil {
+		return x.SourceKey
+	}
+	return ""
+}
+
+func (x *ImportIssueEventsRequest) GetEvents() []*ImportedEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *ImportIssueEventsRequest) GetOverwrite() bool {
+	if x != nil {
+		return x.Overwrite
+	}
+	return false
+}
+
+// Un evento con su fecha en el origen.
+type ImportedEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Única por issue: reconoce el evento en las corridas siguientes. P. ej.
+	// el sha del commit o "archivo:resuelto". Sin espacios en los extremos, 1
+	// a 200 caracteres.
+	SourceRef string `protobuf:"bytes,1,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	// EVENT_SOURCE_IMPORT_HISTORY o EVENT_SOURCE_IMPORT_FILE; otro valor es
+	// INVALID_ARGUMENT.
+	Source EventSource `protobuf:"varint,2,opt,name=source,proto3,enum=issues.v1.EventSource" json:"source,omitempty"`
+	// Fecha del evento en el origen; queda como created_at del IssueEvent.
+	// Obligatoria, no en el futuro y no anterior al created_at del issue
+	// (INVALID_ARGUMENT): el alta va primero (ImportIssue con
+	// override_created_at si hace falta).
+	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	// Qué cambió. Sin change: INVALID_ARGUMENT.
+	//
+	// Types that are valid to be assigned to Change:
+	//
+	//	*ImportedEvent_StatusChanged
+	Change        isImportedEvent_Change `protobuf_oneof:"change"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportedEvent) Reset() {
+	*x = ImportedEvent{}
+	mi := &file_issues_v1_issues_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportedEvent) ProtoMessage() {}
+
+func (x *ImportedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportedEvent.ProtoReflect.Descriptor instead.
+func (*ImportedEvent) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *ImportedEvent) GetSourceRef() string {
+	if x != nil {
+		return x.SourceRef
+	}
+	return ""
+}
+
+func (x *ImportedEvent) GetSource() EventSource {
+	if x != nil {
+		return x.Source
+	}
+	return EventSource_EVENT_SOURCE_UNSPECIFIED
+}
+
+func (x *ImportedEvent) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
+func (x *ImportedEvent) GetChange() isImportedEvent_Change {
+	if x != nil {
+		return x.Change
+	}
+	return nil
+}
+
+func (x *ImportedEvent) GetStatusChanged() *ImportedStatusChange {
+	if x != nil {
+		if x, ok := x.Change.(*ImportedEvent_StatusChanged); ok {
+			return x.StatusChanged
+		}
+	}
+	return nil
+}
+
+type isImportedEvent_Change interface {
+	isImportedEvent_Change()
+}
+
+type ImportedEvent_StatusChanged struct {
+	StatusChanged *ImportedStatusChange `protobuf:"bytes,4,opt,name=status_changed,json=statusChanged,proto3,oneof"`
+}
+
+func (*ImportedEvent_StatusChanged) isImportedEvent_Change() {}
+
+// Cambio de estado importado: queda como un StatusChanged sin ids de estado.
+type ImportedStatusChange struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Categorías antes y después; UNSPECIFIED es INVALID_ARGUMENT. Pueden ser
+	// iguales (cambió el valor del origen, no la categoría).
+	FromState IssueState `protobuf:"varint,1,opt,name=from_state,json=fromState,proto3,enum=issues.v1.IssueState" json:"from_state,omitempty"`
+	ToState   IssueState `protobuf:"varint,2,opt,name=to_state,json=toState,proto3,enum=issues.v1.IssueState" json:"to_state,omitempty"`
+	// Valores en el origen (p. ej. "open", "in-progress"), 1 a 40 caracteres
+	// como el nombre de un estado: van como from_status_name y
+	// to_status_name.
+	FromName      string `protobuf:"bytes,3,opt,name=from_name,json=fromName,proto3" json:"from_name,omitempty"`
+	ToName        string `protobuf:"bytes,4,opt,name=to_name,json=toName,proto3" json:"to_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportedStatusChange) Reset() {
+	*x = ImportedStatusChange{}
+	mi := &file_issues_v1_issues_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportedStatusChange) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportedStatusChange) ProtoMessage() {}
+
+func (x *ImportedStatusChange) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportedStatusChange.ProtoReflect.Descriptor instead.
+func (*ImportedStatusChange) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *ImportedStatusChange) GetFromState() IssueState {
+	if x != nil {
+		return x.FromState
+	}
+	return IssueState_ISSUE_STATE_UNSPECIFIED
+}
+
+func (x *ImportedStatusChange) GetToState() IssueState {
+	if x != nil {
+		return x.ToState
+	}
+	return IssueState_ISSUE_STATE_UNSPECIFIED
+}
+
+func (x *ImportedStatusChange) GetFromName() string {
+	if x != nil {
+		return x.FromName
+	}
+	return ""
+}
+
+func (x *ImportedStatusChange) GetToName() string {
+	if x != nil {
+		return x.ToName
+	}
+	return ""
+}
+
+type ImportIssueEventsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Eventos nuevos en el historial.
+	Created int32 `protobuf:"varint,1,opt,name=created,proto3" json:"created,omitempty"`
+	// Eventos cuya source_ref ya estaba: no se tocaron (sin overwrite).
+	Skipped int32 `protobuf:"varint,2,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	// Eventos cuya source_ref ya estaba y se reescribieron (con overwrite).
+	Updated       int32 `protobuf:"varint,3,opt,name=updated,proto3" json:"updated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportIssueEventsResponse) Reset() {
+	*x = ImportIssueEventsResponse{}
+	mi := &file_issues_v1_issues_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportIssueEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportIssueEventsResponse) ProtoMessage() {}
+
+func (x *ImportIssueEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_issues_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportIssueEventsResponse.ProtoReflect.Descriptor instead.
+func (*ImportIssueEventsResponse) Descriptor() ([]byte, []int) {
+	return file_issues_v1_issues_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *ImportIssueEventsResponse) GetCreated() int32 {
+	if x != nil {
+		return x.Created
+	}
+	return 0
+}
+
+func (x *ImportIssueEventsResponse) GetSkipped() int32 {
+	if x != nil {
+		return x.Skipped
+	}
+	return 0
+}
+
+func (x *ImportIssueEventsResponse) GetUpdated() int32 {
+	if x != nil {
+		return x.Updated
+	}
+	return 0
 }
 
 var File_issues_v1_issues_proto protoreflect.FileDescriptor
@@ -4609,7 +5029,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\tauthor_id\x18\x03 \x01(\tR\bauthorId\x12\x12\n" +
 	"\x04body\x18\x04 \x01(\tR\x04body\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xb8\x06\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x87\a\n" +
 	"\n" +
 	"IssueEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
@@ -4628,7 +5048,10 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\tdiscarded\x18\f \x01(\v2\x19.issues.v1.IssueDiscardedH\x00R\tdiscarded\x126\n" +
 	"\brestored\x18\r \x01(\v2\x18.issues.v1.IssueRestoredH\x00R\brestored\x12G\n" +
 	"\x10assignee_changed\x18\x0e \x01(\v2\x1a.issues.v1.AssigneeChangedH\x00R\x0fassigneeChanged\x12\x19\n" +
-	"\bagent_id\x18\x0f \x01(\tR\aagentIdB\b\n" +
+	"\bagent_id\x18\x0f \x01(\tR\aagentId\x12.\n" +
+	"\x06source\x18\x10 \x01(\x0e2\x16.issues.v1.EventSourceR\x06source\x12\x1d\n" +
+	"\n" +
+	"source_ref\x18\x11 \x01(\tR\tsourceRefB\b\n" +
 	"\x06change\"\x0e\n" +
 	"\fIssueCreated\"\x8f\x02\n" +
 	"\rStatusChanged\x12$\n" +
@@ -4869,7 +5292,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x04page\x18\x03 \x01(\v2\x16.issues.v1.PageRequestR\x04page\"u\n" +
 	"\x17ListIssueEventsResponse\x12-\n" +
 	"\x06events\x18\x01 \x03(\v2\x15.issues.v1.IssueEventR\x06events\x12+\n" +
-	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page\"\xdc\x02\n" +
+	"\x04page\x18\x02 \x01(\v2\x17.issues.v1.PageResponseR\x04page\"\x8c\x03\n" +
 	"\x12ImportIssueRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
@@ -4883,10 +5306,37 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\bpriority\x18\a \x01(\x0e2\x13.issues.v1.PriorityR\bpriority\x12+\n" +
 	"\x05state\x18\b \x01(\x0e2\x15.issues.v1.IssueStateR\x05state\x12\x1f\n" +
 	"\vlabel_names\x18\t \x03(\tR\n" +
-	"labelNames\"q\n" +
+	"labelNames\x12.\n" +
+	"\x13override_created_at\x18\n" +
+	" \x01(\bR\x11overrideCreatedAt\"q\n" +
 	"\x13ImportIssueResponse\x12&\n" +
 	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\x122\n" +
-	"\aoutcome\x18\x02 \x01(\x0e2\x18.issues.v1.ImportOutcomeR\aoutcome*\x8c\x01\n" +
+	"\aoutcome\x18\x02 \x01(\x0e2\x18.issues.v1.ImportOutcomeR\aoutcome\"\xa8\x01\n" +
+	"\x18ImportIssueEventsRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
+	"\n" +
+	"source_key\x18\x02 \x01(\tR\tsourceKey\x120\n" +
+	"\x06events\x18\x03 \x03(\v2\x18.issues.v1.ImportedEventR\x06events\x12\x1c\n" +
+	"\toverwrite\x18\x04 \x01(\bR\toverwrite\"\xef\x01\n" +
+	"\rImportedEvent\x12\x1d\n" +
+	"\n" +
+	"source_ref\x18\x01 \x01(\tR\tsourceRef\x12.\n" +
+	"\x06source\x18\x02 \x01(\x0e2\x16.issues.v1.EventSourceR\x06source\x12;\n" +
+	"\voccurred_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"occurredAt\x12H\n" +
+	"\x0estatus_changed\x18\x04 \x01(\v2\x1f.issues.v1.ImportedStatusChangeH\x00R\rstatusChangedB\b\n" +
+	"\x06change\"\xb4\x01\n" +
+	"\x14ImportedStatusChange\x124\n" +
+	"\n" +
+	"from_state\x18\x01 \x01(\x0e2\x15.issues.v1.IssueStateR\tfromState\x120\n" +
+	"\bto_state\x18\x02 \x01(\x0e2\x15.issues.v1.IssueStateR\atoState\x12\x1b\n" +
+	"\tfrom_name\x18\x03 \x01(\tR\bfromName\x12\x17\n" +
+	"\ato_name\x18\x04 \x01(\tR\x06toName\"i\n" +
+	"\x19ImportIssueEventsResponse\x12\x18\n" +
+	"\acreated\x18\x01 \x01(\x05R\acreated\x12\x18\n" +
+	"\askipped\x18\x02 \x01(\x05R\askipped\x12\x18\n" +
+	"\aupdated\x18\x03 \x01(\x05R\aupdated*\x8c\x01\n" +
 	"\n" +
 	"IssueState\x12\x1b\n" +
 	"\x17ISSUE_STATE_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -4909,7 +5359,13 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x13LABEL_COLOR_WARNING\x10\x04\x12\x16\n" +
 	"\x12LABEL_COLOR_DANGER\x10\x05\x12\x16\n" +
 	"\x12LABEL_COLOR_ACCENT\x10\x06\x12\x15\n" +
-	"\x11LABEL_COLOR_BRAND\x10\a*|\n" +
+	"\x11LABEL_COLOR_BRAND\x10\a*\x9f\x01\n" +
+	"\vEventSource\x12\x1c\n" +
+	"\x18EVENT_SOURCE_UNSPECIFIED\x10\x00\x12\x15\n" +
+	"\x11EVENT_SOURCE_LIVE\x10\x01\x12\x1f\n" +
+	"\x1bEVENT_SOURCE_IMPORT_HISTORY\x10\x02\x12\x1c\n" +
+	"\x18EVENT_SOURCE_IMPORT_FILE\x10\x03\x12\x1c\n" +
+	"\x18EVENT_SOURCE_IMPORT_SYNC\x10\x04*|\n" +
 	"\n" +
 	"IssueOrder\x12\x1b\n" +
 	"\x17ISSUE_ORDER_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -4920,7 +5376,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x1aIMPORT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_CREATED\x10\x01\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_UPDATED\x10\x02\x12\x1c\n" +
-	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xd6\x15\n" +
+	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xf7\x16\n" +
 	"\fIssueService\x12e\n" +
 	"\fListProjects\x12\x1e.issues.v1.ListProjectsRequest\x1a\x1f.issues.v1.ListProjectsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12k\n" +
 	"\rCreateProject\x12\x1f.issues.v1.CreateProjectRequest\x1a .issues.v1.CreateProjectResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12s\n" +
@@ -4944,7 +5400,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\vDeleteLabel\x12\x1d.issues.v1.DeleteLabelRequest\x1a\x1e.issues.v1.DeleteLabelResponse\"3\x82\xd3\xe4\x93\x02-*+/v1/projects/{project_id}/labels/{label_id}\x12\x91\x01\n" +
 	"\rCreateComment\x12\x1f.issues.v1.CreateCommentRequest\x1a .issues.v1.CreateCommentResponse\"=\x82\xd3\xe4\x93\x027:\x01*\"2/v1/projects/{project_id}/issues/{number}/comments\x12\x92\x01\n" +
 	"\x0fListIssueEvents\x12!.issues.v1.ListIssueEventsRequest\x1a\".issues.v1.ListIssueEventsResponse\"8\x82\xd3\xe4\x93\x022\x120/v1/projects/{project_id}/issues/{number}/events\x12\x86\x01\n" +
-	"\vImportIssue\x12\x1d.issues.v1.ImportIssueRequest\x1a\x1e.issues.v1.ImportIssueResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/issues:importB\x9e\x01\n" +
+	"\vImportIssue\x12\x1d.issues.v1.ImportIssueRequest\x1a\x1e.issues.v1.ImportIssueResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/issues:import\x12\x9e\x01\n" +
+	"\x11ImportIssueEvents\x12#.issues.v1.ImportIssueEventsRequest\x1a$.issues.v1.ImportIssueEventsResponse\">\x82\xd3\xe4\x93\x028:\x01*\"3/v1/admin/projects/{project_id}/issues:importEventsB\x9e\x01\n" +
 	"\rcom.issues.v1B\vIssuesProtoP\x01Z;github.com/tekitla/tekitla-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
 	"Issues::V1b\x06proto3"
 
@@ -4960,201 +5417,215 @@ func file_issues_v1_issues_proto_rawDescGZIP() []byte {
 	return file_issues_v1_issues_proto_rawDescData
 }
 
-var file_issues_v1_issues_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_issues_v1_issues_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
+var file_issues_v1_issues_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_issues_v1_issues_proto_msgTypes = make([]protoimpl.MessageInfo, 67)
 var file_issues_v1_issues_proto_goTypes = []any{
 	(IssueState)(0),                     // 0: issues.v1.IssueState
 	(Priority)(0),                       // 1: issues.v1.Priority
 	(LabelColor)(0),                     // 2: issues.v1.LabelColor
-	(IssueOrder)(0),                     // 3: issues.v1.IssueOrder
-	(ImportOutcome)(0),                  // 4: issues.v1.ImportOutcome
-	(*Project)(nil),                     // 5: issues.v1.Project
-	(*Issue)(nil),                       // 6: issues.v1.Issue
-	(*DiscardInfo)(nil),                 // 7: issues.v1.DiscardInfo
-	(*Status)(nil),                      // 8: issues.v1.Status
-	(*Label)(nil),                       // 9: issues.v1.Label
-	(*Comment)(nil),                     // 10: issues.v1.Comment
-	(*IssueEvent)(nil),                  // 11: issues.v1.IssueEvent
-	(*IssueCreated)(nil),                // 12: issues.v1.IssueCreated
-	(*StatusChanged)(nil),               // 13: issues.v1.StatusChanged
-	(*IssueDiscarded)(nil),              // 14: issues.v1.IssueDiscarded
-	(*IssueRestored)(nil),               // 15: issues.v1.IssueRestored
-	(*TitleChanged)(nil),                // 16: issues.v1.TitleChanged
-	(*AssigneeChanged)(nil),             // 17: issues.v1.AssigneeChanged
-	(*DescriptionChanged)(nil),          // 18: issues.v1.DescriptionChanged
-	(*PriorityChanged)(nil),             // 19: issues.v1.PriorityChanged
-	(*LabelsChanged)(nil),               // 20: issues.v1.LabelsChanged
-	(*PageRequest)(nil),                 // 21: issues.v1.PageRequest
-	(*PageResponse)(nil),                // 22: issues.v1.PageResponse
-	(*ListProjectsRequest)(nil),         // 23: issues.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),        // 24: issues.v1.ListProjectsResponse
-	(*CreateProjectRequest)(nil),        // 25: issues.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),       // 26: issues.v1.CreateProjectResponse
-	(*ListIssuesRequest)(nil),           // 27: issues.v1.ListIssuesRequest
-	(*ListIssuesResponse)(nil),          // 28: issues.v1.ListIssuesResponse
-	(*GetIssueRequest)(nil),             // 29: issues.v1.GetIssueRequest
-	(*GetIssueResponse)(nil),            // 30: issues.v1.GetIssueResponse
-	(*CreateIssueRequest)(nil),          // 31: issues.v1.CreateIssueRequest
-	(*CreateIssueResponse)(nil),         // 32: issues.v1.CreateIssueResponse
-	(*MoveIssueRequest)(nil),            // 33: issues.v1.MoveIssueRequest
-	(*MoveIssueResponse)(nil),           // 34: issues.v1.MoveIssueResponse
-	(*UpdateIssueRequest)(nil),          // 35: issues.v1.UpdateIssueRequest
-	(*LabelIds)(nil),                    // 36: issues.v1.LabelIds
-	(*UpdateIssueResponse)(nil),         // 37: issues.v1.UpdateIssueResponse
-	(*DiscardIssueRequest)(nil),         // 38: issues.v1.DiscardIssueRequest
-	(*DiscardIssueResponse)(nil),        // 39: issues.v1.DiscardIssueResponse
-	(*RestoreIssueRequest)(nil),         // 40: issues.v1.RestoreIssueRequest
-	(*RestoreIssueResponse)(nil),        // 41: issues.v1.RestoreIssueResponse
-	(*ListStatusesRequest)(nil),         // 42: issues.v1.ListStatusesRequest
-	(*ListStatusesResponse)(nil),        // 43: issues.v1.ListStatusesResponse
-	(*CreateStatusRequest)(nil),         // 44: issues.v1.CreateStatusRequest
-	(*CreateStatusResponse)(nil),        // 45: issues.v1.CreateStatusResponse
-	(*UpdateStatusRequest)(nil),         // 46: issues.v1.UpdateStatusRequest
-	(*UpdateStatusResponse)(nil),        // 47: issues.v1.UpdateStatusResponse
-	(*DeleteStatusRequest)(nil),         // 48: issues.v1.DeleteStatusRequest
-	(*DeleteStatusResponse)(nil),        // 49: issues.v1.DeleteStatusResponse
-	(*BatchUpdateStatusesRequest)(nil),  // 50: issues.v1.BatchUpdateStatusesRequest
-	(*StatusSpec)(nil),                  // 51: issues.v1.StatusSpec
-	(*StatusDeletion)(nil),              // 52: issues.v1.StatusDeletion
-	(*BatchUpdateStatusesResponse)(nil), // 53: issues.v1.BatchUpdateStatusesResponse
-	(*ListLabelsRequest)(nil),           // 54: issues.v1.ListLabelsRequest
-	(*ListLabelsResponse)(nil),          // 55: issues.v1.ListLabelsResponse
-	(*CreateLabelRequest)(nil),          // 56: issues.v1.CreateLabelRequest
-	(*CreateLabelResponse)(nil),         // 57: issues.v1.CreateLabelResponse
-	(*UpdateLabelRequest)(nil),          // 58: issues.v1.UpdateLabelRequest
-	(*UpdateLabelResponse)(nil),         // 59: issues.v1.UpdateLabelResponse
-	(*DeleteLabelRequest)(nil),          // 60: issues.v1.DeleteLabelRequest
-	(*DeleteLabelResponse)(nil),         // 61: issues.v1.DeleteLabelResponse
-	(*CreateCommentRequest)(nil),        // 62: issues.v1.CreateCommentRequest
-	(*CreateCommentResponse)(nil),       // 63: issues.v1.CreateCommentResponse
-	(*ListIssueEventsRequest)(nil),      // 64: issues.v1.ListIssueEventsRequest
-	(*ListIssueEventsResponse)(nil),     // 65: issues.v1.ListIssueEventsResponse
-	(*ImportIssueRequest)(nil),          // 66: issues.v1.ImportIssueRequest
-	(*ImportIssueResponse)(nil),         // 67: issues.v1.ImportIssueResponse
-	(*timestamppb.Timestamp)(nil),       // 68: google.protobuf.Timestamp
+	(EventSource)(0),                    // 3: issues.v1.EventSource
+	(IssueOrder)(0),                     // 4: issues.v1.IssueOrder
+	(ImportOutcome)(0),                  // 5: issues.v1.ImportOutcome
+	(*Project)(nil),                     // 6: issues.v1.Project
+	(*Issue)(nil),                       // 7: issues.v1.Issue
+	(*DiscardInfo)(nil),                 // 8: issues.v1.DiscardInfo
+	(*Status)(nil),                      // 9: issues.v1.Status
+	(*Label)(nil),                       // 10: issues.v1.Label
+	(*Comment)(nil),                     // 11: issues.v1.Comment
+	(*IssueEvent)(nil),                  // 12: issues.v1.IssueEvent
+	(*IssueCreated)(nil),                // 13: issues.v1.IssueCreated
+	(*StatusChanged)(nil),               // 14: issues.v1.StatusChanged
+	(*IssueDiscarded)(nil),              // 15: issues.v1.IssueDiscarded
+	(*IssueRestored)(nil),               // 16: issues.v1.IssueRestored
+	(*TitleChanged)(nil),                // 17: issues.v1.TitleChanged
+	(*AssigneeChanged)(nil),             // 18: issues.v1.AssigneeChanged
+	(*DescriptionChanged)(nil),          // 19: issues.v1.DescriptionChanged
+	(*PriorityChanged)(nil),             // 20: issues.v1.PriorityChanged
+	(*LabelsChanged)(nil),               // 21: issues.v1.LabelsChanged
+	(*PageRequest)(nil),                 // 22: issues.v1.PageRequest
+	(*PageResponse)(nil),                // 23: issues.v1.PageResponse
+	(*ListProjectsRequest)(nil),         // 24: issues.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),        // 25: issues.v1.ListProjectsResponse
+	(*CreateProjectRequest)(nil),        // 26: issues.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),       // 27: issues.v1.CreateProjectResponse
+	(*ListIssuesRequest)(nil),           // 28: issues.v1.ListIssuesRequest
+	(*ListIssuesResponse)(nil),          // 29: issues.v1.ListIssuesResponse
+	(*GetIssueRequest)(nil),             // 30: issues.v1.GetIssueRequest
+	(*GetIssueResponse)(nil),            // 31: issues.v1.GetIssueResponse
+	(*CreateIssueRequest)(nil),          // 32: issues.v1.CreateIssueRequest
+	(*CreateIssueResponse)(nil),         // 33: issues.v1.CreateIssueResponse
+	(*MoveIssueRequest)(nil),            // 34: issues.v1.MoveIssueRequest
+	(*MoveIssueResponse)(nil),           // 35: issues.v1.MoveIssueResponse
+	(*UpdateIssueRequest)(nil),          // 36: issues.v1.UpdateIssueRequest
+	(*LabelIds)(nil),                    // 37: issues.v1.LabelIds
+	(*UpdateIssueResponse)(nil),         // 38: issues.v1.UpdateIssueResponse
+	(*DiscardIssueRequest)(nil),         // 39: issues.v1.DiscardIssueRequest
+	(*DiscardIssueResponse)(nil),        // 40: issues.v1.DiscardIssueResponse
+	(*RestoreIssueRequest)(nil),         // 41: issues.v1.RestoreIssueRequest
+	(*RestoreIssueResponse)(nil),        // 42: issues.v1.RestoreIssueResponse
+	(*ListStatusesRequest)(nil),         // 43: issues.v1.ListStatusesRequest
+	(*ListStatusesResponse)(nil),        // 44: issues.v1.ListStatusesResponse
+	(*CreateStatusRequest)(nil),         // 45: issues.v1.CreateStatusRequest
+	(*CreateStatusResponse)(nil),        // 46: issues.v1.CreateStatusResponse
+	(*UpdateStatusRequest)(nil),         // 47: issues.v1.UpdateStatusRequest
+	(*UpdateStatusResponse)(nil),        // 48: issues.v1.UpdateStatusResponse
+	(*DeleteStatusRequest)(nil),         // 49: issues.v1.DeleteStatusRequest
+	(*DeleteStatusResponse)(nil),        // 50: issues.v1.DeleteStatusResponse
+	(*BatchUpdateStatusesRequest)(nil),  // 51: issues.v1.BatchUpdateStatusesRequest
+	(*StatusSpec)(nil),                  // 52: issues.v1.StatusSpec
+	(*StatusDeletion)(nil),              // 53: issues.v1.StatusDeletion
+	(*BatchUpdateStatusesResponse)(nil), // 54: issues.v1.BatchUpdateStatusesResponse
+	(*ListLabelsRequest)(nil),           // 55: issues.v1.ListLabelsRequest
+	(*ListLabelsResponse)(nil),          // 56: issues.v1.ListLabelsResponse
+	(*CreateLabelRequest)(nil),          // 57: issues.v1.CreateLabelRequest
+	(*CreateLabelResponse)(nil),         // 58: issues.v1.CreateLabelResponse
+	(*UpdateLabelRequest)(nil),          // 59: issues.v1.UpdateLabelRequest
+	(*UpdateLabelResponse)(nil),         // 60: issues.v1.UpdateLabelResponse
+	(*DeleteLabelRequest)(nil),          // 61: issues.v1.DeleteLabelRequest
+	(*DeleteLabelResponse)(nil),         // 62: issues.v1.DeleteLabelResponse
+	(*CreateCommentRequest)(nil),        // 63: issues.v1.CreateCommentRequest
+	(*CreateCommentResponse)(nil),       // 64: issues.v1.CreateCommentResponse
+	(*ListIssueEventsRequest)(nil),      // 65: issues.v1.ListIssueEventsRequest
+	(*ListIssueEventsResponse)(nil),     // 66: issues.v1.ListIssueEventsResponse
+	(*ImportIssueRequest)(nil),          // 67: issues.v1.ImportIssueRequest
+	(*ImportIssueResponse)(nil),         // 68: issues.v1.ImportIssueResponse
+	(*ImportIssueEventsRequest)(nil),    // 69: issues.v1.ImportIssueEventsRequest
+	(*ImportedEvent)(nil),               // 70: issues.v1.ImportedEvent
+	(*ImportedStatusChange)(nil),        // 71: issues.v1.ImportedStatusChange
+	(*ImportIssueEventsResponse)(nil),   // 72: issues.v1.ImportIssueEventsResponse
+	(*timestamppb.Timestamp)(nil),       // 73: google.protobuf.Timestamp
 }
 var file_issues_v1_issues_proto_depIdxs = []int32{
-	68, // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	68, // 1: issues.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
-	0,  // 2: issues.v1.Issue.state:type_name -> issues.v1.IssueState
-	1,  // 3: issues.v1.Issue.priority:type_name -> issues.v1.Priority
-	68, // 4: issues.v1.Issue.created_at:type_name -> google.protobuf.Timestamp
-	68, // 5: issues.v1.Issue.updated_at:type_name -> google.protobuf.Timestamp
-	7,  // 6: issues.v1.Issue.discard:type_name -> issues.v1.DiscardInfo
-	68, // 7: issues.v1.DiscardInfo.discarded_at:type_name -> google.protobuf.Timestamp
-	0,  // 8: issues.v1.Status.category:type_name -> issues.v1.IssueState
-	2,  // 9: issues.v1.Status.color:type_name -> issues.v1.LabelColor
-	2,  // 10: issues.v1.Label.color:type_name -> issues.v1.LabelColor
-	68, // 11: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
-	68, // 12: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
-	12, // 13: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
-	13, // 14: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
-	16, // 15: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
-	18, // 16: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
-	19, // 17: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
-	20, // 18: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
-	10, // 19: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
-	14, // 20: issues.v1.IssueEvent.discarded:type_name -> issues.v1.IssueDiscarded
-	15, // 21: issues.v1.IssueEvent.restored:type_name -> issues.v1.IssueRestored
-	17, // 22: issues.v1.IssueEvent.assignee_changed:type_name -> issues.v1.AssigneeChanged
-	0,  // 23: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
-	0,  // 24: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
-	0,  // 25: issues.v1.IssueDiscarded.from_state:type_name -> issues.v1.IssueState
-	1,  // 26: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
-	1,  // 27: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
-	21, // 28: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
-	5,  // 29: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
-	22, // 30: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
-	5,  // 31: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
-	0,  // 32: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
-	21, // 33: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
-	0,  // 34: issues.v1.ListIssuesRequest.states:type_name -> issues.v1.IssueState
-	1,  // 35: issues.v1.ListIssuesRequest.priorities:type_name -> issues.v1.Priority
-	3,  // 36: issues.v1.ListIssuesRequest.order_by:type_name -> issues.v1.IssueOrder
-	6,  // 37: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
-	22, // 38: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
-	6,  // 39: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
-	1,  // 40: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
-	6,  // 41: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
-	0,  // 42: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
-	6,  // 43: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
-	1,  // 44: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
-	36, // 45: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
-	6,  // 46: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
-	6,  // 47: issues.v1.DiscardIssueResponse.issue:type_name -> issues.v1.Issue
-	6,  // 48: issues.v1.RestoreIssueResponse.issue:type_name -> issues.v1.Issue
-	8,  // 49: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
-	0,  // 50: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
-	2,  // 51: issues.v1.CreateStatusRequest.color:type_name -> issues.v1.LabelColor
-	8,  // 52: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
-	2,  // 53: issues.v1.UpdateStatusRequest.color:type_name -> issues.v1.LabelColor
-	8,  // 54: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
-	51, // 55: issues.v1.BatchUpdateStatusesRequest.statuses:type_name -> issues.v1.StatusSpec
-	52, // 56: issues.v1.BatchUpdateStatusesRequest.deletions:type_name -> issues.v1.StatusDeletion
-	0,  // 57: issues.v1.StatusSpec.category:type_name -> issues.v1.IssueState
-	2,  // 58: issues.v1.StatusSpec.color:type_name -> issues.v1.LabelColor
-	8,  // 59: issues.v1.BatchUpdateStatusesResponse.statuses:type_name -> issues.v1.Status
-	9,  // 60: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
-	2,  // 61: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
-	9,  // 62: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
-	2,  // 63: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
-	9,  // 64: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
-	10, // 65: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
-	21, // 66: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
-	11, // 67: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
-	22, // 68: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
-	68, // 69: issues.v1.ImportIssueRequest.created_at:type_name -> google.protobuf.Timestamp
-	1,  // 70: issues.v1.ImportIssueRequest.priority:type_name -> issues.v1.Priority
-	0,  // 71: issues.v1.ImportIssueRequest.state:type_name -> issues.v1.IssueState
-	6,  // 72: issues.v1.ImportIssueResponse.issue:type_name -> issues.v1.Issue
-	4,  // 73: issues.v1.ImportIssueResponse.outcome:type_name -> issues.v1.ImportOutcome
-	23, // 74: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
-	25, // 75: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
-	27, // 76: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
-	29, // 77: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
-	31, // 78: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
-	33, // 79: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
-	35, // 80: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
-	38, // 81: issues.v1.IssueService.DiscardIssue:input_type -> issues.v1.DiscardIssueRequest
-	40, // 82: issues.v1.IssueService.RestoreIssue:input_type -> issues.v1.RestoreIssueRequest
-	42, // 83: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
-	44, // 84: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
-	46, // 85: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
-	48, // 86: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
-	50, // 87: issues.v1.IssueService.BatchUpdateStatuses:input_type -> issues.v1.BatchUpdateStatusesRequest
-	54, // 88: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
-	56, // 89: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
-	58, // 90: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
-	60, // 91: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
-	62, // 92: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
-	64, // 93: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
-	66, // 94: issues.v1.IssueService.ImportIssue:input_type -> issues.v1.ImportIssueRequest
-	24, // 95: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
-	26, // 96: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
-	28, // 97: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
-	30, // 98: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
-	32, // 99: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
-	34, // 100: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
-	37, // 101: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
-	39, // 102: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
-	41, // 103: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
-	43, // 104: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
-	45, // 105: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
-	47, // 106: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
-	49, // 107: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
-	53, // 108: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
-	55, // 109: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
-	57, // 110: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
-	59, // 111: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
-	61, // 112: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
-	63, // 113: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
-	65, // 114: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
-	67, // 115: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
-	95, // [95:116] is the sub-list for method output_type
-	74, // [74:95] is the sub-list for method input_type
-	74, // [74:74] is the sub-list for extension type_name
-	74, // [74:74] is the sub-list for extension extendee
-	0,  // [0:74] is the sub-list for field type_name
+	73,  // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	73,  // 1: issues.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
+	0,   // 2: issues.v1.Issue.state:type_name -> issues.v1.IssueState
+	1,   // 3: issues.v1.Issue.priority:type_name -> issues.v1.Priority
+	73,  // 4: issues.v1.Issue.created_at:type_name -> google.protobuf.Timestamp
+	73,  // 5: issues.v1.Issue.updated_at:type_name -> google.protobuf.Timestamp
+	8,   // 6: issues.v1.Issue.discard:type_name -> issues.v1.DiscardInfo
+	73,  // 7: issues.v1.DiscardInfo.discarded_at:type_name -> google.protobuf.Timestamp
+	0,   // 8: issues.v1.Status.category:type_name -> issues.v1.IssueState
+	2,   // 9: issues.v1.Status.color:type_name -> issues.v1.LabelColor
+	2,   // 10: issues.v1.Label.color:type_name -> issues.v1.LabelColor
+	73,  // 11: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
+	73,  // 12: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
+	13,  // 13: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
+	14,  // 14: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
+	17,  // 15: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
+	19,  // 16: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
+	20,  // 17: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
+	21,  // 18: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
+	11,  // 19: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
+	15,  // 20: issues.v1.IssueEvent.discarded:type_name -> issues.v1.IssueDiscarded
+	16,  // 21: issues.v1.IssueEvent.restored:type_name -> issues.v1.IssueRestored
+	18,  // 22: issues.v1.IssueEvent.assignee_changed:type_name -> issues.v1.AssigneeChanged
+	3,   // 23: issues.v1.IssueEvent.source:type_name -> issues.v1.EventSource
+	0,   // 24: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
+	0,   // 25: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
+	0,   // 26: issues.v1.IssueDiscarded.from_state:type_name -> issues.v1.IssueState
+	1,   // 27: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
+	1,   // 28: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
+	22,  // 29: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
+	6,   // 30: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
+	23,  // 31: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
+	6,   // 32: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
+	0,   // 33: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
+	22,  // 34: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
+	0,   // 35: issues.v1.ListIssuesRequest.states:type_name -> issues.v1.IssueState
+	1,   // 36: issues.v1.ListIssuesRequest.priorities:type_name -> issues.v1.Priority
+	4,   // 37: issues.v1.ListIssuesRequest.order_by:type_name -> issues.v1.IssueOrder
+	7,   // 38: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
+	23,  // 39: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
+	7,   // 40: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
+	1,   // 41: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
+	7,   // 42: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
+	0,   // 43: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
+	7,   // 44: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
+	1,   // 45: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
+	37,  // 46: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
+	7,   // 47: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
+	7,   // 48: issues.v1.DiscardIssueResponse.issue:type_name -> issues.v1.Issue
+	7,   // 49: issues.v1.RestoreIssueResponse.issue:type_name -> issues.v1.Issue
+	9,   // 50: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
+	0,   // 51: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
+	2,   // 52: issues.v1.CreateStatusRequest.color:type_name -> issues.v1.LabelColor
+	9,   // 53: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
+	2,   // 54: issues.v1.UpdateStatusRequest.color:type_name -> issues.v1.LabelColor
+	9,   // 55: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
+	52,  // 56: issues.v1.BatchUpdateStatusesRequest.statuses:type_name -> issues.v1.StatusSpec
+	53,  // 57: issues.v1.BatchUpdateStatusesRequest.deletions:type_name -> issues.v1.StatusDeletion
+	0,   // 58: issues.v1.StatusSpec.category:type_name -> issues.v1.IssueState
+	2,   // 59: issues.v1.StatusSpec.color:type_name -> issues.v1.LabelColor
+	9,   // 60: issues.v1.BatchUpdateStatusesResponse.statuses:type_name -> issues.v1.Status
+	10,  // 61: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
+	2,   // 62: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
+	10,  // 63: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
+	2,   // 64: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
+	10,  // 65: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
+	11,  // 66: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
+	22,  // 67: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
+	12,  // 68: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
+	23,  // 69: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
+	73,  // 70: issues.v1.ImportIssueRequest.created_at:type_name -> google.protobuf.Timestamp
+	1,   // 71: issues.v1.ImportIssueRequest.priority:type_name -> issues.v1.Priority
+	0,   // 72: issues.v1.ImportIssueRequest.state:type_name -> issues.v1.IssueState
+	7,   // 73: issues.v1.ImportIssueResponse.issue:type_name -> issues.v1.Issue
+	5,   // 74: issues.v1.ImportIssueResponse.outcome:type_name -> issues.v1.ImportOutcome
+	70,  // 75: issues.v1.ImportIssueEventsRequest.events:type_name -> issues.v1.ImportedEvent
+	3,   // 76: issues.v1.ImportedEvent.source:type_name -> issues.v1.EventSource
+	73,  // 77: issues.v1.ImportedEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	71,  // 78: issues.v1.ImportedEvent.status_changed:type_name -> issues.v1.ImportedStatusChange
+	0,   // 79: issues.v1.ImportedStatusChange.from_state:type_name -> issues.v1.IssueState
+	0,   // 80: issues.v1.ImportedStatusChange.to_state:type_name -> issues.v1.IssueState
+	24,  // 81: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
+	26,  // 82: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
+	28,  // 83: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
+	30,  // 84: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
+	32,  // 85: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
+	34,  // 86: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
+	36,  // 87: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
+	39,  // 88: issues.v1.IssueService.DiscardIssue:input_type -> issues.v1.DiscardIssueRequest
+	41,  // 89: issues.v1.IssueService.RestoreIssue:input_type -> issues.v1.RestoreIssueRequest
+	43,  // 90: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
+	45,  // 91: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
+	47,  // 92: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
+	49,  // 93: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
+	51,  // 94: issues.v1.IssueService.BatchUpdateStatuses:input_type -> issues.v1.BatchUpdateStatusesRequest
+	55,  // 95: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
+	57,  // 96: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
+	59,  // 97: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
+	61,  // 98: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
+	63,  // 99: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
+	65,  // 100: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
+	67,  // 101: issues.v1.IssueService.ImportIssue:input_type -> issues.v1.ImportIssueRequest
+	69,  // 102: issues.v1.IssueService.ImportIssueEvents:input_type -> issues.v1.ImportIssueEventsRequest
+	25,  // 103: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
+	27,  // 104: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
+	29,  // 105: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
+	31,  // 106: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
+	33,  // 107: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
+	35,  // 108: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
+	38,  // 109: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
+	40,  // 110: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
+	42,  // 111: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
+	44,  // 112: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
+	46,  // 113: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
+	48,  // 114: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
+	50,  // 115: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
+	54,  // 116: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
+	56,  // 117: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
+	58,  // 118: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
+	60,  // 119: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
+	62,  // 120: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
+	64,  // 121: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
+	66,  // 122: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
+	68,  // 123: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
+	72,  // 124: issues.v1.IssueService.ImportIssueEvents:output_type -> issues.v1.ImportIssueEventsResponse
+	103, // [103:125] is the sub-list for method output_type
+	81,  // [81:103] is the sub-list for method input_type
+	81,  // [81:81] is the sub-list for extension type_name
+	81,  // [81:81] is the sub-list for extension extendee
+	0,   // [0:81] is the sub-list for field type_name
 }
 
 func init() { file_issues_v1_issues_proto_init() }
@@ -5178,13 +5649,16 @@ func file_issues_v1_issues_proto_init() {
 	file_issues_v1_issues_proto_msgTypes[39].OneofWrappers = []any{}
 	file_issues_v1_issues_proto_msgTypes[41].OneofWrappers = []any{}
 	file_issues_v1_issues_proto_msgTypes[53].OneofWrappers = []any{}
+	file_issues_v1_issues_proto_msgTypes[64].OneofWrappers = []any{
+		(*ImportedEvent_StatusChanged)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_issues_v1_issues_proto_rawDesc), len(file_issues_v1_issues_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   63,
+			NumEnums:      6,
+			NumMessages:   67,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

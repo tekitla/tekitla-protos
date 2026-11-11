@@ -471,6 +471,23 @@ export declare type IssueEvent = Message<"issues.v1.IssueEvent"> & {
    * @generated from field: string agent_id = 15;
    */
   agentId: string;
+
+  /**
+   * De dónde sale el evento (v0.6.0). Los registrados en vivo, también los
+   * anteriores a este campo, son EVENT_SOURCE_LIVE; los de ImportIssue,
+   * EVENT_SOURCE_IMPORT_SYNC.
+   *
+   * @generated from field: issues.v1.EventSource source = 16;
+   */
+  source: EventSource;
+
+  /**
+   * Referencia del evento en el origen si se importó con ImportIssueEvents
+   * (p. ej. el sha del commit); vacío en los demás.
+   *
+   * @generated from field: string source_ref = 17;
+   */
+  sourceRef: string;
 };
 
 /**
@@ -493,7 +510,9 @@ export declare const IssueCreatedSchema: GenMessage<IssueCreated>;
 
 /**
  * Los nombres se guardan al momento del cambio: el historial se sigue
- * leyendo aunque el estado después se renombre o se borre.
+ * leyendo aunque el estado después se renombre o se borre. En un evento
+ * importado (source distinto de LIVE) los ids van vacíos y los nombres son
+ * los valores del origen (p. ej. "in-progress").
  *
  * @generated from message issues.v1.StatusChanged
  */
@@ -1966,7 +1985,8 @@ export declare type ImportIssueRequest = Message<"issues.v1.ImportIssueRequest">
   number: number;
 
   /**
-   * Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+   * Fecha de alta en el origen; ausente: ahora. Solo se usa al crear, salvo
+   * con override_created_at.
    *
    * @generated from field: google.protobuf.Timestamp created_at = 4;
    */
@@ -2007,6 +2027,17 @@ export declare type ImportIssueRequest = Message<"issues.v1.ImportIssueRequest">
    * @generated from field: repeated string label_names = 9;
    */
   labelNames: string[];
+
+  /**
+   * Si el issue ya existe, corrige su created_at con el que viene (p. ej.
+   * una fecha de alta más vieja que se conoció después, issue 036), y
+   * también la fecha de su evento IssueCreated. Sin evento nuevo; cuenta
+   * como UPDATED si cambia. true sin created_at: INVALID_ARGUMENT. Al crear
+   * no hace nada distinto.
+   *
+   * @generated from field: bool override_created_at = 10;
+   */
+  overrideCreatedAt: boolean;
 };
 
 /**
@@ -2035,6 +2066,171 @@ export declare type ImportIssueResponse = Message<"issues.v1.ImportIssueResponse
  * Use `create(ImportIssueResponseSchema)` to create a new message.
  */
 export declare const ImportIssueResponseSchema: GenMessage<ImportIssueResponse>;
+
+/**
+ * @generated from message issues.v1.ImportIssueEventsRequest
+ */
+export declare type ImportIssueEventsRequest = Message<"issues.v1.ImportIssueEventsRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * Clave de origen del issue (la de ImportIssue). NOT_FOUND si ningún
+   * issue del proyecto la tiene.
+   *
+   * @generated from field: string source_key = 2;
+   */
+  sourceKey: string;
+
+  /**
+   * 1 a 500 eventos. Dos con la misma source_ref en un pedido:
+   * INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated issues.v1.ImportedEvent events = 3;
+   */
+  events: ImportedEvent[];
+
+  /**
+   * Reescribir (fecha y cambio) los eventos cuya source_ref ya está, en
+   * lugar de omitirlos. Para corregir una importación equivocada.
+   *
+   * @generated from field: bool overwrite = 4;
+   */
+  overwrite: boolean;
+};
+
+/**
+ * Describes the message issues.v1.ImportIssueEventsRequest.
+ * Use `create(ImportIssueEventsRequestSchema)` to create a new message.
+ */
+export declare const ImportIssueEventsRequestSchema: GenMessage<ImportIssueEventsRequest>;
+
+/**
+ * Un evento con su fecha en el origen.
+ *
+ * @generated from message issues.v1.ImportedEvent
+ */
+export declare type ImportedEvent = Message<"issues.v1.ImportedEvent"> & {
+  /**
+   * Única por issue: reconoce el evento en las corridas siguientes. P. ej.
+   * el sha del commit o "archivo:resuelto". Sin espacios en los extremos, 1
+   * a 200 caracteres.
+   *
+   * @generated from field: string source_ref = 1;
+   */
+  sourceRef: string;
+
+  /**
+   * EVENT_SOURCE_IMPORT_HISTORY o EVENT_SOURCE_IMPORT_FILE; otro valor es
+   * INVALID_ARGUMENT.
+   *
+   * @generated from field: issues.v1.EventSource source = 2;
+   */
+  source: EventSource;
+
+  /**
+   * Fecha del evento en el origen; queda como created_at del IssueEvent.
+   * Obligatoria, no en el futuro y no anterior al created_at del issue
+   * (INVALID_ARGUMENT): el alta va primero (ImportIssue con
+   * override_created_at si hace falta).
+   *
+   * @generated from field: google.protobuf.Timestamp occurred_at = 3;
+   */
+  occurredAt?: Timestamp | undefined;
+
+  /**
+   * Qué cambió. Sin change: INVALID_ARGUMENT.
+   *
+   * @generated from oneof issues.v1.ImportedEvent.change
+   */
+  change: {
+    /**
+     * @generated from field: issues.v1.ImportedStatusChange status_changed = 4;
+     */
+    value: ImportedStatusChange;
+    case: "statusChanged";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message issues.v1.ImportedEvent.
+ * Use `create(ImportedEventSchema)` to create a new message.
+ */
+export declare const ImportedEventSchema: GenMessage<ImportedEvent>;
+
+/**
+ * Cambio de estado importado: queda como un StatusChanged sin ids de estado.
+ *
+ * @generated from message issues.v1.ImportedStatusChange
+ */
+export declare type ImportedStatusChange = Message<"issues.v1.ImportedStatusChange"> & {
+  /**
+   * Categorías antes y después; UNSPECIFIED es INVALID_ARGUMENT. Pueden ser
+   * iguales (cambió el valor del origen, no la categoría).
+   *
+   * @generated from field: issues.v1.IssueState from_state = 1;
+   */
+  fromState: IssueState;
+
+  /**
+   * @generated from field: issues.v1.IssueState to_state = 2;
+   */
+  toState: IssueState;
+
+  /**
+   * Valores en el origen (p. ej. "open", "in-progress"), 1 a 40 caracteres
+   * como el nombre de un estado: van como from_status_name y
+   * to_status_name.
+   *
+   * @generated from field: string from_name = 3;
+   */
+  fromName: string;
+
+  /**
+   * @generated from field: string to_name = 4;
+   */
+  toName: string;
+};
+
+/**
+ * Describes the message issues.v1.ImportedStatusChange.
+ * Use `create(ImportedStatusChangeSchema)` to create a new message.
+ */
+export declare const ImportedStatusChangeSchema: GenMessage<ImportedStatusChange>;
+
+/**
+ * @generated from message issues.v1.ImportIssueEventsResponse
+ */
+export declare type ImportIssueEventsResponse = Message<"issues.v1.ImportIssueEventsResponse"> & {
+  /**
+   * Eventos nuevos en el historial.
+   *
+   * @generated from field: int32 created = 1;
+   */
+  created: number;
+
+  /**
+   * Eventos cuya source_ref ya estaba: no se tocaron (sin overwrite).
+   *
+   * @generated from field: int32 skipped = 2;
+   */
+  skipped: number;
+
+  /**
+   * Eventos cuya source_ref ya estaba y se reescribieron (con overwrite).
+   *
+   * @generated from field: int32 updated = 3;
+   */
+  updated: number;
+};
+
+/**
+ * Describes the message issues.v1.ImportIssueEventsResponse.
+ * Use `create(ImportIssueEventsResponseSchema)` to create a new message.
+ */
+export declare const ImportIssueEventsResponseSchema: GenMessage<ImportIssueEventsResponse>;
 
 /**
  * Categoría del estado de un issue. Es fija y la entienden todos los clientes
@@ -2179,6 +2375,62 @@ export enum LabelColor {
  * Describes the enum issues.v1.LabelColor.
  */
 export declare const LabelColorSchema: GenEnum<LabelColor>;
+
+/**
+ * De dónde sale un evento del historial (issue 036). Las métricas lo usan
+ * para decir qué tan confiable es cada número.
+ *
+ * @generated from enum issues.v1.EventSource
+ */
+export enum EventSource {
+  /**
+   * En IssueEvent no lo envía el servidor (un cliente que lo recibe lo trata
+   * como LIVE). En ImportedEvent es INVALID_ARGUMENT.
+   *
+   * @generated from enum value: EVENT_SOURCE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Registrado por Tekitla al momento del cambio.
+   *
+   * @generated from enum value: EVENT_SOURCE_LIVE = 1;
+   */
+  LIVE = 1,
+
+  /**
+   * Reconstruido del historial del origen, p. ej. un commit que cambió el
+   * Estado de un issue de Round: la fecha es la del commit.
+   *
+   * @generated from enum value: EVENT_SOURCE_IMPORT_HISTORY = 2;
+   */
+  IMPORT_HISTORY = 2,
+
+  /**
+   * Tomado de una fecha escrita en el archivo de origen (p. ej. «Fecha
+   * resuelto») que ningún commit marca. Sin hora: medianoche UTC.
+   *
+   * @generated from enum value: EVENT_SOURCE_IMPORT_FILE = 3;
+   */
+  IMPORT_FILE = 3,
+
+  /**
+   * Registrado por ImportIssue al reflejar el origen (alta, cambios de
+   * estado, título, etiquetas): la fecha es la de la corrida, no la del
+   * cambio en el origen. Las métricas de flujo no lo cuentan como
+   * transición si el issue tiene histórico importado. Los eventos de
+   * ImportIssue anteriores a v0.6.0 pueden figurar como LIVE: la migración
+   * que agrega source en tekitla-issues decide su backfill.
+   *
+   * @generated from enum value: EVENT_SOURCE_IMPORT_SYNC = 4;
+   */
+  IMPORT_SYNC = 4,
+}
+
+/**
+ * Describes the enum issues.v1.EventSource.
+ */
+export declare const EventSourceSchema: GenEnum<EventSource>;
 
 /**
  * Orden de ListIssues. Los empates se resuelven por rank, así el orden es
@@ -2491,7 +2743,13 @@ export declare const IssueService: GenService<{
     output: typeof CreateCommentResponseSchema;
   },
   /**
-   * Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+   * Historial de un issue (cambios y comentarios), del más viejo al más nuevo
+   * por created_at, con el orden de registro como desempate: un evento
+   * importado con ImportIssueEvents aparece en su fecha del origen, no al
+   * final. El cursor lleva las dos columnas; uno de antes de v0.6.0 es
+   * INVALID_ARGUMENT. Un evento importado entre dos páginas con fecha
+   * anterior al cursor no aparece en las siguientes: el cliente recarga
+   * desde la primera página.
    *
    * @generated from rpc issues.v1.IssueService.ListIssueEvents
    */
@@ -2511,9 +2769,11 @@ export declare const IssueService: GenService<{
    *   issue (importado con otra clave o creado en Tekitla).
    * - Si ya existe, pisa título, descripción, prioridad, categoría y
    *   etiquetas con lo que viene (el proyecto es un espejo del origen).
-   *   number y created_at no cambian: FAILED_PRECONDITION si number no
-   *   coincide con el guardado.
-   * Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+   *   number no cambia (FAILED_PRECONDITION si no coincide con el guardado)
+   *   y created_at tampoco, salvo con override_created_at.
+   * Cada cambio queda en el historial como en los RPC sueltos, con source
+   * EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue
+   * importado lleva el created_at del issue (desde v0.6.0). El siguiente
    * CreateIssue usa un número mayor que todos los del proyecto, importados
    * incluidos.
    *
@@ -2523,6 +2783,24 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof ImportIssueRequestSchema;
     output: typeof ImportIssueResponseSchema;
+  },
+  /**
+   * Agrega al historial de un issue importado eventos con su fecha en el
+   * origen (p. ej. los cambios de Estado reconstruidos de git, issue 036).
+   * Solo para quien importa, como ImportIssue: una persona, no un agente.
+   *
+   * Idempotente por (issue, source_ref): un evento cuya source_ref ya está
+   * en el historial del issue se omite sin tocarlo, así una segunda corrida
+   * no agrega nada; con overwrite, se reescribe (para corregir una
+   * importación equivocada). No cambia el estado actual del issue (eso lo
+   * hace ImportIssue): solo escribe historial.
+   *
+   * @generated from rpc issues.v1.IssueService.ImportIssueEvents
+   */
+  importIssueEvents: {
+    methodKind: "unary";
+    input: typeof ImportIssueEventsRequestSchema;
+    output: typeof ImportIssueEventsResponseSchema;
   },
 }>;
 

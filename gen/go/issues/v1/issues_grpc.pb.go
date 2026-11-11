@@ -57,6 +57,7 @@ const (
 	IssueService_CreateComment_FullMethodName       = "/issues.v1.IssueService/CreateComment"
 	IssueService_ListIssueEvents_FullMethodName     = "/issues.v1.IssueService/ListIssueEvents"
 	IssueService_ImportIssue_FullMethodName         = "/issues.v1.IssueService/ImportIssue"
+	IssueService_ImportIssueEvents_FullMethodName   = "/issues.v1.IssueService/ImportIssueEvents"
 )
 
 // IssueServiceClient is the client API for IssueService service.
@@ -139,7 +140,13 @@ type IssueServiceClient interface {
 	DeleteLabel(ctx context.Context, in *DeleteLabelRequest, opts ...grpc.CallOption) (*DeleteLabelResponse, error)
 	// Comenta un issue. El comentario aparece en su historial.
 	CreateComment(ctx context.Context, in *CreateCommentRequest, opts ...grpc.CallOption) (*CreateCommentResponse, error)
-	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo
+	// por created_at, con el orden de registro como desempate: un evento
+	// importado con ImportIssueEvents aparece en su fecha del origen, no al
+	// final. El cursor lleva las dos columnas; uno de antes de v0.6.0 es
+	// INVALID_ARGUMENT. Un evento importado entre dos páginas con fecha
+	// anterior al cursor no aparece en las siguientes: el cliente recarga
+	// desde la primera página.
 	ListIssueEvents(ctx context.Context, in *ListIssueEventsRequest, opts ...grpc.CallOption) (*ListIssueEventsResponse, error)
 	// Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
 	// de Round), conservando su número. Solo para quien importa: administración,
@@ -151,13 +158,25 @@ type IssueServiceClient interface {
 	//     issue (importado con otra clave o creado en Tekitla).
 	//   - Si ya existe, pisa título, descripción, prioridad, categoría y
 	//     etiquetas con lo que viene (el proyecto es un espejo del origen).
-	//     number y created_at no cambian: FAILED_PRECONDITION si number no
-	//     coincide con el guardado.
+	//     number no cambia (FAILED_PRECONDITION si no coincide con el guardado)
+	//     y created_at tampoco, salvo con override_created_at.
 	//
-	// Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+	// Cada cambio queda en el historial como en los RPC sueltos, con source
+	// EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue
+	// importado lleva el created_at del issue (desde v0.6.0). El siguiente
 	// CreateIssue usa un número mayor que todos los del proyecto, importados
 	// incluidos.
 	ImportIssue(ctx context.Context, in *ImportIssueRequest, opts ...grpc.CallOption) (*ImportIssueResponse, error)
+	// Agrega al historial de un issue importado eventos con su fecha en el
+	// origen (p. ej. los cambios de Estado reconstruidos de git, issue 036).
+	// Solo para quien importa, como ImportIssue: una persona, no un agente.
+	//
+	// Idempotente por (issue, source_ref): un evento cuya source_ref ya está
+	// en el historial del issue se omite sin tocarlo, así una segunda corrida
+	// no agrega nada; con overwrite, se reescribe (para corregir una
+	// importación equivocada). No cambia el estado actual del issue (eso lo
+	// hace ImportIssue): solo escribe historial.
+	ImportIssueEvents(ctx context.Context, in *ImportIssueEventsRequest, opts ...grpc.CallOption) (*ImportIssueEventsResponse, error)
 }
 
 type issueServiceClient struct {
@@ -378,6 +397,16 @@ func (c *issueServiceClient) ImportIssue(ctx context.Context, in *ImportIssueReq
 	return out, nil
 }
 
+func (c *issueServiceClient) ImportIssueEvents(ctx context.Context, in *ImportIssueEventsRequest, opts ...grpc.CallOption) (*ImportIssueEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportIssueEventsResponse)
+	err := c.cc.Invoke(ctx, IssueService_ImportIssueEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IssueServiceServer is the server API for IssueService service.
 // All implementations must embed UnimplementedIssueServiceServer
 // for forward compatibility.
@@ -458,7 +487,13 @@ type IssueServiceServer interface {
 	DeleteLabel(context.Context, *DeleteLabelRequest) (*DeleteLabelResponse, error)
 	// Comenta un issue. El comentario aparece en su historial.
 	CreateComment(context.Context, *CreateCommentRequest) (*CreateCommentResponse, error)
-	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo.
+	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo
+	// por created_at, con el orden de registro como desempate: un evento
+	// importado con ImportIssueEvents aparece en su fecha del origen, no al
+	// final. El cursor lleva las dos columnas; uno de antes de v0.6.0 es
+	// INVALID_ARGUMENT. Un evento importado entre dos páginas con fecha
+	// anterior al cursor no aparece en las siguientes: el cliente recarga
+	// desde la primera página.
 	ListIssueEvents(context.Context, *ListIssueEventsRequest) (*ListIssueEventsResponse, error)
 	// Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
 	// de Round), conservando su número. Solo para quien importa: administración,
@@ -470,13 +505,25 @@ type IssueServiceServer interface {
 	//     issue (importado con otra clave o creado en Tekitla).
 	//   - Si ya existe, pisa título, descripción, prioridad, categoría y
 	//     etiquetas con lo que viene (el proyecto es un espejo del origen).
-	//     number y created_at no cambian: FAILED_PRECONDITION si number no
-	//     coincide con el guardado.
+	//     number no cambia (FAILED_PRECONDITION si no coincide con el guardado)
+	//     y created_at tampoco, salvo con override_created_at.
 	//
-	// Cada cambio queda en el historial como en los RPC sueltos. El siguiente
+	// Cada cambio queda en el historial como en los RPC sueltos, con source
+	// EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue
+	// importado lleva el created_at del issue (desde v0.6.0). El siguiente
 	// CreateIssue usa un número mayor que todos los del proyecto, importados
 	// incluidos.
 	ImportIssue(context.Context, *ImportIssueRequest) (*ImportIssueResponse, error)
+	// Agrega al historial de un issue importado eventos con su fecha en el
+	// origen (p. ej. los cambios de Estado reconstruidos de git, issue 036).
+	// Solo para quien importa, como ImportIssue: una persona, no un agente.
+	//
+	// Idempotente por (issue, source_ref): un evento cuya source_ref ya está
+	// en el historial del issue se omite sin tocarlo, así una segunda corrida
+	// no agrega nada; con overwrite, se reescribe (para corregir una
+	// importación equivocada). No cambia el estado actual del issue (eso lo
+	// hace ImportIssue): solo escribe historial.
+	ImportIssueEvents(context.Context, *ImportIssueEventsRequest) (*ImportIssueEventsResponse, error)
 	mustEmbedUnimplementedIssueServiceServer()
 }
 
@@ -549,6 +596,9 @@ func (UnimplementedIssueServiceServer) ListIssueEvents(context.Context, *ListIss
 }
 func (UnimplementedIssueServiceServer) ImportIssue(context.Context, *ImportIssueRequest) (*ImportIssueResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ImportIssue not implemented")
+}
+func (UnimplementedIssueServiceServer) ImportIssueEvents(context.Context, *ImportIssueEventsRequest) (*ImportIssueEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportIssueEvents not implemented")
 }
 func (UnimplementedIssueServiceServer) mustEmbedUnimplementedIssueServiceServer() {}
 func (UnimplementedIssueServiceServer) testEmbeddedByValue()                      {}
@@ -949,6 +999,24 @@ func _IssueService_ImportIssue_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IssueService_ImportIssueEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportIssueEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).ImportIssueEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_ImportIssueEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).ImportIssueEvents(ctx, req.(*ImportIssueEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IssueService_ServiceDesc is the grpc.ServiceDesc for IssueService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1039,6 +1107,10 @@ var IssueService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportIssue",
 			Handler:    _IssueService_ImportIssue_Handler,
+		},
+		{
+			MethodName: "ImportIssueEvents",
+			Handler:    _IssueService_ImportIssueEvents_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
