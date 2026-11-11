@@ -1605,7 +1605,7 @@ func RegisterIssueServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/issues.v1.IssueService/ImportIssueEvents", runtime.WithHTTPPathPattern("/v1/admin/projects/{project_id}/events:import"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/issues.v1.IssueService/ImportIssueEvents", runtime.WithHTTPPathPattern("/v1/admin/projects/{project_id}/issues:importEvents"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2020,7 +2020,7 @@ func RegisterIssueServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/issues.v1.IssueService/ImportIssueEvents", runtime.WithHTTPPathPattern("/v1/admin/projects/{project_id}/events:import"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/issues.v1.IssueService/ImportIssueEvents", runtime.WithHTTPPathPattern("/v1/admin/projects/{project_id}/issues:importEvents"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2058,7 +2058,7 @@ var (
 	pattern_IssueService_CreateComment_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "projects", "project_id", "issues", "number", "comments"}, ""))
 	pattern_IssueService_ListIssueEvents_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "projects", "project_id", "issues", "number", "events"}, ""))
 	pattern_IssueService_ImportIssue_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "admin", "projects", "project_id", "issues"}, "import"))
-	pattern_IssueService_ImportIssueEvents_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "admin", "projects", "project_id", "events"}, "import"))
+	pattern_IssueService_ImportIssueEvents_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "admin", "projects", "project_id", "issues"}, "importEvents"))
 )
 
 var (

@@ -1985,7 +1985,8 @@ export declare type ImportIssueRequest = Message<"issues.v1.ImportIssueRequest">
   number: number;
 
   /**
-   * Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+   * Fecha de alta en el origen; ausente: ahora. Solo se usa al crear, salvo
+   * con override_created_at.
    *
    * @generated from field: google.protobuf.Timestamp created_at = 4;
    */
@@ -2029,9 +2030,10 @@ export declare type ImportIssueRequest = Message<"issues.v1.ImportIssueRequest">
 
   /**
    * Si el issue ya existe, corrige su created_at con el que viene (p. ej.
-   * una fecha de alta más vieja que se conoció después, issue 036). Sin
-   * evento en el historial; cuenta como UPDATED si cambia. Sin created_at,
-   * INVALID_ARGUMENT. Al crear no hace nada distinto.
+   * una fecha de alta más vieja que se conoció después, issue 036), y
+   * también la fecha de su evento IssueCreated. Sin evento nuevo; cuenta
+   * como UPDATED si cambia. true sin created_at: INVALID_ARGUMENT. Al crear
+   * no hace nada distinto.
    *
    * @generated from field: bool override_created_at = 10;
    */
@@ -2089,6 +2091,14 @@ export declare type ImportIssueEventsRequest = Message<"issues.v1.ImportIssueEve
    * @generated from field: repeated issues.v1.ImportedEvent events = 3;
    */
   events: ImportedEvent[];
+
+  /**
+   * Reescribir (fecha y cambio) los eventos cuya source_ref ya está, en
+   * lugar de omitirlos. Para corregir una importación equivocada.
+   *
+   * @generated from field: bool overwrite = 4;
+   */
+  overwrite: boolean;
 };
 
 /**
@@ -2122,7 +2132,9 @@ export declare type ImportedEvent = Message<"issues.v1.ImportedEvent"> & {
 
   /**
    * Fecha del evento en el origen; queda como created_at del IssueEvent.
-   * Obligatoria y no en el futuro.
+   * Obligatoria, no en el futuro y no anterior al created_at del issue
+   * (INVALID_ARGUMENT): el alta va primero (ImportIssue con
+   * override_created_at si hace falta).
    *
    * @generated from field: google.protobuf.Timestamp occurred_at = 3;
    */
@@ -2168,8 +2180,9 @@ export declare type ImportedStatusChange = Message<"issues.v1.ImportedStatusChan
   toState: IssueState;
 
   /**
-   * Valores en el origen (p. ej. "open", "in-progress"), 0 a 100
-   * caracteres: van como from_status_name y to_status_name.
+   * Valores en el origen (p. ej. "open", "in-progress"), 1 a 40 caracteres
+   * como el nombre de un estado: van como from_status_name y
+   * to_status_name.
    *
    * @generated from field: string from_name = 3;
    */
@@ -2199,11 +2212,18 @@ export declare type ImportIssueEventsResponse = Message<"issues.v1.ImportIssueEv
   created: number;
 
   /**
-   * Eventos cuya source_ref ya estaba: no se tocaron.
+   * Eventos cuya source_ref ya estaba: no se tocaron (sin overwrite).
    *
    * @generated from field: int32 skipped = 2;
    */
   skipped: number;
+
+  /**
+   * Eventos cuya source_ref ya estaba y se reescribieron (con overwrite).
+   *
+   * @generated from field: int32 updated = 3;
+   */
+  updated: number;
 };
 
 /**
@@ -2364,7 +2384,8 @@ export declare const LabelColorSchema: GenEnum<LabelColor>;
  */
 export enum EventSource {
   /**
-   * No lo envía el servidor; si llega, se trata como LIVE.
+   * En IssueEvent no lo envía el servidor (un cliente que lo recibe lo trata
+   * como LIVE). En ImportedEvent es INVALID_ARGUMENT.
    *
    * @generated from enum value: EVENT_SOURCE_UNSPECIFIED = 0;
    */
@@ -2398,7 +2419,8 @@ export enum EventSource {
    * estado, título, etiquetas): la fecha es la de la corrida, no la del
    * cambio en el origen. Las métricas de flujo no lo cuentan como
    * transición si el issue tiene histórico importado. Los eventos de
-   * ImportIssue anteriores a v0.6.0 pueden figurar como LIVE.
+   * ImportIssue anteriores a v0.6.0 pueden figurar como LIVE: la migración
+   * que agrega source en tekitla-issues decide su backfill.
    *
    * @generated from enum value: EVENT_SOURCE_IMPORT_SYNC = 4;
    */
@@ -2724,7 +2746,10 @@ export declare const IssueService: GenService<{
    * Historial de un issue (cambios y comentarios), del más viejo al más nuevo
    * por created_at, con el orden de registro como desempate: un evento
    * importado con ImportIssueEvents aparece en su fecha del origen, no al
-   * final.
+   * final. El cursor lleva las dos columnas; uno de antes de v0.6.0 es
+   * INVALID_ARGUMENT. Un evento importado entre dos páginas con fecha
+   * anterior al cursor no aparece en las siguientes: el cliente recarga
+   * desde la primera página.
    *
    * @generated from rpc issues.v1.IssueService.ListIssueEvents
    */
@@ -2744,10 +2769,11 @@ export declare const IssueService: GenService<{
    *   issue (importado con otra clave o creado en Tekitla).
    * - Si ya existe, pisa título, descripción, prioridad, categoría y
    *   etiquetas con lo que viene (el proyecto es un espejo del origen).
-   *   number y created_at no cambian: FAILED_PRECONDITION si number no
-   *   coincide con el guardado.
+   *   number no cambia (FAILED_PRECONDITION si no coincide con el guardado)
+   *   y created_at tampoco, salvo con override_created_at.
    * Cada cambio queda en el historial como en los RPC sueltos, con source
-   * EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El siguiente
+   * EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue
+   * importado lleva el created_at del issue (desde v0.6.0). El siguiente
    * CreateIssue usa un número mayor que todos los del proyecto, importados
    * incluidos.
    *
@@ -2765,8 +2791,9 @@ export declare const IssueService: GenService<{
    *
    * Idempotente por (issue, source_ref): un evento cuya source_ref ya está
    * en el historial del issue se omite sin tocarlo, así una segunda corrida
-   * no agrega nada. No cambia el estado actual del issue (eso lo hace
-   * ImportIssue): solo escribe historial.
+   * no agrega nada; con overwrite, se reescribe (para corregir una
+   * importación equivocada). No cambia el estado actual del issue (eso lo
+   * hace ImportIssue): solo escribe historial.
    *
    * @generated from rpc issues.v1.IssueService.ImportIssueEvents
    */

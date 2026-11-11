@@ -177,7 +177,10 @@ service IssueService {
   // Historial de un issue (cambios y comentarios), del más viejo al más nuevo
   // por created_at, con el orden de registro como desempate: un evento
   // importado con ImportIssueEvents aparece en su fecha del origen, no al
-  // final.
+  // final. El cursor lleva las dos columnas; uno de antes de v0.6.0 es
+  // INVALID_ARGUMENT. Un evento importado entre dos páginas con fecha
+  // anterior al cursor no aparece en las siguientes: el cliente recarga
+  // desde la primera página.
   rpc ListIssueEvents(ListIssueEventsRequest) returns (ListIssueEventsResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}/events"};
   }
@@ -192,10 +195,11 @@ service IssueService {
   //   issue (importado con otra clave o creado en Tekitla).
   // - Si ya existe, pisa título, descripción, prioridad, categoría y
   //   etiquetas con lo que viene (el proyecto es un espejo del origen).
-  //   number y created_at no cambian: FAILED_PRECONDITION si number no
-  //   coincide con el guardado.
+  //   number no cambia (FAILED_PRECONDITION si no coincide con el guardado)
+  //   y created_at tampoco, salvo con override_created_at.
   // Cada cambio queda en el historial como en los RPC sueltos, con source
-  // EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El siguiente
+  // EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue
+  // importado lleva el created_at del issue (desde v0.6.0). El siguiente
   // CreateIssue usa un número mayor que todos los del proyecto, importados
   // incluidos.
   rpc ImportIssue(ImportIssueRequest) returns (ImportIssueResponse) {
@@ -211,11 +215,12 @@ service IssueService {
   //
   // Idempotente por (issue, source_ref): un evento cuya source_ref ya está
   // en el historial del issue se omite sin tocarlo, así una segunda corrida
-  // no agrega nada. No cambia el estado actual del issue (eso lo hace
-  // ImportIssue): solo escribe historial.
+  // no agrega nada; con overwrite, se reescribe (para corregir una
+  // importación equivocada). No cambia el estado actual del issue (eso lo
+  // hace ImportIssue): solo escribe historial.
   rpc ImportIssueEvents(ImportIssueEventsRequest) returns (ImportIssueEventsResponse) {
     option (google.api.http) = {
-      post: "/v1/admin/projects/{project_id}/events:import"
+      post: "/v1/admin/projects/{project_id}/issues:importEvents"
       body: "*"
     };
   }
@@ -402,7 +407,8 @@ message IssueEvent {
 // De dónde sale un evento del historial (issue 036). Las métricas lo usan
 // para decir qué tan confiable es cada número.
 enum EventSource {
-  // No lo envía el servidor; si llega, se trata como LIVE.
+  // En IssueEvent no lo envía el servidor (un cliente que lo recibe lo trata
+  // como LIVE). En ImportedEvent es INVALID_ARGUMENT.
   EVENT_SOURCE_UNSPECIFIED = 0;
   // Registrado por Tekitla al momento del cambio.
   EVENT_SOURCE_LIVE = 1;
@@ -416,7 +422,8 @@ enum EventSource {
   // estado, título, etiquetas): la fecha es la de la corrida, no la del
   // cambio en el origen. Las métricas de flujo no lo cuentan como
   // transición si el issue tiene histórico importado. Los eventos de
-  // ImportIssue anteriores a v0.6.0 pueden figurar como LIVE.
+  // ImportIssue anteriores a v0.6.0 pueden figurar como LIVE: la migración
+  // que agrega source en tekitla-issues decide su backfill.
   EVENT_SOURCE_IMPORT_SYNC = 4;
 }
 
@@ -844,7 +851,8 @@ message ImportIssueRequest {
   string source_key = 2;
   // Número que conserva el issue (el del origen), desde 1.
   int32 number = 3;
-  // Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+  // Fecha de alta en el origen; ausente: ahora. Solo se usa al crear, salvo
+  // con override_created_at.
   google.protobuf.Timestamp created_at = 4;
   // Como en CreateIssueRequest: título obligatorio; descripción en markdown.
   string title = 5;
@@ -859,9 +867,10 @@ message ImportIssueRequest {
   // crean con color NEUTRAL. Reemplazan las del issue.
   repeated string label_names = 9;
   // Si el issue ya existe, corrige su created_at con el que viene (p. ej.
-  // una fecha de alta más vieja que se conoció después, issue 036). Sin
-  // evento en el historial; cuenta como UPDATED si cambia. Sin created_at,
-  // INVALID_ARGUMENT. Al crear no hace nada distinto.
+  // una fecha de alta más vieja que se conoció después, issue 036), y
+  // también la fecha de su evento IssueCreated. Sin evento nuevo; cuenta
+  // como UPDATED si cambia. true sin created_at: INVALID_ARGUMENT. Al crear
+  // no hace nada distinto.
   bool override_created_at = 10;
 }
 
@@ -889,6 +898,9 @@ message ImportIssueEventsRequest {
   // 1 a 500 eventos. Dos con la misma source_ref en un pedido:
   // INVALID_ARGUMENT.
   repeated ImportedEvent events = 3;
+  // Reescribir (fecha y cambio) los eventos cuya source_ref ya está, en
+  // lugar de omitirlos. Para corregir una importación equivocada.
+  bool overwrite = 4;
 }
 
 // Un evento con su fecha en el origen.
@@ -901,7 +913,9 @@ message ImportedEvent {
   // INVALID_ARGUMENT.
   EventSource source = 2;
   // Fecha del evento en el origen; queda como created_at del IssueEvent.
-  // Obligatoria y no en el futuro.
+  // Obligatoria, no en el futuro y no anterior al created_at del issue
+  // (INVALID_ARGUMENT): el alta va primero (ImportIssue con
+  // override_created_at si hace falta).
   google.protobuf.Timestamp occurred_at = 3;
   // Qué cambió. Sin change: INVALID_ARGUMENT.
   oneof change {
@@ -915,8 +929,9 @@ message ImportedStatusChange {
   // iguales (cambió el valor del origen, no la categoría).
   IssueState from_state = 1;
   IssueState to_state = 2;
-  // Valores en el origen (p. ej. "open", "in-progress"), 0 a 100
-  // caracteres: van como from_status_name y to_status_name.
+  // Valores en el origen (p. ej. "open", "in-progress"), 1 a 40 caracteres
+  // como el nombre de un estado: van como from_status_name y
+  // to_status_name.
   string from_name = 3;
   string to_name = 4;
 }
@@ -924,6 +939,8 @@ message ImportedStatusChange {
 message ImportIssueEventsResponse {
   // Eventos nuevos en el historial.
   int32 created = 1;
-  // Eventos cuya source_ref ya estaba: no se tocaron.
+  // Eventos cuya source_ref ya estaba: no se tocaron (sin overwrite).
   int32 skipped = 2;
+  // Eventos cuya source_ref ya estaba y se reescribieron (con overwrite).
+  int32 updated = 3;
 }

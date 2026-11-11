@@ -235,7 +235,8 @@ func (LabelColor) EnumDescriptor() ([]byte, []int) {
 type EventSource int32
 
 const (
-	// No lo envía el servidor; si llega, se trata como LIVE.
+	// En IssueEvent no lo envía el servidor (un cliente que lo recibe lo trata
+	// como LIVE). En ImportedEvent es INVALID_ARGUMENT.
 	EventSource_EVENT_SOURCE_UNSPECIFIED EventSource = 0
 	// Registrado por Tekitla al momento del cambio.
 	EventSource_EVENT_SOURCE_LIVE EventSource = 1
@@ -249,7 +250,8 @@ const (
 	// estado, título, etiquetas): la fecha es la de la corrida, no la del
 	// cambio en el origen. Las métricas de flujo no lo cuentan como
 	// transición si el issue tiene histórico importado. Los eventos de
-	// ImportIssue anteriores a v0.6.0 pueden figurar como LIVE.
+	// ImportIssue anteriores a v0.6.0 pueden figurar como LIVE: la migración
+	// que agrega source en tekitla-issues decide su backfill.
 	EventSource_EVENT_SOURCE_IMPORT_SYNC EventSource = 4
 )
 
@@ -4475,7 +4477,8 @@ type ImportIssueRequest struct {
 	SourceKey string `protobuf:"bytes,2,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
 	// Número que conserva el issue (el del origen), desde 1.
 	Number int32 `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
-	// Fecha de alta en el origen; ausente: ahora. Solo se usa al crear.
+	// Fecha de alta en el origen; ausente: ahora. Solo se usa al crear, salvo
+	// con override_created_at.
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Como en CreateIssueRequest: título obligatorio; descripción en markdown.
 	Title       string `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
@@ -4490,9 +4493,10 @@ type ImportIssueRequest struct {
 	// crean con color NEUTRAL. Reemplazan las del issue.
 	LabelNames []string `protobuf:"bytes,9,rep,name=label_names,json=labelNames,proto3" json:"label_names,omitempty"`
 	// Si el issue ya existe, corrige su created_at con el que viene (p. ej.
-	// una fecha de alta más vieja que se conoció después, issue 036). Sin
-	// evento en el historial; cuenta como UPDATED si cambia. Sin created_at,
-	// INVALID_ARGUMENT. Al crear no hace nada distinto.
+	// una fecha de alta más vieja que se conoció después, issue 036), y
+	// también la fecha de su evento IssueCreated. Sin evento nuevo; cuenta
+	// como UPDATED si cambia. true sin created_at: INVALID_ARGUMENT. Al crear
+	// no hace nada distinto.
 	OverrideCreatedAt bool `protobuf:"varint,10,opt,name=override_created_at,json=overrideCreatedAt,proto3" json:"override_created_at,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -4658,7 +4662,10 @@ type ImportIssueEventsRequest struct {
 	SourceKey string `protobuf:"bytes,2,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
 	// 1 a 500 eventos. Dos con la misma source_ref en un pedido:
 	// INVALID_ARGUMENT.
-	Events        []*ImportedEvent `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
+	Events []*ImportedEvent `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
+	// Reescribir (fecha y cambio) los eventos cuya source_ref ya está, en
+	// lugar de omitirlos. Para corregir una importación equivocada.
+	Overwrite     bool `protobuf:"varint,4,opt,name=overwrite,proto3" json:"overwrite,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4714,6 +4721,13 @@ func (x *ImportIssueEventsRequest) GetEvents() []*ImportedEvent {
 	return nil
 }
 
+func (x *ImportIssueEventsRequest) GetOverwrite() bool {
+	if x != nil {
+		return x.Overwrite
+	}
+	return false
+}
+
 // Un evento con su fecha en el origen.
 type ImportedEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -4725,7 +4739,9 @@ type ImportedEvent struct {
 	// INVALID_ARGUMENT.
 	Source EventSource `protobuf:"varint,2,opt,name=source,proto3,enum=issues.v1.EventSource" json:"source,omitempty"`
 	// Fecha del evento en el origen; queda como created_at del IssueEvent.
-	// Obligatoria y no en el futuro.
+	// Obligatoria, no en el futuro y no anterior al created_at del issue
+	// (INVALID_ARGUMENT): el alta va primero (ImportIssue con
+	// override_created_at si hace falta).
 	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
 	// Qué cambió. Sin change: INVALID_ARGUMENT.
 	//
@@ -4821,8 +4837,9 @@ type ImportedStatusChange struct {
 	// iguales (cambió el valor del origen, no la categoría).
 	FromState IssueState `protobuf:"varint,1,opt,name=from_state,json=fromState,proto3,enum=issues.v1.IssueState" json:"from_state,omitempty"`
 	ToState   IssueState `protobuf:"varint,2,opt,name=to_state,json=toState,proto3,enum=issues.v1.IssueState" json:"to_state,omitempty"`
-	// Valores en el origen (p. ej. "open", "in-progress"), 0 a 100
-	// caracteres: van como from_status_name y to_status_name.
+	// Valores en el origen (p. ej. "open", "in-progress"), 1 a 40 caracteres
+	// como el nombre de un estado: van como from_status_name y
+	// to_status_name.
 	FromName      string `protobuf:"bytes,3,opt,name=from_name,json=fromName,proto3" json:"from_name,omitempty"`
 	ToName        string `protobuf:"bytes,4,opt,name=to_name,json=toName,proto3" json:"to_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -4891,8 +4908,10 @@ type ImportIssueEventsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Eventos nuevos en el historial.
 	Created int32 `protobuf:"varint,1,opt,name=created,proto3" json:"created,omitempty"`
-	// Eventos cuya source_ref ya estaba: no se tocaron.
-	Skipped       int32 `protobuf:"varint,2,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	// Eventos cuya source_ref ya estaba: no se tocaron (sin overwrite).
+	Skipped int32 `protobuf:"varint,2,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	// Eventos cuya source_ref ya estaba y se reescribieron (con overwrite).
+	Updated       int32 `protobuf:"varint,3,opt,name=updated,proto3" json:"updated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4937,6 +4956,13 @@ func (x *ImportIssueEventsResponse) GetCreated() int32 {
 func (x *ImportIssueEventsResponse) GetSkipped() int32 {
 	if x != nil {
 		return x.Skipped
+	}
+	return 0
+}
+
+func (x *ImportIssueEventsResponse) GetUpdated() int32 {
+	if x != nil {
+		return x.Updated
 	}
 	return 0
 }
@@ -5285,13 +5311,14 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	" \x01(\bR\x11overrideCreatedAt\"q\n" +
 	"\x13ImportIssueResponse\x12&\n" +
 	"\x05issue\x18\x01 \x01(\v2\x10.issues.v1.IssueR\x05issue\x122\n" +
-	"\aoutcome\x18\x02 \x01(\x0e2\x18.issues.v1.ImportOutcomeR\aoutcome\"\x8a\x01\n" +
+	"\aoutcome\x18\x02 \x01(\x0e2\x18.issues.v1.ImportOutcomeR\aoutcome\"\xa8\x01\n" +
 	"\x18ImportIssueEventsRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
 	"\n" +
 	"source_key\x18\x02 \x01(\tR\tsourceKey\x120\n" +
-	"\x06events\x18\x03 \x03(\v2\x18.issues.v1.ImportedEventR\x06events\"\xef\x01\n" +
+	"\x06events\x18\x03 \x03(\v2\x18.issues.v1.ImportedEventR\x06events\x12\x1c\n" +
+	"\toverwrite\x18\x04 \x01(\bR\toverwrite\"\xef\x01\n" +
 	"\rImportedEvent\x12\x1d\n" +
 	"\n" +
 	"source_ref\x18\x01 \x01(\tR\tsourceRef\x12.\n" +
@@ -5305,10 +5332,11 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"from_state\x18\x01 \x01(\x0e2\x15.issues.v1.IssueStateR\tfromState\x120\n" +
 	"\bto_state\x18\x02 \x01(\x0e2\x15.issues.v1.IssueStateR\atoState\x12\x1b\n" +
 	"\tfrom_name\x18\x03 \x01(\tR\bfromName\x12\x17\n" +
-	"\ato_name\x18\x04 \x01(\tR\x06toName\"O\n" +
+	"\ato_name\x18\x04 \x01(\tR\x06toName\"i\n" +
 	"\x19ImportIssueEventsResponse\x12\x18\n" +
 	"\acreated\x18\x01 \x01(\x05R\acreated\x12\x18\n" +
-	"\askipped\x18\x02 \x01(\x05R\askipped*\x8c\x01\n" +
+	"\askipped\x18\x02 \x01(\x05R\askipped\x12\x18\n" +
+	"\aupdated\x18\x03 \x01(\x05R\aupdated*\x8c\x01\n" +
 	"\n" +
 	"IssueState\x12\x1b\n" +
 	"\x17ISSUE_STATE_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -5348,7 +5376,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x1aIMPORT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_CREATED\x10\x01\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_UPDATED\x10\x02\x12\x1c\n" +
-	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xf1\x16\n" +
+	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xf7\x16\n" +
 	"\fIssueService\x12e\n" +
 	"\fListProjects\x12\x1e.issues.v1.ListProjectsRequest\x1a\x1f.issues.v1.ListProjectsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12k\n" +
 	"\rCreateProject\x12\x1f.issues.v1.CreateProjectRequest\x1a .issues.v1.CreateProjectResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12s\n" +
@@ -5372,8 +5400,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\vDeleteLabel\x12\x1d.issues.v1.DeleteLabelRequest\x1a\x1e.issues.v1.DeleteLabelResponse\"3\x82\xd3\xe4\x93\x02-*+/v1/projects/{project_id}/labels/{label_id}\x12\x91\x01\n" +
 	"\rCreateComment\x12\x1f.issues.v1.CreateCommentRequest\x1a .issues.v1.CreateCommentResponse\"=\x82\xd3\xe4\x93\x027:\x01*\"2/v1/projects/{project_id}/issues/{number}/comments\x12\x92\x01\n" +
 	"\x0fListIssueEvents\x12!.issues.v1.ListIssueEventsRequest\x1a\".issues.v1.ListIssueEventsResponse\"8\x82\xd3\xe4\x93\x022\x120/v1/projects/{project_id}/issues/{number}/events\x12\x86\x01\n" +
-	"\vImportIssue\x12\x1d.issues.v1.ImportIssueRequest\x1a\x1e.issues.v1.ImportIssueResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/issues:import\x12\x98\x01\n" +
-	"\x11ImportIssueEvents\x12#.issues.v1.ImportIssueEventsRequest\x1a$.issues.v1.ImportIssueEventsResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/events:importB\x9e\x01\n" +
+	"\vImportIssue\x12\x1d.issues.v1.ImportIssueRequest\x1a\x1e.issues.v1.ImportIssueResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/issues:import\x12\x9e\x01\n" +
+	"\x11ImportIssueEvents\x12#.issues.v1.ImportIssueEventsRequest\x1a$.issues.v1.ImportIssueEventsResponse\">\x82\xd3\xe4\x93\x028:\x01*\"3/v1/admin/projects/{project_id}/issues:importEventsB\x9e\x01\n" +
 	"\rcom.issues.v1B\vIssuesProtoP\x01Z;github.com/tekitla/tekitla-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
 	"Issues::V1b\x06proto3"
 

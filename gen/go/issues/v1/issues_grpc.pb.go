@@ -143,7 +143,10 @@ type IssueServiceClient interface {
 	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo
 	// por created_at, con el orden de registro como desempate: un evento
 	// importado con ImportIssueEvents aparece en su fecha del origen, no al
-	// final.
+	// final. El cursor lleva las dos columnas; uno de antes de v0.6.0 es
+	// INVALID_ARGUMENT. Un evento importado entre dos páginas con fecha
+	// anterior al cursor no aparece en las siguientes: el cliente recarga
+	// desde la primera página.
 	ListIssueEvents(ctx context.Context, in *ListIssueEventsRequest, opts ...grpc.CallOption) (*ListIssueEventsResponse, error)
 	// Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
 	// de Round), conservando su número. Solo para quien importa: administración,
@@ -155,11 +158,12 @@ type IssueServiceClient interface {
 	//     issue (importado con otra clave o creado en Tekitla).
 	//   - Si ya existe, pisa título, descripción, prioridad, categoría y
 	//     etiquetas con lo que viene (el proyecto es un espejo del origen).
-	//     number y created_at no cambian: FAILED_PRECONDITION si number no
-	//     coincide con el guardado.
+	//     number no cambia (FAILED_PRECONDITION si no coincide con el guardado)
+	//     y created_at tampoco, salvo con override_created_at.
 	//
 	// Cada cambio queda en el historial como en los RPC sueltos, con source
-	// EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El siguiente
+	// EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue
+	// importado lleva el created_at del issue (desde v0.6.0). El siguiente
 	// CreateIssue usa un número mayor que todos los del proyecto, importados
 	// incluidos.
 	ImportIssue(ctx context.Context, in *ImportIssueRequest, opts ...grpc.CallOption) (*ImportIssueResponse, error)
@@ -169,8 +173,9 @@ type IssueServiceClient interface {
 	//
 	// Idempotente por (issue, source_ref): un evento cuya source_ref ya está
 	// en el historial del issue se omite sin tocarlo, así una segunda corrida
-	// no agrega nada. No cambia el estado actual del issue (eso lo hace
-	// ImportIssue): solo escribe historial.
+	// no agrega nada; con overwrite, se reescribe (para corregir una
+	// importación equivocada). No cambia el estado actual del issue (eso lo
+	// hace ImportIssue): solo escribe historial.
 	ImportIssueEvents(ctx context.Context, in *ImportIssueEventsRequest, opts ...grpc.CallOption) (*ImportIssueEventsResponse, error)
 }
 
@@ -485,7 +490,10 @@ type IssueServiceServer interface {
 	// Historial de un issue (cambios y comentarios), del más viejo al más nuevo
 	// por created_at, con el orden de registro como desempate: un evento
 	// importado con ImportIssueEvents aparece en su fecha del origen, no al
-	// final.
+	// final. El cursor lleva las dos columnas; uno de antes de v0.6.0 es
+	// INVALID_ARGUMENT. Un evento importado entre dos páginas con fecha
+	// anterior al cursor no aparece en las siguientes: el cliente recarga
+	// desde la primera página.
 	ListIssueEvents(context.Context, *ListIssueEventsRequest) (*ListIssueEventsResponse, error)
 	// Crea o actualiza un issue importado de otro tracker (p. ej. los markdown
 	// de Round), conservando su número. Solo para quien importa: administración,
@@ -497,11 +505,12 @@ type IssueServiceServer interface {
 	//     issue (importado con otra clave o creado en Tekitla).
 	//   - Si ya existe, pisa título, descripción, prioridad, categoría y
 	//     etiquetas con lo que viene (el proyecto es un espejo del origen).
-	//     number y created_at no cambian: FAILED_PRECONDITION si number no
-	//     coincide con el guardado.
+	//     number no cambia (FAILED_PRECONDITION si no coincide con el guardado)
+	//     y created_at tampoco, salvo con override_created_at.
 	//
 	// Cada cambio queda en el historial como en los RPC sueltos, con source
-	// EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El siguiente
+	// EVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue
+	// importado lleva el created_at del issue (desde v0.6.0). El siguiente
 	// CreateIssue usa un número mayor que todos los del proyecto, importados
 	// incluidos.
 	ImportIssue(context.Context, *ImportIssueRequest) (*ImportIssueResponse, error)
@@ -511,8 +520,9 @@ type IssueServiceServer interface {
 	//
 	// Idempotente por (issue, source_ref): un evento cuya source_ref ya está
 	// en el historial del issue se omite sin tocarlo, así una segunda corrida
-	// no agrega nada. No cambia el estado actual del issue (eso lo hace
-	// ImportIssue): solo escribe historial.
+	// no agrega nada; con overwrite, se reescribe (para corregir una
+	// importación equivocada). No cambia el estado actual del issue (eso lo
+	// hace ImportIssue): solo escribe historial.
 	ImportIssueEvents(context.Context, *ImportIssueEventsRequest) (*ImportIssueEventsResponse, error)
 	mustEmbedUnimplementedIssueServiceServer()
 }

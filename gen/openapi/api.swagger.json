@@ -84,44 +84,10 @@
         ]
       }
     },
-    "/v1/admin/projects/{projectId}/events:import": {
-      "post": {
-        "summary": "Agrega al historial de un issue importado eventos con su fecha en el\norigen (p. ej. los cambios de Estado reconstruidos de git, issue 036).\nSolo para quien importa, como ImportIssue: una persona, no un agente.",
-        "description": "Idempotente por (issue, source_ref): un evento cuya source_ref ya está\nen el historial del issue se omite sin tocarlo, así una segunda corrida\nno agrega nada. No cambia el estado actual del issue (eso lo hace\nImportIssue): solo escribe historial.",
-        "operationId": "IssueService_ImportIssueEvents",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ImportIssueEventsResponse"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "projectId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/IssueServiceImportIssueEventsBody"
-            }
-          }
-        ],
-        "tags": [
-          "IssueService"
-        ]
-      }
-    },
     "/v1/admin/projects/{projectId}/issues:import": {
       "post": {
         "summary": "Crea o actualiza un issue importado de otro tracker (p. ej. los markdown\nde Round), conservando su número. Solo para quien importa: administración,\nel gateway no la expone a los clientes normales.",
-        "description": "Idempotente por source_key (única por proyecto):\n- Si ningún issue del proyecto tiene esa source_key, lo crea con number y\n  created_at, al final del orden. ALREADY_EXISTS si number ya es de otro\n  issue (importado con otra clave o creado en Tekitla).\n- Si ya existe, pisa título, descripción, prioridad, categoría y\n  etiquetas con lo que viene (el proyecto es un espejo del origen).\n  number y created_at no cambian: FAILED_PRECONDITION si number no\n  coincide con el guardado.\nCada cambio queda en el historial como en los RPC sueltos, con source\nEVENT_SOURCE_IMPORT_SYNC (v0.6.0). El siguiente\nCreateIssue usa un número mayor que todos los del proyecto, importados\nincluidos.",
+        "description": "Idempotente por source_key (única por proyecto):\n- Si ningún issue del proyecto tiene esa source_key, lo crea con number y\n  created_at, al final del orden. ALREADY_EXISTS si number ya es de otro\n  issue (importado con otra clave o creado en Tekitla).\n- Si ya existe, pisa título, descripción, prioridad, categoría y\n  etiquetas con lo que viene (el proyecto es un espejo del origen).\n  number no cambia (FAILED_PRECONDITION si no coincide con el guardado)\n  y created_at tampoco, salvo con override_created_at.\nCada cambio queda en el historial como en los RPC sueltos, con source\nEVENT_SOURCE_IMPORT_SYNC (v0.6.0). El evento IssueCreated de un issue\nimportado lleva el created_at del issue (desde v0.6.0). El siguiente\nCreateIssue usa un número mayor que todos los del proyecto, importados\nincluidos.",
         "operationId": "IssueService_ImportIssue",
         "responses": {
           "200": {
@@ -144,6 +110,40 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/IssueServiceImportIssueBody"
+            }
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
+    "/v1/admin/projects/{projectId}/issues:importEvents": {
+      "post": {
+        "summary": "Agrega al historial de un issue importado eventos con su fecha en el\norigen (p. ej. los cambios de Estado reconstruidos de git, issue 036).\nSolo para quien importa, como ImportIssue: una persona, no un agente.",
+        "description": "Idempotente por (issue, source_ref): un evento cuya source_ref ya está\nen el historial del issue se omite sin tocarlo, así una segunda corrida\nno agrega nada; con overwrite, se reescribe (para corregir una\nimportación equivocada). No cambia el estado actual del issue (eso lo\nhace ImportIssue): solo escribe historial.",
+        "operationId": "IssueService_ImportIssueEvents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ImportIssueEventsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IssueServiceImportIssueEventsBody"
             }
           }
         ],
@@ -536,7 +536,7 @@
     },
     "/v1/projects/{projectId}/issues/{number}/events": {
       "get": {
-        "summary": "Historial de un issue (cambios y comentarios), del más viejo al más nuevo\npor created_at, con el orden de registro como desempate: un evento\nimportado con ImportIssueEvents aparece en su fecha del origen, no al\nfinal.",
+        "summary": "Historial de un issue (cambios y comentarios), del más viejo al más nuevo\npor created_at, con el orden de registro como desempate: un evento\nimportado con ImportIssueEvents aparece en su fecha del origen, no al\nfinal. El cursor lleva las dos columnas; uno de antes de v0.6.0 es\nINVALID_ARGUMENT. Un evento importado entre dos páginas con fecha\nanterior al cursor no aparece en las siguientes: el cliente recarga\ndesde la primera página.",
         "operationId": "IssueService_ListIssueEvents",
         "responses": {
           "200": {
@@ -1199,7 +1199,7 @@
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Fecha de alta en el origen; ausente: ahora. Solo se usa al crear."
+          "description": "Fecha de alta en el origen; ausente: ahora. Solo se usa al crear, salvo\ncon override_created_at."
         },
         "title": {
           "type": "string",
@@ -1225,7 +1225,7 @@
         },
         "overrideCreatedAt": {
           "type": "boolean",
-          "description": "Si el issue ya existe, corrige su created_at con el que viene (p. ej.\nuna fecha de alta más vieja que se conoció después, issue 036). Sin\nevento en el historial; cuenta como UPDATED si cambia. Sin created_at,\nINVALID_ARGUMENT. Al crear no hace nada distinto."
+          "description": "Si el issue ya existe, corrige su created_at con el que viene (p. ej.\nuna fecha de alta más vieja que se conoció después, issue 036), y\ntambién la fecha de su evento IssueCreated. Sin evento nuevo; cuenta\ncomo UPDATED si cambia. true sin created_at: INVALID_ARGUMENT. Al crear\nno hace nada distinto."
         }
       }
     },
@@ -1243,6 +1243,10 @@
             "$ref": "#/definitions/v1ImportedEvent"
           },
           "description": "1 a 500 eventos. Dos con la misma source_ref en un pedido:\nINVALID_ARGUMENT."
+        },
+        "overwrite": {
+          "type": "boolean",
+          "description": "Reescribir (fecha y cambio) los eventos cuya source_ref ya está, en\nlugar de omitirlos. Para corregir una importación equivocada."
         }
       }
     },
@@ -1664,7 +1668,7 @@
         "EVENT_SOURCE_IMPORT_SYNC"
       ],
       "default": "EVENT_SOURCE_UNSPECIFIED",
-      "description": "De dónde sale un evento del historial (issue 036). Las métricas lo usan\npara decir qué tan confiable es cada número.\n\n - EVENT_SOURCE_UNSPECIFIED: No lo envía el servidor; si llega, se trata como LIVE.\n - EVENT_SOURCE_LIVE: Registrado por Tekitla al momento del cambio.\n - EVENT_SOURCE_IMPORT_HISTORY: Reconstruido del historial del origen, p. ej. un commit que cambió el\nEstado de un issue de Round: la fecha es la del commit.\n - EVENT_SOURCE_IMPORT_FILE: Tomado de una fecha escrita en el archivo de origen (p. ej. «Fecha\nresuelto») que ningún commit marca. Sin hora: medianoche UTC.\n - EVENT_SOURCE_IMPORT_SYNC: Registrado por ImportIssue al reflejar el origen (alta, cambios de\nestado, título, etiquetas): la fecha es la de la corrida, no la del\ncambio en el origen. Las métricas de flujo no lo cuentan como\ntransición si el issue tiene histórico importado. Los eventos de\nImportIssue anteriores a v0.6.0 pueden figurar como LIVE."
+      "description": "De dónde sale un evento del historial (issue 036). Las métricas lo usan\npara decir qué tan confiable es cada número.\n\n - EVENT_SOURCE_UNSPECIFIED: En IssueEvent no lo envía el servidor (un cliente que lo recibe lo trata\ncomo LIVE). En ImportedEvent es INVALID_ARGUMENT.\n - EVENT_SOURCE_LIVE: Registrado por Tekitla al momento del cambio.\n - EVENT_SOURCE_IMPORT_HISTORY: Reconstruido del historial del origen, p. ej. un commit que cambió el\nEstado de un issue de Round: la fecha es la del commit.\n - EVENT_SOURCE_IMPORT_FILE: Tomado de una fecha escrita en el archivo de origen (p. ej. «Fecha\nresuelto») que ningún commit marca. Sin hora: medianoche UTC.\n - EVENT_SOURCE_IMPORT_SYNC: Registrado por ImportIssue al reflejar el origen (alta, cambios de\nestado, título, etiquetas): la fecha es la de la corrida, no la del\ncambio en el origen. Las métricas de flujo no lo cuentan como\ntransición si el issue tiene histórico importado. Los eventos de\nImportIssue anteriores a v0.6.0 pueden figurar como LIVE: la migración\nque agrega source en tekitla-issues decide su backfill."
     },
     "v1GetIssueResponse": {
       "type": "object",
@@ -1685,7 +1689,12 @@
         "skipped": {
           "type": "integer",
           "format": "int32",
-          "description": "Eventos cuya source_ref ya estaba: no se tocaron."
+          "description": "Eventos cuya source_ref ya estaba: no se tocaron (sin overwrite)."
+        },
+        "updated": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Eventos cuya source_ref ya estaba y se reescribieron (con overwrite)."
         }
       }
     },
@@ -1725,7 +1734,7 @@
         "occurredAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Fecha del evento en el origen; queda como created_at del IssueEvent.\nObligatoria y no en el futuro."
+          "description": "Fecha del evento en el origen; queda como created_at del IssueEvent.\nObligatoria, no en el futuro y no anterior al created_at del issue\n(INVALID_ARGUMENT): el alta va primero (ImportIssue con\noverride_created_at si hace falta)."
         },
         "statusChanged": {
           "$ref": "#/definitions/v1ImportedStatusChange"
@@ -1745,7 +1754,7 @@
         },
         "fromName": {
           "type": "string",
-          "description": "Valores en el origen (p. ej. \"open\", \"in-progress\"), 0 a 100\ncaracteres: van como from_status_name y to_status_name."
+          "description": "Valores en el origen (p. ej. \"open\", \"in-progress\"), 1 a 40 caracteres\ncomo el nombre de un estado: van como from_status_name y\nto_status_name."
         },
         "toName": {
           "type": "string"
