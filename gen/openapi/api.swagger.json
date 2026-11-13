@@ -1822,7 +1822,7 @@
           "$ref": "#/definitions/v1MetricSource"
         }
       },
-      "description": "Métricas de todo el período."
+      "description": "Métricas de todo el período: las semanas juntas. Los conteos son la suma\nde los de las semanas (un issue reabierto que vuelve a terminar en otra\nsemana cuenta dos veces) y las duraciones son las de todos los\nterminados del período. wip es el de to."
     },
     "v1FlowWeek": {
       "type": "object",
@@ -1897,7 +1897,7 @@
         },
         "summary": {
           "$ref": "#/definitions/v1FlowSummary",
-          "description": "Lo mismo sobre todo el período; wip es el de to."
+          "description": "Las semanas juntas (ver FlowSummary)."
         },
         "stale": {
           "type": "array",

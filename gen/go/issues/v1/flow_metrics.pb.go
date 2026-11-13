@@ -212,7 +212,7 @@ type GetFlowMetricsResponse struct {
 	// Una por semana del período, en orden. La primera y la última se
 	// recortan a from y to.
 	Weeks []*FlowWeek `protobuf:"bytes,4,rep,name=weeks,proto3" json:"weeks,omitempty"`
-	// Lo mismo sobre todo el período; wip es el de to.
+	// Las semanas juntas (ver FlowSummary).
 	Summary *FlowSummary `protobuf:"bytes,5,opt,name=summary,proto3" json:"summary,omitempty"`
 	// Issues en IN_PROGRESS en to sin actividad hace stale_after_days o más,
 	// del que lleva más tiempo en curso al que menos. A lo sumo stale_limit.
@@ -448,7 +448,10 @@ func (x *FlowWeek) GetSource() *MetricSource {
 	return nil
 }
 
-// Métricas de todo el período.
+// Métricas de todo el período: las semanas juntas. Los conteos son la suma
+// de los de las semanas (un issue reabierto que vuelve a terminar en otra
+// semana cuenta dos veces) y las duraciones son las de todos los
+// terminados del período. wip es el de to.
 type FlowSummary struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	LeadTime    *DurationStats         `protobuf:"bytes,1,opt,name=lead_time,json=leadTime,proto3" json:"lead_time,omitempty"`

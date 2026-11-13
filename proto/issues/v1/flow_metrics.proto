@@ -53,7 +53,7 @@ message GetFlowMetricsResponse {
   // Una por semana del período, en orden. La primera y la última se
   // recortan a from y to.
   repeated FlowWeek weeks = 4;
-  // Lo mismo sobre todo el período; wip es el de to.
+  // Las semanas juntas (ver FlowSummary).
   FlowSummary summary = 5;
   // Issues en IN_PROGRESS en to sin actividad hace stale_after_days o más,
   // del que lleva más tiempo en curso al que menos. A lo sumo stale_limit.
@@ -91,7 +91,10 @@ message FlowWeek {
   MetricSource source = 10;
 }
 
-// Métricas de todo el período.
+// Métricas de todo el período: las semanas juntas. Los conteos son la suma
+// de los de las semanas (un issue reabierto que vuelve a terminar en otra
+// semana cuenta dos veces) y las duraciones son las de todos los
+// terminados del período. wip es el de to.
 message FlowSummary {
   DurationStats lead_time = 1;
   DurationStats cycle_time = 2;

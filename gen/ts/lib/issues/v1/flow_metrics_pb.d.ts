@@ -123,7 +123,7 @@ export declare type GetFlowMetricsResponse = Message<"issues.v1.GetFlowMetricsRe
   weeks: FlowWeek[];
 
   /**
-   * Lo mismo sobre todo el período; wip es el de to.
+   * Las semanas juntas (ver FlowSummary).
    *
    * @generated from field: issues.v1.FlowSummary summary = 5;
    */
@@ -245,7 +245,10 @@ export declare type FlowWeek = Message<"issues.v1.FlowWeek"> & {
 export declare const FlowWeekSchema: GenMessage<FlowWeek>;
 
 /**
- * Métricas de todo el período.
+ * Métricas de todo el período: las semanas juntas. Los conteos son la suma
+ * de los de las semanas (un issue reabierto que vuelve a terminar en otra
+ * semana cuenta dos veces) y las duraciones son las de todos los
+ * terminados del período. wip es el de to.
  *
  * @generated from message issues.v1.FlowSummary
  */
