@@ -147,15 +147,16 @@ service IssueService {
   rpc ListLabels(ListLabelsRequest) returns (ListLabelsResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/labels"};
   }
-  // Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
-  // FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+  // Crea una etiqueta, opcionalmente de valor (Label.value). ALREADY_EXISTS
+  // si ya hay una con ese nombre; FAILED_PRECONDITION si el proyecto ya
+  // tiene el máximo (100).
   rpc CreateLabel(CreateLabelRequest) returns (CreateLabelResponse) {
     option (google.api.http) = {
       post: "/v1/projects/{project_id}/labels"
       body: "*"
     };
   }
-  // Renombra o cambia el color de una etiqueta.
+  // Renombra una etiqueta, cambia su color o si es de valor (Label.value).
   rpc UpdateLabel(UpdateLabelRequest) returns (UpdateLabelResponse) {
     option (google.api.http) = {
       patch: "/v1/projects/{project_id}/labels/{label_id}"
@@ -368,7 +369,9 @@ message Label {
   string name = 3;
   LabelColor color = 4;
   // Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
-  // los cerrados de valor del resto (FlowWeek.closed_value). Nace en false.
+  // los cerrados de valor del resto (FlowWeek.closed_value). Lo ponen
+  // CreateLabel y UpdateLabel; false por defecto (también las etiquetas que
+  // crea ImportIssue).
   bool value = 5;
 }
 

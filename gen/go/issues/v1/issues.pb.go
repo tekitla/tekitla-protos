@@ -867,7 +867,9 @@ type Label struct {
 	Name  string     `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Color LabelColor `protobuf:"varint,4,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
 	// Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
-	// los cerrados de valor del resto (FlowWeek.closed_value). Nace en false.
+	// los cerrados de valor del resto (FlowWeek.closed_value). Lo ponen
+	// CreateLabel y UpdateLabel; false por defecto (también las etiquetas que
+	// crea ImportIssue).
 	Value         bool `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

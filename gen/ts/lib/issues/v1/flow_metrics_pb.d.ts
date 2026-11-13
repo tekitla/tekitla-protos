@@ -10,6 +10,12 @@
 //     Los eventos EVENT_SOURCE_IMPORT_SYNC llevan la fecha de la corrida:
 //     cuentan solo si son posteriores al último evento importado con fecha
 //     (IMPORT_HISTORY o IMPORT_FILE) del issue, o si no tiene ninguno.
+//   - Categoría inicial (desde el alta): la de origen de la primera
+//     transición que cuenta; sin transiciones, la actual. Nacer en
+//     IN_PROGRESS (p. ej. un importado sin histórico) cuenta como empezar en
+//     el alta; nacer en DONE no es terminar (FlowCoverage.done_without_dates).
+//     Si el historial no termina en el estado actual del issue, mandan el
+//     historial y sus fechas.
 //   - Terminado: la última entrada a DONE dentro de la semana, si el issue
 //     sigue en DONE al final de ella. Un reabierto vuelve a contar cuando
 //     vuelve a entrar.
@@ -55,7 +61,8 @@ export declare type GetFlowMetricsRequest = Message<"issues.v1.GetFlowMetricsReq
 
   /**
    * Zona IANA que define las semanas: de lunes 00:00 a lunes 00:00 en esa
-   * zona. Vacía: "America/Mexico_City". Desconocida → INVALID_ARGUMENT
+   * zona (donde el cambio de horario se salta las 00:00, desde la primera
+   * hora que existe ese día). Vacía: "America/Mexico_City". Desconocida → INVALID_ARGUMENT
    * (INVALID_TIME_ZONE).
    *
    * @generated from field: string time_zone = 4;
@@ -124,14 +131,16 @@ export declare type GetFlowMetricsResponse = Message<"issues.v1.GetFlowMetricsRe
   weeks: FlowWeek[];
 
   /**
-   * Las semanas juntas (ver FlowSummary).
+   * Las semanas juntas (ver FlowSummary). Un período del todo futuro es
+   * INVALID_PERIOD: to se recorta a ahora.
    *
    * @generated from field: issues.v1.FlowSummary summary = 5;
    */
   summary?: FlowSummary | undefined;
 
   /**
-   * Issues en IN_PROGRESS en to sin actividad hace stale_after_days o más,
+   * Issues en IN_PROGRESS en to sin actividad en los stale_after_days días
+   * anteriores a to (la actividad posterior a to no cuenta),
    * del que lleva más tiempo en curso al que menos. A lo sumo stale_limit.
    * Actividad: cualquier evento en vivo (también comentarios y ediciones),
    * los importados con fecha (IMPORT_HISTORY, IMPORT_FILE), las
@@ -249,7 +258,10 @@ export declare const FlowWeekSchema: GenMessage<FlowWeek>;
  * Métricas de todo el período: las semanas juntas. Los conteos son la suma
  * de los de las semanas (un issue reabierto que vuelve a terminar en otra
  * semana cuenta dos veces) y las duraciones son las de todos los
- * terminados del período. wip es el de to.
+ * terminados del período. wip es el de to. source también es la suma de
+ * las semanas: una transición que sostiene números de dos semanas (la
+ * entrada a IN_PROGRESS de un issue que empieza en una y termina en otra)
+ * cuenta en las dos.
  *
  * @generated from message issues.v1.FlowSummary
  */
@@ -387,6 +399,8 @@ export declare type StaleIssue = Message<"issues.v1.StaleIssue"> & {
   number: number;
 
   /**
+   * Título y estado actuales (no los de to).
+   *
    * @generated from field: string title = 2;
    */
   title: string;

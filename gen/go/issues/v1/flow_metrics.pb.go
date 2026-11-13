@@ -10,6 +10,12 @@
 //     Los eventos EVENT_SOURCE_IMPORT_SYNC llevan la fecha de la corrida:
 //     cuentan solo si son posteriores al último evento importado con fecha
 //     (IMPORT_HISTORY o IMPORT_FILE) del issue, o si no tiene ninguno.
+//   - Categoría inicial (desde el alta): la de origen de la primera
+//     transición que cuenta; sin transiciones, la actual. Nacer en
+//     IN_PROGRESS (p. ej. un importado sin histórico) cuenta como empezar en
+//     el alta; nacer en DONE no es terminar (FlowCoverage.done_without_dates).
+//     Si el historial no termina en el estado actual del issue, mandan el
+//     historial y sus fechas.
 //   - Terminado: la última entrada a DONE dentro de la semana, si el issue
 //     sigue en DONE al final de ella. Un reabierto vuelve a contar cuando
 //     vuelve a entrar.
@@ -108,7 +114,8 @@ type GetFlowMetricsRequest struct {
 	From *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
 	To   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
 	// Zona IANA que define las semanas: de lunes 00:00 a lunes 00:00 en esa
-	// zona. Vacía: "America/Mexico_City". Desconocida → INVALID_ARGUMENT
+	// zona (donde el cambio de horario se salta las 00:00, desde la primera
+	// hora que existe ese día). Vacía: "America/Mexico_City". Desconocida → INVALID_ARGUMENT
 	// (INVALID_TIME_ZONE).
 	TimeZone string `protobuf:"bytes,4,opt,name=time_zone,json=timeZone,proto3" json:"time_zone,omitempty"`
 	// Solo los issues con alguna de estas etiquetas (p. ej. un área o un
@@ -213,9 +220,11 @@ type GetFlowMetricsResponse struct {
 	// Una por semana del período, en orden. La primera y la última se
 	// recortan a from y to.
 	Weeks []*FlowWeek `protobuf:"bytes,4,rep,name=weeks,proto3" json:"weeks,omitempty"`
-	// Las semanas juntas (ver FlowSummary).
+	// Las semanas juntas (ver FlowSummary). Un período del todo futuro es
+	// INVALID_PERIOD: to se recorta a ahora.
 	Summary *FlowSummary `protobuf:"bytes,5,opt,name=summary,proto3" json:"summary,omitempty"`
-	// Issues en IN_PROGRESS en to sin actividad hace stale_after_days o más,
+	// Issues en IN_PROGRESS en to sin actividad en los stale_after_days días
+	// anteriores a to (la actividad posterior a to no cuenta),
 	// del que lleva más tiempo en curso al que menos. A lo sumo stale_limit.
 	// Actividad: cualquier evento en vivo (también comentarios y ediciones),
 	// los importados con fecha (IMPORT_HISTORY, IMPORT_FILE), las
@@ -452,7 +461,10 @@ func (x *FlowWeek) GetSource() *MetricSource {
 // Métricas de todo el período: las semanas juntas. Los conteos son la suma
 // de los de las semanas (un issue reabierto que vuelve a terminar en otra
 // semana cuenta dos veces) y las duraciones son las de todos los
-// terminados del período. wip es el de to.
+// terminados del período. wip es el de to. source también es la suma de
+// las semanas: una transición que sostiene números de dos semanas (la
+// entrada a IN_PROGRESS de un issue que empieza en una y termina en otra)
+// cuenta en las dos.
 type FlowSummary struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	LeadTime    *DurationStats         `protobuf:"bytes,1,opt,name=lead_time,json=leadTime,proto3" json:"lead_time,omitempty"`
@@ -699,10 +711,11 @@ func (x *MetricSource) GetImportSync() int32 {
 
 // Un issue en curso sin actividad reciente.
 type StaleIssue struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Number   int32                  `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
-	Title    string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	StatusId string                 `protobuf:"bytes,3,opt,name=status_id,json=statusId,proto3" json:"status_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Number int32                  `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
+	// Título y estado actuales (no los de to).
+	Title    string `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	StatusId string `protobuf:"bytes,3,opt,name=status_id,json=statusId,proto3" json:"status_id,omitempty"`
 	// Desde cuándo está en curso: la última entrada a IN_PROGRESS (el alta si
 	// nació en curso).
 	InProgressSince *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=in_progress_since,json=inProgressSince,proto3" json:"in_progress_since,omitempty"`

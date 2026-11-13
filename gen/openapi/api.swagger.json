@@ -279,7 +279,7 @@
           },
           {
             "name": "timeZone",
-            "description": "Zona IANA que define las semanas: de lunes 00:00 a lunes 00:00 en esa\nzona. Vacía: \"America/Mexico_City\". Desconocida → INVALID_ARGUMENT\n(INVALID_TIME_ZONE).",
+            "description": "Zona IANA que define las semanas: de lunes 00:00 a lunes 00:00 en esa\nzona (donde el cambio de horario se salta las 00:00, desde la primera\nhora que existe ese día). Vacía: \"America/Mexico_City\". Desconocida → INVALID_ARGUMENT\n(INVALID_TIME_ZONE).",
             "in": "query",
             "required": false,
             "type": "string"
@@ -798,7 +798,7 @@
         ]
       },
       "post": {
-        "summary": "Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;\nFAILED_PRECONDITION si el proyecto ya tiene el máximo (100).",
+        "summary": "Crea una etiqueta, opcionalmente de valor (Label.value). ALREADY_EXISTS\nsi ya hay una con ese nombre; FAILED_PRECONDITION si el proyecto ya\ntiene el máximo (100).",
         "operationId": "IssueService_CreateLabel",
         "responses": {
           "200": {
@@ -860,7 +860,7 @@
         ]
       },
       "patch": {
-        "summary": "Renombra o cambia el color de una etiqueta.",
+        "summary": "Renombra una etiqueta, cambia su color o si es de valor (Label.value).",
         "operationId": "IssueService_UpdateLabel",
         "responses": {
           "200": {
@@ -1434,7 +1434,7 @@
         },
         "value": {
           "type": "boolean",
-          "description": "Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa\nlos cerrados de valor del resto (FlowWeek.closed_value). Nace en false."
+          "description": "Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa\nlos cerrados de valor del resto (FlowWeek.closed_value). Lo ponen\nCreateLabel y UpdateLabel; false por defecto (también las etiquetas que\ncrea ImportIssue)."
         }
       }
     },
@@ -1822,7 +1822,7 @@
           "$ref": "#/definitions/v1MetricSource"
         }
       },
-      "description": "Métricas de todo el período: las semanas juntas. Los conteos son la suma\nde los de las semanas (un issue reabierto que vuelve a terminar en otra\nsemana cuenta dos veces) y las duraciones son las de todos los\nterminados del período. wip es el de to."
+      "description": "Métricas de todo el período: las semanas juntas. Los conteos son la suma\nde los de las semanas (un issue reabierto que vuelve a terminar en otra\nsemana cuenta dos veces) y las duraciones son las de todos los\nterminados del período. wip es el de to. source también es la suma de\nlas semanas: una transición que sostiene números de dos semanas (la\nentrada a IN_PROGRESS de un issue que empieza en una y termina en otra)\ncuenta en las dos."
     },
     "v1FlowWeek": {
       "type": "object",
@@ -1897,7 +1897,7 @@
         },
         "summary": {
           "$ref": "#/definitions/v1FlowSummary",
-          "description": "Las semanas juntas (ver FlowSummary)."
+          "description": "Las semanas juntas (ver FlowSummary). Un período del todo futuro es\nINVALID_PERIOD: to se recorta a ahora."
         },
         "stale": {
           "type": "array",
@@ -1905,7 +1905,7 @@
             "type": "object",
             "$ref": "#/definitions/v1StaleIssue"
           },
-          "description": "Issues en IN_PROGRESS en to sin actividad hace stale_after_days o más,\ndel que lleva más tiempo en curso al que menos. A lo sumo stale_limit.\nActividad: cualquier evento en vivo (también comentarios y ediciones),\nlos importados con fecha (IMPORT_HISTORY, IMPORT_FILE), las\ntransiciones IMPORT_SYNC que cuentan y el alta. Los demás IMPORT_SYNC\nno: su fecha es la de la corrida del importador."
+          "description": "Issues en IN_PROGRESS en to sin actividad en los stale_after_days días\nanteriores a to (la actividad posterior a to no cuenta),\ndel que lleva más tiempo en curso al que menos. A lo sumo stale_limit.\nActividad: cualquier evento en vivo (también comentarios y ediciones),\nlos importados con fecha (IMPORT_HISTORY, IMPORT_FILE), las\ntransiciones IMPORT_SYNC que cuentan y el alta. Los demás IMPORT_SYNC\nno: su fecha es la de la corrida del importador."
         },
         "staleTotal": {
           "type": "integer",
@@ -2522,7 +2522,8 @@
           "format": "int32"
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Título y estado actuales (no los de to)."
         },
         "statusId": {
           "type": "string"

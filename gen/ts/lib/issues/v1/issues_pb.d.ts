@@ -323,7 +323,9 @@ export declare type Label = Message<"issues.v1.Label"> & {
 
   /**
    * Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
-   * los cerrados de valor del resto (FlowWeek.closed_value). Nace en false.
+   * los cerrados de valor del resto (FlowWeek.closed_value). Lo ponen
+   * CreateLabel y UpdateLabel; false por defecto (también las etiquetas que
+   * crea ImportIssue).
    *
    * @generated from field: bool value = 5;
    */
@@ -2724,8 +2726,9 @@ export declare const IssueService: GenService<{
     output: typeof ListLabelsResponseSchema;
   },
   /**
-   * Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
-   * FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+   * Crea una etiqueta, opcionalmente de valor (Label.value). ALREADY_EXISTS
+   * si ya hay una con ese nombre; FAILED_PRECONDITION si el proyecto ya
+   * tiene el máximo (100).
    *
    * @generated from rpc issues.v1.IssueService.CreateLabel
    */
@@ -2735,7 +2738,7 @@ export declare const IssueService: GenService<{
     output: typeof CreateLabelResponseSchema;
   },
   /**
-   * Renombra o cambia el color de una etiqueta.
+   * Renombra una etiqueta, cambia su color o si es de valor (Label.value).
    *
    * @generated from rpc issues.v1.IssueService.UpdateLabel
    */

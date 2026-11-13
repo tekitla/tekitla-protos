@@ -10,6 +10,12 @@
 //     Los eventos EVENT_SOURCE_IMPORT_SYNC llevan la fecha de la corrida:
 //     cuentan solo si son posteriores al último evento importado con fecha
 //     (IMPORT_HISTORY o IMPORT_FILE) del issue, o si no tiene ninguno.
+//   - Categoría inicial (desde el alta): la de origen de la primera
+//     transición que cuenta; sin transiciones, la actual. Nacer en
+//     IN_PROGRESS (p. ej. un importado sin histórico) cuenta como empezar en
+//     el alta; nacer en DONE no es terminar (FlowCoverage.done_without_dates).
+//     Si el historial no termina en el estado actual del issue, mandan el
+//     historial y sus fechas.
 //   - Terminado: la última entrada a DONE dentro de la semana, si el issue
 //     sigue en DONE al final de ella. Un reabierto vuelve a contar cuando
 //     vuelve a entrar.
