@@ -101,8 +101,9 @@ func (MetricConfidence) EnumDescriptor() ([]byte, []int) {
 type GetFlowMetricsRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	// Período. Sin from: 12 semanas antes de to. Sin to: ahora. from después
-	// de to → INVALID_ARGUMENT (reason INVALID_PERIOD); más de 104 semanas →
+	// Período. Sin from: 12 semanas antes de to. Sin to, o con un to futuro:
+	// ahora. from no anterior a to, o un Timestamp fuera de rango →
+	// INVALID_ARGUMENT (reason INVALID_PERIOD); más de 104 semanas →
 	// INVALID_ARGUMENT (PERIOD_TOO_LONG).
 	From *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
 	To   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
@@ -112,13 +113,13 @@ type GetFlowMetricsRequest struct {
 	TimeZone string `protobuf:"bytes,4,opt,name=time_zone,json=timeZone,proto3" json:"time_zone,omitempty"`
 	// Solo los issues con alguna de estas etiquetas (p. ej. un área o un
 	// repo). Vacío: todos. Una etiqueta que no es del proyecto →
-	// INVALID_ARGUMENT.
+	// INVALID_ARGUMENT (UNKNOWN_LABEL).
 	LabelIds []string `protobuf:"bytes,5,rep,name=label_ids,json=labelIds,proto3" json:"label_ids,omitempty"`
 	// Días sin actividad para que un issue en curso cuente como estancado.
-	// 0: 30. Entre 1 y 365 (si no, INVALID_ARGUMENT).
+	// 0: 30. Entre 1 y 365 (si no, INVALID_ARGUMENT, INVALID_STALE_AFTER_DAYS).
 	StaleAfterDays int32 `protobuf:"varint,6,opt,name=stale_after_days,json=staleAfterDays,proto3" json:"stale_after_days,omitempty"`
 	// Máximo de estancados en la respuesta. 0: 20. Entre 1 y 100 (si no,
-	// INVALID_ARGUMENT).
+	// INVALID_ARGUMENT, INVALID_STALE_LIMIT).
 	StaleLimit    int32 `protobuf:"varint,7,opt,name=stale_limit,json=staleLimit,proto3" json:"stale_limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -617,7 +618,9 @@ func (x *DurationStats) GetP85() *durationpb.Duration {
 
 // De dónde salen los números: cuántas transiciones de cada fuente los
 // sostienen (para lead y cycle time, la entrada a DONE y la entrada a
-// IN_PROGRESS) y la confianza que resulta.
+// IN_PROGRESS) y la confianza que resulta. En una semana, cada transición
+// cuenta una vez aunque sostenga dos números (la entrada a IN_PROGRESS de un
+// issue que empieza y termina en la misma semana).
 type MetricSource struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Confidence    MetricConfidence       `protobuf:"varint,1,opt,name=confidence,proto3,enum=issues.v1.MetricConfidence" json:"confidence,omitempty"`

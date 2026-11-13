@@ -39,8 +39,9 @@ export declare type GetFlowMetricsRequest = Message<"issues.v1.GetFlowMetricsReq
   projectId: string;
 
   /**
-   * Período. Sin from: 12 semanas antes de to. Sin to: ahora. from después
-   * de to → INVALID_ARGUMENT (reason INVALID_PERIOD); más de 104 semanas →
+   * Período. Sin from: 12 semanas antes de to. Sin to, o con un to futuro:
+   * ahora. from no anterior a to, o un Timestamp fuera de rango →
+   * INVALID_ARGUMENT (reason INVALID_PERIOD); más de 104 semanas →
    * INVALID_ARGUMENT (PERIOD_TOO_LONG).
    *
    * @generated from field: google.protobuf.Timestamp from = 2;
@@ -64,7 +65,7 @@ export declare type GetFlowMetricsRequest = Message<"issues.v1.GetFlowMetricsReq
   /**
    * Solo los issues con alguna de estas etiquetas (p. ej. un área o un
    * repo). Vacío: todos. Una etiqueta que no es del proyecto →
-   * INVALID_ARGUMENT.
+   * INVALID_ARGUMENT (UNKNOWN_LABEL).
    *
    * @generated from field: repeated string label_ids = 5;
    */
@@ -72,7 +73,7 @@ export declare type GetFlowMetricsRequest = Message<"issues.v1.GetFlowMetricsReq
 
   /**
    * Días sin actividad para que un issue en curso cuente como estancado.
-   * 0: 30. Entre 1 y 365 (si no, INVALID_ARGUMENT).
+   * 0: 30. Entre 1 y 365 (si no, INVALID_ARGUMENT, INVALID_STALE_AFTER_DAYS).
    *
    * @generated from field: int32 stale_after_days = 6;
    */
@@ -80,7 +81,7 @@ export declare type GetFlowMetricsRequest = Message<"issues.v1.GetFlowMetricsReq
 
   /**
    * Máximo de estancados en la respuesta. 0: 20. Entre 1 y 100 (si no,
-   * INVALID_ARGUMENT).
+   * INVALID_ARGUMENT, INVALID_STALE_LIMIT).
    *
    * @generated from field: int32 stale_limit = 7;
    */
@@ -335,7 +336,9 @@ export declare const DurationStatsSchema: GenMessage<DurationStats>;
 /**
  * De dónde salen los números: cuántas transiciones de cada fuente los
  * sostienen (para lead y cycle time, la entrada a DONE y la entrada a
- * IN_PROGRESS) y la confianza que resulta.
+ * IN_PROGRESS) y la confianza que resulta. En una semana, cada transición
+ * cuenta una vez aunque sostenga dos números (la entrada a IN_PROGRESS de un
+ * issue que empieza y termina en la misma semana).
  *
  * @generated from message issues.v1.MetricSource
  */
