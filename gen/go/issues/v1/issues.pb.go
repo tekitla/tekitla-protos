@@ -864,8 +864,11 @@ type Label struct {
 	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	ProjectId string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
-	Name          string     `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Color         LabelColor `protobuf:"varint,4,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
+	Name  string     `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Color LabelColor `protobuf:"varint,4,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
+	// Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
+	// los cerrados de valor del resto (FlowWeek.closed_value). Nace en false.
+	Value         bool `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -926,6 +929,13 @@ func (x *Label) GetColor() LabelColor {
 		return x.Color
 	}
 	return LabelColor_LABEL_COLOR_UNSPECIFIED
+}
+
+func (x *Label) GetValue() bool {
+	if x != nil {
+		return x.Value
+	}
+	return false
 }
 
 type Comment struct {
@@ -3947,10 +3957,12 @@ func (x *ListLabelsResponse) GetLabels() []*Label {
 }
 
 type CreateLabelRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Color         LabelColor             `protobuf:"varint,3,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Color     LabelColor             `protobuf:"varint,3,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
+	// Ver Label.value.
+	Value         bool `protobuf:"varint,4,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4006,6 +4018,13 @@ func (x *CreateLabelRequest) GetColor() LabelColor {
 	return LabelColor_LABEL_COLOR_UNSPECIFIED
 }
 
+func (x *CreateLabelRequest) GetValue() bool {
+	if x != nil {
+		return x.Value
+	}
+	return false
+}
+
 type CreateLabelResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Label         *Label                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
@@ -4056,7 +4075,9 @@ type UpdateLabelRequest struct {
 	LabelId   string                 `protobuf:"bytes,2,opt,name=label_id,json=labelId,proto3" json:"label_id,omitempty"`
 	Name      *string                `protobuf:"bytes,3,opt,name=name,proto3,oneof" json:"name,omitempty"`
 	// UNSPECIFIED se guarda como NEUTRAL.
-	Color         *LabelColor `protobuf:"varint,4,opt,name=color,proto3,enum=issues.v1.LabelColor,oneof" json:"color,omitempty"`
+	Color *LabelColor `protobuf:"varint,4,opt,name=color,proto3,enum=issues.v1.LabelColor,oneof" json:"color,omitempty"`
+	// Ver Label.value.
+	Value         *bool `protobuf:"varint,5,opt,name=value,proto3,oneof" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4117,6 +4138,13 @@ func (x *UpdateLabelRequest) GetColor() LabelColor {
 		return *x.Color
 	}
 	return LabelColor_LABEL_COLOR_UNSPECIFIED
+}
+
+func (x *UpdateLabelRequest) GetValue() bool {
+	if x != nil && x.Value != nil {
+		return *x.Value
+	}
+	return false
 }
 
 type UpdateLabelResponse struct {
@@ -4971,7 +4999,7 @@ var File_issues_v1_issues_proto protoreflect.FileDescriptor
 
 const file_issues_v1_issues_proto_rawDesc = "" +
 	"\n" +
-	"\x16issues/v1/issues.proto\x12\tissues.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xfa\x01\n" +
+	"\x16issues/v1/issues.proto\x12\tissues.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cissues/v1/flow_metrics.proto\"\xfa\x01\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x12\n" +
@@ -5016,13 +5044,14 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x04rank\x18\x05 \x01(\tR\x04rank\x12+\n" +
 	"\x05color\x18\x06 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x1b\n" +
 	"\twip_limit\x18\a \x01(\x05R\bwipLimit\x12\x16\n" +
-	"\x06hidden\x18\b \x01(\bR\x06hidden\"w\n" +
+	"\x06hidden\x18\b \x01(\bR\x06hidden\"\x8d\x01\n" +
 	"\x05Label\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12+\n" +
-	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\"\xa0\x01\n" +
+	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x14\n" +
+	"\x05value\x18\x05 \x01(\bR\x05value\"\xa0\x01\n" +
 	"\aComment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\bissue_id\x18\x02 \x01(\tR\aissueId\x12\x1b\n" +
@@ -5255,22 +5284,25 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\">\n" +
 	"\x12ListLabelsResponse\x12(\n" +
-	"\x06labels\x18\x01 \x03(\v2\x10.issues.v1.LabelR\x06labels\"t\n" +
+	"\x06labels\x18\x01 \x03(\v2\x10.issues.v1.LabelR\x06labels\"\x8a\x01\n" +
 	"\x12CreateLabelRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12+\n" +
-	"\x05color\x18\x03 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\"=\n" +
+	"\x05color\x18\x03 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x14\n" +
+	"\x05value\x18\x04 \x01(\bR\x05value\"=\n" +
 	"\x13CreateLabelResponse\x12&\n" +
-	"\x05label\x18\x01 \x01(\v2\x10.issues.v1.LabelR\x05label\"\xac\x01\n" +
+	"\x05label\x18\x01 \x01(\v2\x10.issues.v1.LabelR\x05label\"\xd1\x01\n" +
 	"\x12UpdateLabelRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x19\n" +
 	"\blabel_id\x18\x02 \x01(\tR\alabelId\x12\x17\n" +
 	"\x04name\x18\x03 \x01(\tH\x00R\x04name\x88\x01\x01\x120\n" +
-	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorH\x01R\x05color\x88\x01\x01B\a\n" +
+	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorH\x01R\x05color\x88\x01\x01\x12\x19\n" +
+	"\x05value\x18\x05 \x01(\bH\x02R\x05value\x88\x01\x01B\a\n" +
 	"\x05_nameB\b\n" +
-	"\x06_color\"=\n" +
+	"\x06_colorB\b\n" +
+	"\x06_value\"=\n" +
 	"\x13UpdateLabelResponse\x12&\n" +
 	"\x05label\x18\x01 \x01(\v2\x10.issues.v1.LabelR\x05label\"N\n" +
 	"\x12DeleteLabelRequest\x12\x1d\n" +
@@ -5376,7 +5408,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x1aIMPORT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_CREATED\x10\x01\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_UPDATED\x10\x02\x12\x1c\n" +
-	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xf7\x16\n" +
+	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xfe\x17\n" +
 	"\fIssueService\x12e\n" +
 	"\fListProjects\x12\x1e.issues.v1.ListProjectsRequest\x1a\x1f.issues.v1.ListProjectsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12k\n" +
 	"\rCreateProject\x12\x1f.issues.v1.CreateProjectRequest\x1a .issues.v1.CreateProjectResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12s\n" +
@@ -5401,7 +5433,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\rCreateComment\x12\x1f.issues.v1.CreateCommentRequest\x1a .issues.v1.CreateCommentResponse\"=\x82\xd3\xe4\x93\x027:\x01*\"2/v1/projects/{project_id}/issues/{number}/comments\x12\x92\x01\n" +
 	"\x0fListIssueEvents\x12!.issues.v1.ListIssueEventsRequest\x1a\".issues.v1.ListIssueEventsResponse\"8\x82\xd3\xe4\x93\x022\x120/v1/projects/{project_id}/issues/{number}/events\x12\x86\x01\n" +
 	"\vImportIssue\x12\x1d.issues.v1.ImportIssueRequest\x1a\x1e.issues.v1.ImportIssueResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/issues:import\x12\x9e\x01\n" +
-	"\x11ImportIssueEvents\x12#.issues.v1.ImportIssueEventsRequest\x1a$.issues.v1.ImportIssueEventsResponse\">\x82\xd3\xe4\x93\x028:\x01*\"3/v1/admin/projects/{project_id}/issues:importEventsB\x9e\x01\n" +
+	"\x11ImportIssueEvents\x12#.issues.v1.ImportIssueEventsRequest\x1a$.issues.v1.ImportIssueEventsResponse\">\x82\xd3\xe4\x93\x028:\x01*\"3/v1/admin/projects/{project_id}/issues:importEvents\x12\x84\x01\n" +
+	"\x0eGetFlowMetrics\x12 .issues.v1.GetFlowMetricsRequest\x1a!.issues.v1.GetFlowMetricsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/projects/{project_id}/flowMetricsB\x9e\x01\n" +
 	"\rcom.issues.v1B\vIssuesProtoP\x01Z;github.com/tekitla/tekitla-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
 	"Issues::V1b\x06proto3"
 
@@ -5494,6 +5527,8 @@ var file_issues_v1_issues_proto_goTypes = []any{
 	(*ImportedStatusChange)(nil),        // 71: issues.v1.ImportedStatusChange
 	(*ImportIssueEventsResponse)(nil),   // 72: issues.v1.ImportIssueEventsResponse
 	(*timestamppb.Timestamp)(nil),       // 73: google.protobuf.Timestamp
+	(*GetFlowMetricsRequest)(nil),       // 74: issues.v1.GetFlowMetricsRequest
+	(*GetFlowMetricsResponse)(nil),      // 75: issues.v1.GetFlowMetricsResponse
 }
 var file_issues_v1_issues_proto_depIdxs = []int32{
 	73,  // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
@@ -5599,30 +5634,32 @@ var file_issues_v1_issues_proto_depIdxs = []int32{
 	65,  // 100: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
 	67,  // 101: issues.v1.IssueService.ImportIssue:input_type -> issues.v1.ImportIssueRequest
 	69,  // 102: issues.v1.IssueService.ImportIssueEvents:input_type -> issues.v1.ImportIssueEventsRequest
-	25,  // 103: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
-	27,  // 104: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
-	29,  // 105: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
-	31,  // 106: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
-	33,  // 107: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
-	35,  // 108: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
-	38,  // 109: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
-	40,  // 110: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
-	42,  // 111: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
-	44,  // 112: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
-	46,  // 113: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
-	48,  // 114: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
-	50,  // 115: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
-	54,  // 116: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
-	56,  // 117: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
-	58,  // 118: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
-	60,  // 119: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
-	62,  // 120: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
-	64,  // 121: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
-	66,  // 122: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
-	68,  // 123: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
-	72,  // 124: issues.v1.IssueService.ImportIssueEvents:output_type -> issues.v1.ImportIssueEventsResponse
-	103, // [103:125] is the sub-list for method output_type
-	81,  // [81:103] is the sub-list for method input_type
+	74,  // 103: issues.v1.IssueService.GetFlowMetrics:input_type -> issues.v1.GetFlowMetricsRequest
+	25,  // 104: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
+	27,  // 105: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
+	29,  // 106: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
+	31,  // 107: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
+	33,  // 108: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
+	35,  // 109: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
+	38,  // 110: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
+	40,  // 111: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
+	42,  // 112: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
+	44,  // 113: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
+	46,  // 114: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
+	48,  // 115: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
+	50,  // 116: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
+	54,  // 117: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
+	56,  // 118: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
+	58,  // 119: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
+	60,  // 120: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
+	62,  // 121: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
+	64,  // 122: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
+	66,  // 123: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
+	68,  // 124: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
+	72,  // 125: issues.v1.IssueService.ImportIssueEvents:output_type -> issues.v1.ImportIssueEventsResponse
+	75,  // 126: issues.v1.IssueService.GetFlowMetrics:output_type -> issues.v1.GetFlowMetricsResponse
+	104, // [104:127] is the sub-list for method output_type
+	81,  // [81:104] is the sub-list for method input_type
 	81,  // [81:81] is the sub-list for extension type_name
 	81,  // [81:81] is the sub-list for extension extendee
 	0,   // [0:81] is the sub-list for field type_name
@@ -5633,6 +5670,7 @@ func file_issues_v1_issues_proto_init() {
 	if File_issues_v1_issues_proto != nil {
 		return
 	}
+	file_issues_v1_flow_metrics_proto_init()
 	file_issues_v1_issues_proto_msgTypes[6].OneofWrappers = []any{
 		(*IssueEvent_Created)(nil),
 		(*IssueEvent_StatusChanged)(nil),

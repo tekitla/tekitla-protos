@@ -22,6 +22,7 @@
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import type { GetFlowMetricsRequestSchema, GetFlowMetricsResponseSchema } from "./flow_metrics_pb.js";
 
 /**
  * Describes the file issues/v1/issues.proto.
@@ -319,6 +320,14 @@ export declare type Label = Message<"issues.v1.Label"> & {
    * @generated from field: issues.v1.LabelColor color = 4;
    */
   color: LabelColor;
+
+  /**
+   * Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
+   * los cerrados de valor del resto (FlowWeek.closed_value). Nace en false.
+   *
+   * @generated from field: bool value = 5;
+   */
+  value: boolean;
 };
 
 /**
@@ -1763,6 +1772,13 @@ export declare type CreateLabelRequest = Message<"issues.v1.CreateLabelRequest">
    * @generated from field: issues.v1.LabelColor color = 3;
    */
   color: LabelColor;
+
+  /**
+   * Ver Label.value.
+   *
+   * @generated from field: bool value = 4;
+   */
+  value: boolean;
 };
 
 /**
@@ -1812,6 +1828,13 @@ export declare type UpdateLabelRequest = Message<"issues.v1.UpdateLabelRequest">
    * @generated from field: optional issues.v1.LabelColor color = 4;
    */
   color?: LabelColor | undefined;
+
+  /**
+   * Ver Label.value.
+   *
+   * @generated from field: optional bool value = 5;
+   */
+  value?: boolean | undefined;
 };
 
 /**
@@ -2801,6 +2824,20 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof ImportIssueEventsRequestSchema;
     output: typeof ImportIssueEventsResponseSchema;
+  },
+  /**
+   * Métricas de flujo de un proyecto por semana (issue 036): lead time y
+   * cycle time, cerrados, empezados, WIP y estancados (flow_metrics.proto).
+   * Salen del historial de estados (IssueEvent), en vivo o importado, y
+   * cada número dice de dónde sale y qué tan confiable es. Son métricas del
+   * sistema: no hay vista ni ranking por persona.
+   *
+   * @generated from rpc issues.v1.IssueService.GetFlowMetrics
+   */
+  getFlowMetrics: {
+    methodKind: "unary";
+    input: typeof GetFlowMetricsRequestSchema;
+    output: typeof GetFlowMetricsResponseSchema;
   },
 }>;
 

@@ -20,6 +20,7 @@ package issues.v1;
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
+import "issues/v1/flow_metrics.proto";
 
 // IssueService gestiona los proyectos y sus issues.
 //
@@ -224,6 +225,15 @@ service IssueService {
       body: "*"
     };
   }
+
+  // Métricas de flujo de un proyecto por semana (issue 036): lead time y
+  // cycle time, cerrados, empezados, WIP y estancados (flow_metrics.proto).
+  // Salen del historial de estados (IssueEvent), en vivo o importado, y
+  // cada número dice de dónde sale y qué tan confiable es. Son métricas del
+  // sistema: no hay vista ni ranking por persona.
+  rpc GetFlowMetrics(GetFlowMetricsRequest) returns (GetFlowMetricsResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/flowMetrics"};
+  }
 }
 
 // Categoría del estado de un issue. Es fija y la entienden todos los clientes
@@ -357,6 +367,9 @@ message Label {
   // Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
   string name = 3;
   LabelColor color = 4;
+  // Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
+  // los cerrados de valor del resto (FlowWeek.closed_value). Nace en false.
+  bool value = 5;
 }
 
 message Comment {
@@ -796,6 +809,8 @@ message CreateLabelRequest {
   string project_id = 1;
   string name = 2;
   LabelColor color = 3;
+  // Ver Label.value.
+  bool value = 4;
 }
 
 message CreateLabelResponse {
@@ -808,6 +823,8 @@ message UpdateLabelRequest {
   optional string name = 3;
   // UNSPECIFIED se guarda como NEUTRAL.
   optional LabelColor color = 4;
+  // Ver Label.value.
+  optional bool value = 5;
 }
 
 message UpdateLabelResponse {
