@@ -74,8 +74,9 @@ message GetFlowMetricsResponse {
   repeated StaleIssue stale = 6;
   // Cuántos estancados hay en total (puede ser más que los de stale).
   int32 stale_total = 7;
-  // Etiquetas de valor del proyecto (Label.value). Vacío: el proyecto no
-  // tiene, y todo lo terminado cuenta como valor (closed_other es 0).
+  // Etiquetas de valor del proyecto (Label.counts_as_value). Vacío: el
+  // proyecto no tiene, y todo lo terminado cuenta como valor (closed_other
+  // es 0).
   repeated string value_label_ids = 8;
   // Issues que entran al cálculo y los que no tienen fechas para él.
   FlowCoverage coverage = 9;

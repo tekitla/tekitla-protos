@@ -798,7 +798,7 @@
         ]
       },
       "post": {
-        "summary": "Crea una etiqueta, opcionalmente de valor (Label.value). ALREADY_EXISTS\nsi ya hay una con ese nombre; FAILED_PRECONDITION si el proyecto ya\ntiene el máximo (100).",
+        "summary": "Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).\nALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el\nproyecto ya tiene el máximo (100).",
         "operationId": "IssueService_CreateLabel",
         "responses": {
           "200": {
@@ -860,7 +860,7 @@
         ]
       },
       "patch": {
-        "summary": "Renombra una etiqueta, cambia su color o si es de valor (Label.value).",
+        "summary": "Renombra una etiqueta, cambia su color o si es de valor\n(Label.counts_as_value).",
         "operationId": "IssueService_UpdateLabel",
         "responses": {
           "200": {
@@ -1216,9 +1216,9 @@
         "color": {
           "$ref": "#/definitions/v1LabelColor"
         },
-        "value": {
+        "countsAsValue": {
           "type": "boolean",
-          "description": "Ver Label.value."
+          "description": "Ver Label.counts_as_value."
         }
       }
     },
@@ -1387,9 +1387,9 @@
           "$ref": "#/definitions/v1LabelColor",
           "description": "UNSPECIFIED se guarda como NEUTRAL."
         },
-        "value": {
+        "countsAsValue": {
           "type": "boolean",
-          "description": "Ver Label.value."
+          "description": "Ver Label.counts_as_value."
         }
       }
     },
@@ -1432,7 +1432,7 @@
         "color": {
           "$ref": "#/definitions/v1LabelColor"
         },
-        "value": {
+        "countsAsValue": {
           "type": "boolean",
           "description": "Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa\nlos cerrados de valor del resto (FlowWeek.closed_value). Lo ponen\nCreateLabel y UpdateLabel; false por defecto (también las etiquetas que\ncrea ImportIssue)."
         }
@@ -1917,7 +1917,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Etiquetas de valor del proyecto (Label.value). Vacío: el proyecto no\ntiene, y todo lo terminado cuenta como valor (closed_other es 0)."
+          "description": "Etiquetas de valor del proyecto (Label.counts_as_value). Vacío: el\nproyecto no tiene, y todo lo terminado cuenta como valor (closed_other\nes 0)."
         },
         "coverage": {
           "$ref": "#/definitions/v1FlowCoverage",

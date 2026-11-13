@@ -159,8 +159,9 @@ export declare type GetFlowMetricsResponse = Message<"issues.v1.GetFlowMetricsRe
   staleTotal: number;
 
   /**
-   * Etiquetas de valor del proyecto (Label.value). Vacío: el proyecto no
-   * tiene, y todo lo terminado cuenta como valor (closed_other es 0).
+   * Etiquetas de valor del proyecto (Label.counts_as_value). Vacío: el
+   * proyecto no tiene, y todo lo terminado cuenta como valor (closed_other
+   * es 0).
    *
    * @generated from field: repeated string value_label_ids = 8;
    */

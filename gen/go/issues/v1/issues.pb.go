@@ -870,7 +870,7 @@ type Label struct {
 	// los cerrados de valor del resto (FlowWeek.closed_value). Lo ponen
 	// CreateLabel y UpdateLabel; false por defecto (también las etiquetas que
 	// crea ImportIssue).
-	Value         bool `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
+	CountsAsValue bool `protobuf:"varint,5,opt,name=counts_as_value,json=countsAsValue,proto3" json:"counts_as_value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -933,9 +933,9 @@ func (x *Label) GetColor() LabelColor {
 	return LabelColor_LABEL_COLOR_UNSPECIFIED
 }
 
-func (x *Label) GetValue() bool {
+func (x *Label) GetCountsAsValue() bool {
 	if x != nil {
-		return x.Value
+		return x.CountsAsValue
 	}
 	return false
 }
@@ -3963,8 +3963,8 @@ type CreateLabelRequest struct {
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Color     LabelColor             `protobuf:"varint,3,opt,name=color,proto3,enum=issues.v1.LabelColor" json:"color,omitempty"`
-	// Ver Label.value.
-	Value         bool `protobuf:"varint,4,opt,name=value,proto3" json:"value,omitempty"`
+	// Ver Label.counts_as_value.
+	CountsAsValue bool `protobuf:"varint,4,opt,name=counts_as_value,json=countsAsValue,proto3" json:"counts_as_value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4020,9 +4020,9 @@ func (x *CreateLabelRequest) GetColor() LabelColor {
 	return LabelColor_LABEL_COLOR_UNSPECIFIED
 }
 
-func (x *CreateLabelRequest) GetValue() bool {
+func (x *CreateLabelRequest) GetCountsAsValue() bool {
 	if x != nil {
-		return x.Value
+		return x.CountsAsValue
 	}
 	return false
 }
@@ -4078,8 +4078,8 @@ type UpdateLabelRequest struct {
 	Name      *string                `protobuf:"bytes,3,opt,name=name,proto3,oneof" json:"name,omitempty"`
 	// UNSPECIFIED se guarda como NEUTRAL.
 	Color *LabelColor `protobuf:"varint,4,opt,name=color,proto3,enum=issues.v1.LabelColor,oneof" json:"color,omitempty"`
-	// Ver Label.value.
-	Value         *bool `protobuf:"varint,5,opt,name=value,proto3,oneof" json:"value,omitempty"`
+	// Ver Label.counts_as_value.
+	CountsAsValue *bool `protobuf:"varint,5,opt,name=counts_as_value,json=countsAsValue,proto3,oneof" json:"counts_as_value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4142,9 +4142,9 @@ func (x *UpdateLabelRequest) GetColor() LabelColor {
 	return LabelColor_LABEL_COLOR_UNSPECIFIED
 }
 
-func (x *UpdateLabelRequest) GetValue() bool {
-	if x != nil && x.Value != nil {
-		return *x.Value
+func (x *UpdateLabelRequest) GetCountsAsValue() bool {
+	if x != nil && x.CountsAsValue != nil {
+		return *x.CountsAsValue
 	}
 	return false
 }
@@ -5046,14 +5046,14 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x04rank\x18\x05 \x01(\tR\x04rank\x12+\n" +
 	"\x05color\x18\x06 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x1b\n" +
 	"\twip_limit\x18\a \x01(\x05R\bwipLimit\x12\x16\n" +
-	"\x06hidden\x18\b \x01(\bR\x06hidden\"\x8d\x01\n" +
+	"\x06hidden\x18\b \x01(\bR\x06hidden\"\x9f\x01\n" +
 	"\x05Label\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12+\n" +
-	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x14\n" +
-	"\x05value\x18\x05 \x01(\bR\x05value\"\xa0\x01\n" +
+	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12&\n" +
+	"\x0fcounts_as_value\x18\x05 \x01(\bR\rcountsAsValue\"\xa0\x01\n" +
 	"\aComment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\bissue_id\x18\x02 \x01(\tR\aissueId\x12\x1b\n" +
@@ -5286,25 +5286,25 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\">\n" +
 	"\x12ListLabelsResponse\x12(\n" +
-	"\x06labels\x18\x01 \x03(\v2\x10.issues.v1.LabelR\x06labels\"\x8a\x01\n" +
+	"\x06labels\x18\x01 \x03(\v2\x10.issues.v1.LabelR\x06labels\"\x9c\x01\n" +
 	"\x12CreateLabelRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12+\n" +
-	"\x05color\x18\x03 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12\x14\n" +
-	"\x05value\x18\x04 \x01(\bR\x05value\"=\n" +
+	"\x05color\x18\x03 \x01(\x0e2\x15.issues.v1.LabelColorR\x05color\x12&\n" +
+	"\x0fcounts_as_value\x18\x04 \x01(\bR\rcountsAsValue\"=\n" +
 	"\x13CreateLabelResponse\x12&\n" +
-	"\x05label\x18\x01 \x01(\v2\x10.issues.v1.LabelR\x05label\"\xd1\x01\n" +
+	"\x05label\x18\x01 \x01(\v2\x10.issues.v1.LabelR\x05label\"\xed\x01\n" +
 	"\x12UpdateLabelRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x19\n" +
 	"\blabel_id\x18\x02 \x01(\tR\alabelId\x12\x17\n" +
 	"\x04name\x18\x03 \x01(\tH\x00R\x04name\x88\x01\x01\x120\n" +
-	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorH\x01R\x05color\x88\x01\x01\x12\x19\n" +
-	"\x05value\x18\x05 \x01(\bH\x02R\x05value\x88\x01\x01B\a\n" +
+	"\x05color\x18\x04 \x01(\x0e2\x15.issues.v1.LabelColorH\x01R\x05color\x88\x01\x01\x12+\n" +
+	"\x0fcounts_as_value\x18\x05 \x01(\bH\x02R\rcountsAsValue\x88\x01\x01B\a\n" +
 	"\x05_nameB\b\n" +
-	"\x06_colorB\b\n" +
-	"\x06_value\"=\n" +
+	"\x06_colorB\x12\n" +
+	"\x10_counts_as_value\"=\n" +
 	"\x13UpdateLabelResponse\x12&\n" +
 	"\x05label\x18\x01 \x01(\v2\x10.issues.v1.LabelR\x05label\"N\n" +
 	"\x12DeleteLabelRequest\x12\x1d\n" +

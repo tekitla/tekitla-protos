@@ -327,9 +327,9 @@ export declare type Label = Message<"issues.v1.Label"> & {
    * CreateLabel y UpdateLabel; false por defecto (también las etiquetas que
    * crea ImportIssue).
    *
-   * @generated from field: bool value = 5;
+   * @generated from field: bool counts_as_value = 5;
    */
-  value: boolean;
+  countsAsValue: boolean;
 };
 
 /**
@@ -1776,11 +1776,11 @@ export declare type CreateLabelRequest = Message<"issues.v1.CreateLabelRequest">
   color: LabelColor;
 
   /**
-   * Ver Label.value.
+   * Ver Label.counts_as_value.
    *
-   * @generated from field: bool value = 4;
+   * @generated from field: bool counts_as_value = 4;
    */
-  value: boolean;
+  countsAsValue: boolean;
 };
 
 /**
@@ -1832,11 +1832,11 @@ export declare type UpdateLabelRequest = Message<"issues.v1.UpdateLabelRequest">
   color?: LabelColor | undefined;
 
   /**
-   * Ver Label.value.
+   * Ver Label.counts_as_value.
    *
-   * @generated from field: optional bool value = 5;
+   * @generated from field: optional bool counts_as_value = 5;
    */
-  value?: boolean | undefined;
+  countsAsValue?: boolean | undefined;
 };
 
 /**
@@ -2726,9 +2726,9 @@ export declare const IssueService: GenService<{
     output: typeof ListLabelsResponseSchema;
   },
   /**
-   * Crea una etiqueta, opcionalmente de valor (Label.value). ALREADY_EXISTS
-   * si ya hay una con ese nombre; FAILED_PRECONDITION si el proyecto ya
-   * tiene el máximo (100).
+   * Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).
+   * ALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el
+   * proyecto ya tiene el máximo (100).
    *
    * @generated from rpc issues.v1.IssueService.CreateLabel
    */
@@ -2738,7 +2738,8 @@ export declare const IssueService: GenService<{
     output: typeof CreateLabelResponseSchema;
   },
   /**
-   * Renombra una etiqueta, cambia su color o si es de valor (Label.value).
+   * Renombra una etiqueta, cambia su color o si es de valor
+   * (Label.counts_as_value).
    *
    * @generated from rpc issues.v1.IssueService.UpdateLabel
    */

@@ -233,8 +233,9 @@ type GetFlowMetricsResponse struct {
 	Stale []*StaleIssue `protobuf:"bytes,6,rep,name=stale,proto3" json:"stale,omitempty"`
 	// Cuántos estancados hay en total (puede ser más que los de stale).
 	StaleTotal int32 `protobuf:"varint,7,opt,name=stale_total,json=staleTotal,proto3" json:"stale_total,omitempty"`
-	// Etiquetas de valor del proyecto (Label.value). Vacío: el proyecto no
-	// tiene, y todo lo terminado cuenta como valor (closed_other es 0).
+	// Etiquetas de valor del proyecto (Label.counts_as_value). Vacío: el
+	// proyecto no tiene, y todo lo terminado cuenta como valor (closed_other
+	// es 0).
 	ValueLabelIds []string `protobuf:"bytes,8,rep,name=value_label_ids,json=valueLabelIds,proto3" json:"value_label_ids,omitempty"`
 	// Issues que entran al cálculo y los que no tienen fechas para él.
 	Coverage      *FlowCoverage `protobuf:"bytes,9,opt,name=coverage,proto3" json:"coverage,omitempty"`

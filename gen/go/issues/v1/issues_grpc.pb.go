@@ -131,11 +131,12 @@ type IssueServiceClient interface {
 	BatchUpdateStatuses(ctx context.Context, in *BatchUpdateStatusesRequest, opts ...grpc.CallOption) (*BatchUpdateStatusesResponse, error)
 	// Etiquetas del proyecto, por nombre.
 	ListLabels(ctx context.Context, in *ListLabelsRequest, opts ...grpc.CallOption) (*ListLabelsResponse, error)
-	// Crea una etiqueta, opcionalmente de valor (Label.value). ALREADY_EXISTS
-	// si ya hay una con ese nombre; FAILED_PRECONDITION si el proyecto ya
-	// tiene el máximo (100).
+	// Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).
+	// ALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el
+	// proyecto ya tiene el máximo (100).
 	CreateLabel(ctx context.Context, in *CreateLabelRequest, opts ...grpc.CallOption) (*CreateLabelResponse, error)
-	// Renombra una etiqueta, cambia su color o si es de valor (Label.value).
+	// Renombra una etiqueta, cambia su color o si es de valor
+	// (Label.counts_as_value).
 	UpdateLabel(ctx context.Context, in *UpdateLabelRequest, opts ...grpc.CallOption) (*UpdateLabelResponse, error)
 	// Borra una etiqueta y la quita de todos los issues (sin evento en su
 	// historial).
@@ -495,11 +496,12 @@ type IssueServiceServer interface {
 	BatchUpdateStatuses(context.Context, *BatchUpdateStatusesRequest) (*BatchUpdateStatusesResponse, error)
 	// Etiquetas del proyecto, por nombre.
 	ListLabels(context.Context, *ListLabelsRequest) (*ListLabelsResponse, error)
-	// Crea una etiqueta, opcionalmente de valor (Label.value). ALREADY_EXISTS
-	// si ya hay una con ese nombre; FAILED_PRECONDITION si el proyecto ya
-	// tiene el máximo (100).
+	// Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).
+	// ALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el
+	// proyecto ya tiene el máximo (100).
 	CreateLabel(context.Context, *CreateLabelRequest) (*CreateLabelResponse, error)
-	// Renombra una etiqueta, cambia su color o si es de valor (Label.value).
+	// Renombra una etiqueta, cambia su color o si es de valor
+	// (Label.counts_as_value).
 	UpdateLabel(context.Context, *UpdateLabelRequest) (*UpdateLabelResponse, error)
 	// Borra una etiqueta y la quita de todos los issues (sin evento en su
 	// historial).
