@@ -58,6 +58,7 @@ const (
 	IssueService_ListIssueEvents_FullMethodName     = "/issues.v1.IssueService/ListIssueEvents"
 	IssueService_ImportIssue_FullMethodName         = "/issues.v1.IssueService/ImportIssue"
 	IssueService_ImportIssueEvents_FullMethodName   = "/issues.v1.IssueService/ImportIssueEvents"
+	IssueService_GetFlowMetrics_FullMethodName      = "/issues.v1.IssueService/GetFlowMetrics"
 )
 
 // IssueServiceClient is the client API for IssueService service.
@@ -130,10 +131,12 @@ type IssueServiceClient interface {
 	BatchUpdateStatuses(ctx context.Context, in *BatchUpdateStatusesRequest, opts ...grpc.CallOption) (*BatchUpdateStatusesResponse, error)
 	// Etiquetas del proyecto, por nombre.
 	ListLabels(ctx context.Context, in *ListLabelsRequest, opts ...grpc.CallOption) (*ListLabelsResponse, error)
-	// Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
-	// FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+	// Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).
+	// ALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el
+	// proyecto ya tiene el máximo (100).
 	CreateLabel(ctx context.Context, in *CreateLabelRequest, opts ...grpc.CallOption) (*CreateLabelResponse, error)
-	// Renombra o cambia el color de una etiqueta.
+	// Renombra una etiqueta, cambia su color o si es de valor
+	// (Label.counts_as_value).
 	UpdateLabel(ctx context.Context, in *UpdateLabelRequest, opts ...grpc.CallOption) (*UpdateLabelResponse, error)
 	// Borra una etiqueta y la quita de todos los issues (sin evento en su
 	// historial).
@@ -177,6 +180,12 @@ type IssueServiceClient interface {
 	// importación equivocada). No cambia el estado actual del issue (eso lo
 	// hace ImportIssue): solo escribe historial.
 	ImportIssueEvents(ctx context.Context, in *ImportIssueEventsRequest, opts ...grpc.CallOption) (*ImportIssueEventsResponse, error)
+	// Métricas de flujo de un proyecto por semana (issue 036): lead time y
+	// cycle time, cerrados, empezados, WIP y estancados (flow_metrics.proto).
+	// Salen del historial de estados (IssueEvent), en vivo o importado, y
+	// cada número dice de dónde sale y qué tan confiable es. Son métricas del
+	// sistema: no hay vista ni ranking por persona.
+	GetFlowMetrics(ctx context.Context, in *GetFlowMetricsRequest, opts ...grpc.CallOption) (*GetFlowMetricsResponse, error)
 }
 
 type issueServiceClient struct {
@@ -407,6 +416,16 @@ func (c *issueServiceClient) ImportIssueEvents(ctx context.Context, in *ImportIs
 	return out, nil
 }
 
+func (c *issueServiceClient) GetFlowMetrics(ctx context.Context, in *GetFlowMetricsRequest, opts ...grpc.CallOption) (*GetFlowMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFlowMetricsResponse)
+	err := c.cc.Invoke(ctx, IssueService_GetFlowMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IssueServiceServer is the server API for IssueService service.
 // All implementations must embed UnimplementedIssueServiceServer
 // for forward compatibility.
@@ -477,10 +496,12 @@ type IssueServiceServer interface {
 	BatchUpdateStatuses(context.Context, *BatchUpdateStatusesRequest) (*BatchUpdateStatusesResponse, error)
 	// Etiquetas del proyecto, por nombre.
 	ListLabels(context.Context, *ListLabelsRequest) (*ListLabelsResponse, error)
-	// Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
-	// FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+	// Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).
+	// ALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el
+	// proyecto ya tiene el máximo (100).
 	CreateLabel(context.Context, *CreateLabelRequest) (*CreateLabelResponse, error)
-	// Renombra o cambia el color de una etiqueta.
+	// Renombra una etiqueta, cambia su color o si es de valor
+	// (Label.counts_as_value).
 	UpdateLabel(context.Context, *UpdateLabelRequest) (*UpdateLabelResponse, error)
 	// Borra una etiqueta y la quita de todos los issues (sin evento en su
 	// historial).
@@ -524,6 +545,12 @@ type IssueServiceServer interface {
 	// importación equivocada). No cambia el estado actual del issue (eso lo
 	// hace ImportIssue): solo escribe historial.
 	ImportIssueEvents(context.Context, *ImportIssueEventsRequest) (*ImportIssueEventsResponse, error)
+	// Métricas de flujo de un proyecto por semana (issue 036): lead time y
+	// cycle time, cerrados, empezados, WIP y estancados (flow_metrics.proto).
+	// Salen del historial de estados (IssueEvent), en vivo o importado, y
+	// cada número dice de dónde sale y qué tan confiable es. Son métricas del
+	// sistema: no hay vista ni ranking por persona.
+	GetFlowMetrics(context.Context, *GetFlowMetricsRequest) (*GetFlowMetricsResponse, error)
 	mustEmbedUnimplementedIssueServiceServer()
 }
 
@@ -599,6 +626,9 @@ func (UnimplementedIssueServiceServer) ImportIssue(context.Context, *ImportIssue
 }
 func (UnimplementedIssueServiceServer) ImportIssueEvents(context.Context, *ImportIssueEventsRequest) (*ImportIssueEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ImportIssueEvents not implemented")
+}
+func (UnimplementedIssueServiceServer) GetFlowMetrics(context.Context, *GetFlowMetricsRequest) (*GetFlowMetricsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFlowMetrics not implemented")
 }
 func (UnimplementedIssueServiceServer) mustEmbedUnimplementedIssueServiceServer() {}
 func (UnimplementedIssueServiceServer) testEmbeddedByValue()                      {}
@@ -1017,6 +1047,24 @@ func _IssueService_ImportIssueEvents_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IssueService_GetFlowMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFlowMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).GetFlowMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_GetFlowMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).GetFlowMetrics(ctx, req.(*GetFlowMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IssueService_ServiceDesc is the grpc.ServiceDesc for IssueService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1111,6 +1159,10 @@ var IssueService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportIssueEvents",
 			Handler:    _IssueService_ImportIssueEvents_Handler,
+		},
+		{
+			MethodName: "GetFlowMetrics",
+			Handler:    _IssueService_GetFlowMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

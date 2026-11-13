@@ -20,6 +20,7 @@ package issues.v1;
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
+import "issues/v1/flow_metrics.proto";
 
 // IssueService gestiona los proyectos y sus issues.
 //
@@ -146,15 +147,17 @@ service IssueService {
   rpc ListLabels(ListLabelsRequest) returns (ListLabelsResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/labels"};
   }
-  // Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
-  // FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+  // Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).
+  // ALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el
+  // proyecto ya tiene el máximo (100).
   rpc CreateLabel(CreateLabelRequest) returns (CreateLabelResponse) {
     option (google.api.http) = {
       post: "/v1/projects/{project_id}/labels"
       body: "*"
     };
   }
-  // Renombra o cambia el color de una etiqueta.
+  // Renombra una etiqueta, cambia su color o si es de valor
+  // (Label.counts_as_value).
   rpc UpdateLabel(UpdateLabelRequest) returns (UpdateLabelResponse) {
     option (google.api.http) = {
       patch: "/v1/projects/{project_id}/labels/{label_id}"
@@ -223,6 +226,15 @@ service IssueService {
       post: "/v1/admin/projects/{project_id}/issues:importEvents"
       body: "*"
     };
+  }
+
+  // Métricas de flujo de un proyecto por semana (issue 036): lead time y
+  // cycle time, cerrados, empezados, WIP y estancados (flow_metrics.proto).
+  // Salen del historial de estados (IssueEvent), en vivo o importado, y
+  // cada número dice de dónde sale y qué tan confiable es. Son métricas del
+  // sistema: no hay vista ni ranking por persona.
+  rpc GetFlowMetrics(GetFlowMetricsRequest) returns (GetFlowMetricsResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/flowMetrics"};
   }
 }
 
@@ -357,6 +369,11 @@ message Label {
   // Único en el proyecto (sin distinguir mayúsculas), 1 a 40 caracteres.
   string name = 3;
   LabelColor color = 4;
+  // Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
+  // los cerrados de valor del resto (FlowWeek.closed_value). Lo ponen
+  // CreateLabel y UpdateLabel; false por defecto (también las etiquetas que
+  // crea ImportIssue).
+  bool counts_as_value = 5;
 }
 
 message Comment {
@@ -796,6 +813,8 @@ message CreateLabelRequest {
   string project_id = 1;
   string name = 2;
   LabelColor color = 3;
+  // Ver Label.counts_as_value.
+  bool counts_as_value = 4;
 }
 
 message CreateLabelResponse {
@@ -808,6 +827,8 @@ message UpdateLabelRequest {
   optional string name = 3;
   // UNSPECIFIED se guarda como NEUTRAL.
   optional LabelColor color = 4;
+  // Ver Label.counts_as_value.
+  optional bool counts_as_value = 5;
 }
 
 message UpdateLabelResponse {

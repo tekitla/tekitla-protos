@@ -243,6 +243,80 @@
         ]
       }
     },
+    "/v1/projects/{projectId}/flowMetrics": {
+      "get": {
+        "summary": "Métricas de flujo de un proyecto por semana (issue 036): lead time y\ncycle time, cerrados, empezados, WIP y estancados (flow_metrics.proto).\nSalen del historial de estados (IssueEvent), en vivo o importado, y\ncada número dice de dónde sale y qué tan confiable es. Son métricas del\nsistema: no hay vista ni ranking por persona.",
+        "operationId": "IssueService_GetFlowMetrics",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetFlowMetricsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "from",
+            "description": "Período. Sin from: 12 semanas antes de to. Sin to, o con un to futuro:\nahora. from no anterior a to, o un Timestamp fuera de rango →\nINVALID_ARGUMENT (reason INVALID_PERIOD); más de 104 semanas →\nINVALID_ARGUMENT (PERIOD_TOO_LONG).",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "timeZone",
+            "description": "Zona IANA que define las semanas: de lunes 00:00 a lunes 00:00 en esa\nzona (donde el cambio de horario se salta las 00:00, desde la primera\nhora que existe ese día). Vacía: \"America/Mexico_City\". Desconocida → INVALID_ARGUMENT\n(INVALID_TIME_ZONE).",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "labelIds",
+            "description": "Solo los issues con alguna de estas etiquetas (p. ej. un área o un\nrepo). Vacío: todos. Una etiqueta que no es del proyecto →\nINVALID_ARGUMENT (UNKNOWN_LABEL).",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "staleAfterDays",
+            "description": "Días sin actividad para que un issue en curso cuente como estancado.\n0: 30. Entre 1 y 365 (si no, INVALID_ARGUMENT, INVALID_STALE_AFTER_DAYS).",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "staleLimit",
+            "description": "Máximo de estancados en la respuesta. 0: 20. Entre 1 y 100 (si no,\nINVALID_ARGUMENT, INVALID_STALE_LIMIT).",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
     "/v1/projects/{projectId}/issues": {
       "get": {
         "summary": "Lista los issues de un proyecto con búsqueda, filtros y orden (ver\nListIssuesRequest). Sin ellos: todos, por rank ascendente (el orden\nmanual del backlog y de cada columna).",
@@ -724,7 +798,7 @@
         ]
       },
       "post": {
-        "summary": "Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;\nFAILED_PRECONDITION si el proyecto ya tiene el máximo (100).",
+        "summary": "Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).\nALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el\nproyecto ya tiene el máximo (100).",
         "operationId": "IssueService_CreateLabel",
         "responses": {
           "200": {
@@ -786,7 +860,7 @@
         ]
       },
       "patch": {
-        "summary": "Renombra o cambia el color de una etiqueta.",
+        "summary": "Renombra una etiqueta, cambia su color o si es de valor\n(Label.counts_as_value).",
         "operationId": "IssueService_UpdateLabel",
         "responses": {
           "200": {
@@ -1141,6 +1215,10 @@
         },
         "color": {
           "$ref": "#/definitions/v1LabelColor"
+        },
+        "countsAsValue": {
+          "type": "boolean",
+          "description": "Ver Label.counts_as_value."
         }
       }
     },
@@ -1308,6 +1386,10 @@
         "color": {
           "$ref": "#/definitions/v1LabelColor",
           "description": "UNSPECIFIED se guarda como NEUTRAL."
+        },
+        "countsAsValue": {
+          "type": "boolean",
+          "description": "Ver Label.counts_as_value."
         }
       }
     },
@@ -1349,6 +1431,10 @@
         },
         "color": {
           "$ref": "#/definitions/v1LabelColor"
+        },
+        "countsAsValue": {
+          "type": "boolean",
+          "description": "Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa\nlos cerrados de valor del resto (FlowWeek.closed_value). Lo ponen\nCreateLabel y UpdateLabel; false por defecto (también las etiquetas que\ncrea ImportIssue)."
         }
       }
     },
@@ -1658,6 +1744,23 @@
         }
       }
     },
+    "v1DurationStats": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "median": {
+          "type": "string",
+          "description": "Ausentes si count es 0. Percentil por rango más cercano."
+        },
+        "p85": {
+          "type": "string"
+        }
+      },
+      "description": "Mediana y percentil 85 de una duración."
+    },
     "v1EventSource": {
       "type": "string",
       "enum": [
@@ -1669,6 +1772,158 @@
       ],
       "default": "EVENT_SOURCE_UNSPECIFIED",
       "description": "De dónde sale un evento del historial (issue 036). Las métricas lo usan\npara decir qué tan confiable es cada número.\n\n - EVENT_SOURCE_UNSPECIFIED: En IssueEvent no lo envía el servidor (un cliente que lo recibe lo trata\ncomo LIVE). En ImportedEvent es INVALID_ARGUMENT.\n - EVENT_SOURCE_LIVE: Registrado por Tekitla al momento del cambio.\n - EVENT_SOURCE_IMPORT_HISTORY: Reconstruido del historial del origen, p. ej. un commit que cambió el\nEstado de un issue de Round: la fecha es la del commit.\n - EVENT_SOURCE_IMPORT_FILE: Tomado de una fecha escrita en el archivo de origen (p. ej. «Fecha\nresuelto») que ningún commit marca. Sin hora: medianoche UTC.\n - EVENT_SOURCE_IMPORT_SYNC: Registrado por ImportIssue al reflejar el origen (alta, cambios de\nestado, título, etiquetas): la fecha es la de la corrida, no la del\ncambio en el origen. Las métricas de flujo no lo cuentan como\ntransición si el issue tiene histórico importado. Los eventos de\nImportIssue anteriores a v0.6.0 pueden figurar como LIVE: la migración\nque agrega source en tekitla-issues decide su backfill."
+    },
+    "v1FlowCoverage": {
+      "type": "object",
+      "properties": {
+        "issues": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Issues del proyecto (con el filtro de etiquetas) que entran al cálculo."
+        },
+        "doneWithoutDates": {
+          "type": "integer",
+          "format": "int32",
+          "description": "En DONE sin ninguna transición con fecha que lo lleve ahí (p. ej.\nimportados ya cerrados y sin histórico): no entran a lead time, cycle\ntime ni cerrados."
+        }
+      }
+    },
+    "v1FlowSummary": {
+      "type": "object",
+      "properties": {
+        "leadTime": {
+          "$ref": "#/definitions/v1DurationStats"
+        },
+        "cycleTime": {
+          "$ref": "#/definitions/v1DurationStats"
+        },
+        "closedValue": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "closedOther": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "canceled": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "started": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "wip": {
+          "type": "integer",
+          "format": "int32",
+          "description": "En IN_PROGRESS en to."
+        },
+        "source": {
+          "$ref": "#/definitions/v1MetricSource"
+        }
+      },
+      "description": "Métricas de todo el período: las semanas juntas. Los conteos son la suma\nde los de las semanas (un issue reabierto que vuelve a terminar en otra\nsemana cuenta dos veces) y las duraciones son las de todos los\nterminados del período. wip es el de to. source también es la suma de\nlas semanas: una transición que sostiene números de dos semanas (la\nentrada a IN_PROGRESS de un issue que empieza en una y termina en otra)\ncuenta en las dos."
+    },
+    "v1FlowWeek": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "leadTime": {
+          "$ref": "#/definitions/v1DurationStats",
+          "description": "De todos los issues que terminaron esta semana (valor y otros)."
+        },
+        "cycleTime": {
+          "$ref": "#/definitions/v1DurationStats"
+        },
+        "closedValue": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Terminados con alguna etiqueta de valor y el resto. Sin etiquetas de\nvalor en el proyecto, todos van a closed_value."
+        },
+        "closedOther": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "canceled": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Entraron a CANCELED esta semana y siguen ahí al final de ella."
+        },
+        "started": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Entraron a IN_PROGRESS por primera vez esta semana."
+        },
+        "wip": {
+          "type": "integer",
+          "format": "int32",
+          "description": "En IN_PROGRESS al final de la semana."
+        },
+        "source": {
+          "$ref": "#/definitions/v1MetricSource"
+        }
+      },
+      "description": "Métricas de una semana."
+    },
+    "v1GetFlowMetricsResponse": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Período efectivo, con los valores por defecto aplicados."
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeZone": {
+          "type": "string"
+        },
+        "weeks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FlowWeek"
+          },
+          "description": "Una por semana del período, en orden. La primera y la última se\nrecortan a from y to."
+        },
+        "summary": {
+          "$ref": "#/definitions/v1FlowSummary",
+          "description": "Las semanas juntas (ver FlowSummary). Un período del todo futuro es\nINVALID_PERIOD: to se recorta a ahora."
+        },
+        "stale": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1StaleIssue"
+          },
+          "description": "Issues en IN_PROGRESS en to sin actividad en los stale_after_days días\nanteriores a to (la actividad posterior a to no cuenta),\ndel que lleva más tiempo en curso al que menos. A lo sumo stale_limit.\nActividad: cualquier evento en vivo (también comentarios y ediciones),\nlos importados con fecha (IMPORT_HISTORY, IMPORT_FILE), las\ntransiciones IMPORT_SYNC que cuentan y el alta. Los demás IMPORT_SYNC\nno: su fecha es la de la corrida del importador."
+        },
+        "staleTotal": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Cuántos estancados hay en total (puede ser más que los de stale)."
+        },
+        "valueLabelIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Etiquetas de valor del proyecto (Label.counts_as_value). Vacío: el\nproyecto no tiene, y todo lo terminado cuenta como valor (closed_other\nes 0)."
+        },
+        "coverage": {
+          "$ref": "#/definitions/v1FlowCoverage",
+          "description": "Issues que entran al cálculo y los que no tienen fechas para él."
+        }
+      }
     },
     "v1GetIssueResponse": {
       "type": "object",
@@ -2113,6 +2368,42 @@
       },
       "description": "Sin paginar: los tokens de una persona y sus agentes."
     },
+    "v1MetricConfidence": {
+      "type": "string",
+      "enum": [
+        "METRIC_CONFIDENCE_UNSPECIFIED",
+        "METRIC_CONFIDENCE_NO_DATA",
+        "METRIC_CONFIDENCE_RECORDED",
+        "METRIC_CONFIDENCE_APPROXIMATE"
+      ],
+      "default": "METRIC_CONFIDENCE_UNSPECIFIED",
+      "description": "Qué tan confiable es un número.\n\n - METRIC_CONFIDENCE_NO_DATA: No hay transiciones que lo sostengan.\n - METRIC_CONFIDENCE_RECORDED: Todo registrado en vivo por Tekitla.\n - METRIC_CONFIDENCE_APPROXIMATE: Algo sale de un importador: histórico aproximado (fechas de commits o\ndel archivo de origen, o de la corrida del importador)."
+    },
+    "v1MetricSource": {
+      "type": "object",
+      "properties": {
+        "confidence": {
+          "$ref": "#/definitions/v1MetricConfidence"
+        },
+        "live": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "importHistory": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "importFile": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "importSync": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "De dónde salen los números: cuántas transiciones de cada fuente los\nsostienen (para lead y cycle time, la entrada a DONE y la entrada a\nIN_PROGRESS) y la confianza que resulta. En una semana, cada transición\ncuenta una vez aunque sostenga dos números (la entrada a IN_PROGRESS de un\nissue que empieza y termina en la misma semana)."
+    },
     "v1MoveIssueResponse": {
       "type": "object",
       "properties": {
@@ -2222,6 +2513,37 @@
           "$ref": "#/definitions/v1Token"
         }
       }
+    },
+    "v1StaleIssue": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "title": {
+          "type": "string",
+          "description": "Título y estado actuales (no los de to)."
+        },
+        "statusId": {
+          "type": "string"
+        },
+        "inProgressSince": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Desde cuándo está en curso: la última entrada a IN_PROGRESS (el alta si\nnació en curso)."
+        },
+        "lastActivityAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Último evento que cuenta como actividad (ver GetFlowMetricsResponse.stale)."
+        },
+        "confidence": {
+          "$ref": "#/definitions/v1MetricConfidence",
+          "description": "De la entrada a IN_PROGRESS."
+        }
+      },
+      "description": "Un issue en curso sin actividad reciente."
     },
     "v1StatusChanged": {
       "type": "object",

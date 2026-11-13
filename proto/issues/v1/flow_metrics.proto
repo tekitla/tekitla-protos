@@ -1,0 +1,179 @@
+// Métricas de flujo de un proyecto (issue 036, parte 2): lo que devuelve
+// IssueService.GetFlowMetrics. Miden el sistema, no a las personas: dónde
+// espera el trabajo y cuánto tarda en llegar. Cada número dice de dónde
+// sale (MetricSource): registrado en vivo o reconstruido de un importador.
+//
+// Cómo se calcula (lo implementa tekitla-issues):
+//   - Línea de tiempo de cada issue: sus cambios de categoría (StatusChanged,
+//     IssueDiscarded, IssueRestored) por created_at. Cuenta la categoría de
+//     destino; una transición a la categoría en la que ya está no hace nada.
+//     Los eventos EVENT_SOURCE_IMPORT_SYNC llevan la fecha de la corrida:
+//     cuentan solo si son posteriores al último evento importado con fecha
+//     (IMPORT_HISTORY o IMPORT_FILE) del issue, o si no tiene ninguno.
+//   - Categoría inicial (desde el alta): la de origen de la primera
+//     transición que cuenta; sin transiciones, la actual. Nacer en
+//     IN_PROGRESS (p. ej. un importado sin histórico) cuenta como empezar en
+//     el alta; nacer en DONE no es terminar (FlowCoverage.done_without_dates).
+//     Si el historial no termina en el estado actual del issue, mandan el
+//     historial y sus fechas.
+//   - Terminado: la última entrada a DONE dentro de la semana, si el issue
+//     sigue en DONE al final de ella. Un reabierto vuelve a contar cuando
+//     vuelve a entrar.
+//   - Lead time: del alta a esa entrada. Cycle time: de la primera entrada a
+//     IN_PROGRESS a esa entrada (sin paso por IN_PROGRESS no tiene).
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+message GetFlowMetricsRequest {
+  string project_id = 1;
+  // Período. Sin from: 12 semanas antes de to. Sin to, o con un to futuro:
+  // ahora. from no anterior a to, o un Timestamp fuera de rango →
+  // INVALID_ARGUMENT (reason INVALID_PERIOD); más de 104 semanas →
+  // INVALID_ARGUMENT (PERIOD_TOO_LONG).
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  // Zona IANA que define las semanas: de lunes 00:00 a lunes 00:00 en esa
+  // zona (donde el cambio de horario se salta las 00:00, desde la primera
+  // hora que existe ese día). Vacía: "America/Mexico_City". Desconocida → INVALID_ARGUMENT
+  // (INVALID_TIME_ZONE).
+  string time_zone = 4;
+  // Solo los issues con alguna de estas etiquetas (p. ej. un área o un
+  // repo). Vacío: todos. Una etiqueta que no es del proyecto →
+  // INVALID_ARGUMENT (UNKNOWN_LABEL).
+  repeated string label_ids = 5;
+  // Días sin actividad para que un issue en curso cuente como estancado.
+  // 0: 30. Entre 1 y 365 (si no, INVALID_ARGUMENT, INVALID_STALE_AFTER_DAYS).
+  int32 stale_after_days = 6;
+  // Máximo de estancados en la respuesta. 0: 20. Entre 1 y 100 (si no,
+  // INVALID_ARGUMENT, INVALID_STALE_LIMIT).
+  int32 stale_limit = 7;
+}
+
+message GetFlowMetricsResponse {
+  // Período efectivo, con los valores por defecto aplicados.
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to = 2;
+  string time_zone = 3;
+  // Una por semana del período, en orden. La primera y la última se
+  // recortan a from y to.
+  repeated FlowWeek weeks = 4;
+  // Las semanas juntas (ver FlowSummary). Un período del todo futuro es
+  // INVALID_PERIOD: to se recorta a ahora.
+  FlowSummary summary = 5;
+  // Issues en IN_PROGRESS en to sin actividad en los stale_after_days días
+  // anteriores a to (la actividad posterior a to no cuenta),
+  // del que lleva más tiempo en curso al que menos. A lo sumo stale_limit.
+  // Actividad: cualquier evento en vivo (también comentarios y ediciones),
+  // los importados con fecha (IMPORT_HISTORY, IMPORT_FILE), las
+  // transiciones IMPORT_SYNC que cuentan y el alta. Los demás IMPORT_SYNC
+  // no: su fecha es la de la corrida del importador.
+  repeated StaleIssue stale = 6;
+  // Cuántos estancados hay en total (puede ser más que los de stale).
+  int32 stale_total = 7;
+  // Etiquetas de valor del proyecto (Label.counts_as_value). Vacío: el
+  // proyecto no tiene, y todo lo terminado cuenta como valor (closed_other
+  // es 0).
+  repeated string value_label_ids = 8;
+  // Issues que entran al cálculo y los que no tienen fechas para él.
+  FlowCoverage coverage = 9;
+}
+
+// Métricas de una semana.
+message FlowWeek {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  // De todos los issues que terminaron esta semana (valor y otros).
+  DurationStats lead_time = 3;
+  DurationStats cycle_time = 4;
+  // Terminados con alguna etiqueta de valor y el resto. Sin etiquetas de
+  // valor en el proyecto, todos van a closed_value.
+  int32 closed_value = 5;
+  int32 closed_other = 6;
+  // Entraron a CANCELED esta semana y siguen ahí al final de ella.
+  int32 canceled = 7;
+  // Entraron a IN_PROGRESS por primera vez esta semana.
+  int32 started = 8;
+  // En IN_PROGRESS al final de la semana.
+  int32 wip = 9;
+  MetricSource source = 10;
+}
+
+// Métricas de todo el período: las semanas juntas. Los conteos son la suma
+// de los de las semanas (un issue reabierto que vuelve a terminar en otra
+// semana cuenta dos veces) y las duraciones son las de todos los
+// terminados del período. wip es el de to. source también es la suma de
+// las semanas: una transición que sostiene números de dos semanas (la
+// entrada a IN_PROGRESS de un issue que empieza en una y termina en otra)
+// cuenta en las dos.
+message FlowSummary {
+  DurationStats lead_time = 1;
+  DurationStats cycle_time = 2;
+  int32 closed_value = 3;
+  int32 closed_other = 4;
+  int32 canceled = 5;
+  int32 started = 6;
+  // En IN_PROGRESS en to.
+  int32 wip = 7;
+  MetricSource source = 8;
+}
+
+// Mediana y percentil 85 de una duración.
+message DurationStats {
+  int32 count = 1;
+  // Ausentes si count es 0. Percentil por rango más cercano.
+  google.protobuf.Duration median = 2;
+  google.protobuf.Duration p85 = 3;
+}
+
+// De dónde salen los números: cuántas transiciones de cada fuente los
+// sostienen (para lead y cycle time, la entrada a DONE y la entrada a
+// IN_PROGRESS) y la confianza que resulta. En una semana, cada transición
+// cuenta una vez aunque sostenga dos números (la entrada a IN_PROGRESS de un
+// issue que empieza y termina en la misma semana).
+message MetricSource {
+  MetricConfidence confidence = 1;
+  int32 live = 2;
+  int32 import_history = 3;
+  int32 import_file = 4;
+  int32 import_sync = 5;
+}
+
+// Qué tan confiable es un número.
+enum MetricConfidence {
+  METRIC_CONFIDENCE_UNSPECIFIED = 0;
+  // No hay transiciones que lo sostengan.
+  METRIC_CONFIDENCE_NO_DATA = 1;
+  // Todo registrado en vivo por Tekitla.
+  METRIC_CONFIDENCE_RECORDED = 2;
+  // Algo sale de un importador: histórico aproximado (fechas de commits o
+  // del archivo de origen, o de la corrida del importador).
+  METRIC_CONFIDENCE_APPROXIMATE = 3;
+}
+
+// Un issue en curso sin actividad reciente.
+message StaleIssue {
+  int32 number = 1;
+  // Título y estado actuales (no los de to).
+  string title = 2;
+  string status_id = 3;
+  // Desde cuándo está en curso: la última entrada a IN_PROGRESS (el alta si
+  // nació en curso).
+  google.protobuf.Timestamp in_progress_since = 4;
+  // Último evento que cuenta como actividad (ver GetFlowMetricsResponse.stale).
+  google.protobuf.Timestamp last_activity_at = 5;
+  // De la entrada a IN_PROGRESS.
+  MetricConfidence confidence = 6;
+}
+
+message FlowCoverage {
+  // Issues del proyecto (con el filtro de etiquetas) que entran al cálculo.
+  int32 issues = 1;
+  // En DONE sin ninguna transición con fecha que lo lleve ahí (p. ej.
+  // importados ya cerrados y sin histórico): no entran a lead time, cycle
+  // time ni cerrados.
+  int32 done_without_dates = 2;
+}

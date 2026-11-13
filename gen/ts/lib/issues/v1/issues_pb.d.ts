@@ -22,6 +22,7 @@
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import type { GetFlowMetricsRequestSchema, GetFlowMetricsResponseSchema } from "./flow_metrics_pb.js";
 
 /**
  * Describes the file issues/v1/issues.proto.
@@ -319,6 +320,16 @@ export declare type Label = Message<"issues.v1.Label"> & {
    * @generated from field: issues.v1.LabelColor color = 4;
    */
   color: LabelColor;
+
+  /**
+   * Cuenta como valor en las métricas de flujo (p. ej. feature, bug): separa
+   * los cerrados de valor del resto (FlowWeek.closed_value). Lo ponen
+   * CreateLabel y UpdateLabel; false por defecto (también las etiquetas que
+   * crea ImportIssue).
+   *
+   * @generated from field: bool counts_as_value = 5;
+   */
+  countsAsValue: boolean;
 };
 
 /**
@@ -1763,6 +1774,13 @@ export declare type CreateLabelRequest = Message<"issues.v1.CreateLabelRequest">
    * @generated from field: issues.v1.LabelColor color = 3;
    */
   color: LabelColor;
+
+  /**
+   * Ver Label.counts_as_value.
+   *
+   * @generated from field: bool counts_as_value = 4;
+   */
+  countsAsValue: boolean;
 };
 
 /**
@@ -1812,6 +1830,13 @@ export declare type UpdateLabelRequest = Message<"issues.v1.UpdateLabelRequest">
    * @generated from field: optional issues.v1.LabelColor color = 4;
    */
   color?: LabelColor | undefined;
+
+  /**
+   * Ver Label.counts_as_value.
+   *
+   * @generated from field: optional bool counts_as_value = 5;
+   */
+  countsAsValue?: boolean | undefined;
 };
 
 /**
@@ -2701,8 +2726,9 @@ export declare const IssueService: GenService<{
     output: typeof ListLabelsResponseSchema;
   },
   /**
-   * Crea una etiqueta. ALREADY_EXISTS si ya hay una con ese nombre;
-   * FAILED_PRECONDITION si el proyecto ya tiene el máximo (100).
+   * Crea una etiqueta, opcionalmente de valor (Label.counts_as_value).
+   * ALREADY_EXISTS si ya hay una con ese nombre; FAILED_PRECONDITION si el
+   * proyecto ya tiene el máximo (100).
    *
    * @generated from rpc issues.v1.IssueService.CreateLabel
    */
@@ -2712,7 +2738,8 @@ export declare const IssueService: GenService<{
     output: typeof CreateLabelResponseSchema;
   },
   /**
-   * Renombra o cambia el color de una etiqueta.
+   * Renombra una etiqueta, cambia su color o si es de valor
+   * (Label.counts_as_value).
    *
    * @generated from rpc issues.v1.IssueService.UpdateLabel
    */
@@ -2801,6 +2828,20 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof ImportIssueEventsRequestSchema;
     output: typeof ImportIssueEventsResponseSchema;
+  },
+  /**
+   * Métricas de flujo de un proyecto por semana (issue 036): lead time y
+   * cycle time, cerrados, empezados, WIP y estancados (flow_metrics.proto).
+   * Salen del historial de estados (IssueEvent), en vivo o importado, y
+   * cada número dice de dónde sale y qué tan confiable es. Son métricas del
+   * sistema: no hay vista ni ranking por persona.
+   *
+   * @generated from rpc issues.v1.IssueService.GetFlowMetrics
+   */
+  getFlowMetrics: {
+    methodKind: "unary";
+    input: typeof GetFlowMetricsRequestSchema;
+    output: typeof GetFlowMetricsResponseSchema;
   },
 }>;
 
