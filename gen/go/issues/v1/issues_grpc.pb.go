@@ -90,8 +90,10 @@ type IssueServiceClient interface {
 	ListIssues(ctx context.Context, in *ListIssuesRequest, opts ...grpc.CallOption) (*ListIssuesResponse, error)
 	// Devuelve un issue por su número dentro del proyecto.
 	GetIssue(ctx context.Context, in *GetIssueRequest, opts ...grpc.CallOption) (*GetIssueResponse, error)
-	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
-	// lo ubica al final del orden (rank mayor que el de todos los demás).
+	// Crea un issue con el siguiente número del proyecto en el estado
+	// status_id (vacío: el primer estado de ISSUE_STATE_TODO) y lo ubica al
+	// final del orden (rank mayor que el de todos los demás): queda al final
+	// de su columna.
 	CreateIssue(ctx context.Context, in *CreateIssueRequest, opts ...grpc.CallOption) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero) y,
 	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).
@@ -455,8 +457,10 @@ type IssueServiceServer interface {
 	ListIssues(context.Context, *ListIssuesRequest) (*ListIssuesResponse, error)
 	// Devuelve un issue por su número dentro del proyecto.
 	GetIssue(context.Context, *GetIssueRequest) (*GetIssueResponse, error)
-	// Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
-	// lo ubica al final del orden (rank mayor que el de todos los demás).
+	// Crea un issue con el siguiente número del proyecto en el estado
+	// status_id (vacío: el primer estado de ISSUE_STATE_TODO) y lo ubica al
+	// final del orden (rank mayor que el de todos los demás): queda al final
+	// de su columna.
 	CreateIssue(context.Context, *CreateIssueRequest) (*CreateIssueResponse, error)
 	// Cambia el estado de un issue (mover de columna en el tablero) y,
 	// opcionalmente, su lugar dentro de la columna (ver MoveIssueRequest).

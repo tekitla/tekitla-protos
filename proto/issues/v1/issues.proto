@@ -58,8 +58,10 @@ service IssueService {
   rpc GetIssue(GetIssueRequest) returns (GetIssueResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}"};
   }
-  // Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
-  // lo ubica al final del orden (rank mayor que el de todos los demás).
+  // Crea un issue con el siguiente número del proyecto en el estado
+  // status_id (vacío: el primer estado de ISSUE_STATE_TODO) y lo ubica al
+  // final del orden (rank mayor que el de todos los demás): queda al final
+  // de su columna.
   rpc CreateIssue(CreateIssueRequest) returns (CreateIssueResponse) {
     option (google.api.http) = {
       post: "/v1/projects/{project_id}/issues"
@@ -444,7 +446,15 @@ enum EventSource {
   EVENT_SOURCE_IMPORT_SYNC = 4;
 }
 
-message IssueCreated {}
+// Estado en el que nació el issue (v0.8.0). Vacío en los creados antes de
+// v0.8.0 y en los de ImportIssue. Los nombres se guardan como en
+// StatusChanged. Las métricas de flujo toman el alta como la entrada a ese
+// estado, con su fecha (ver GetFlowMetrics).
+message IssueCreated {
+  string status_id = 1;
+  string status_name = 2;
+  IssueState state = 3;
+}
 
 // Los nombres se guardan al momento del cambio: el historial se sigue
 // leyendo aunque el estado después se renombre o se borre. En un evento
@@ -621,6 +631,13 @@ message CreateIssueRequest {
   Priority priority = 4;
   // Vacío: sin asignar. Ver UpdateIssueRequest.assignee_actor_id.
   string assignee_actor_id = 5;
+  // Estado en el que nace (v0.8.0), p. ej. la columna del tablero donde se
+  // escribió. Vacío: el primer estado de la categoría TODO, como antes. Uno
+  // que no es del proyecto es INVALID_ARGUMENT (reason
+  // STATUS_NOT_IN_PROJECT). Uno de categoría CANCELED es INVALID_ARGUMENT
+  // (reason CANCELED_STATUS): descartar pide motivo, con DiscardIssue. El
+  // límite WIP no se hace cumplir (como en MoveIssue).
+  string status_id = 6;
 }
 
 message CreateIssueResponse {
