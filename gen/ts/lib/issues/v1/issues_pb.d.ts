@@ -508,9 +508,28 @@ export declare type IssueEvent = Message<"issues.v1.IssueEvent"> & {
 export declare const IssueEventSchema: GenMessage<IssueEvent>;
 
 /**
+ * Estado en el que nació el issue (v0.8.0). Vacío en los creados antes de
+ * v0.8.0 y en los de ImportIssue. Los nombres se guardan como en
+ * StatusChanged. Las métricas de flujo toman el alta como la entrada a ese
+ * estado, con su fecha (ver GetFlowMetrics).
+ *
  * @generated from message issues.v1.IssueCreated
  */
 export declare type IssueCreated = Message<"issues.v1.IssueCreated"> & {
+  /**
+   * @generated from field: string status_id = 1;
+   */
+  statusId: string;
+
+  /**
+   * @generated from field: string status_name = 2;
+   */
+  statusName: string;
+
+  /**
+   * @generated from field: issues.v1.IssueState state = 3;
+   */
+  state: IssueState;
 };
 
 /**
@@ -1102,6 +1121,18 @@ export declare type CreateIssueRequest = Message<"issues.v1.CreateIssueRequest">
    * @generated from field: string assignee_actor_id = 5;
    */
   assigneeActorId: string;
+
+  /**
+   * Estado en el que nace (v0.8.0), p. ej. la columna del tablero donde se
+   * escribió. Vacío: el primer estado de la categoría TODO, como antes. Uno
+   * que no es del proyecto es INVALID_ARGUMENT (reason
+   * STATUS_NOT_IN_PROJECT). Uno de categoría CANCELED es INVALID_ARGUMENT
+   * (reason CANCELED_STATUS): descartar pide motivo, con DiscardIssue. El
+   * límite WIP no se hace cumplir (como en MoveIssue).
+   *
+   * @generated from field: string status_id = 6;
+   */
+  statusId: string;
 };
 
 /**
@@ -2597,8 +2628,10 @@ export declare const IssueService: GenService<{
     output: typeof GetIssueResponseSchema;
   },
   /**
-   * Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y
-   * lo ubica al final del orden (rank mayor que el de todos los demás).
+   * Crea un issue con el siguiente número del proyecto en el estado
+   * status_id (vacío: el primer estado de ISSUE_STATE_TODO) y lo ubica al
+   * final del orden (rank mayor que el de todos los demás): queda al final
+   * de su columna.
    *
    * @generated from rpc issues.v1.IssueService.CreateIssue
    */

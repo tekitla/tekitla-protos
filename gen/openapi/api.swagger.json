@@ -467,7 +467,7 @@
         ]
       },
       "post": {
-        "summary": "Crea un issue en ISSUE_STATE_TODO con el siguiente número del proyecto y\nlo ubica al final del orden (rank mayor que el de todos los demás).",
+        "summary": "Crea un issue con el siguiente número del proyecto en el estado\nstatus_id (vacío: el primer estado de ISSUE_STATE_TODO) y lo ubica al\nfinal del orden (rank mayor que el de todos los demás): queda al final\nde su columna.",
         "operationId": "IssueService_CreateIssue",
         "responses": {
           "200": {
@@ -1204,6 +1204,10 @@
         "assigneeActorId": {
           "type": "string",
           "description": "Vacío: sin asignar. Ver UpdateIssueRequest.assignee_actor_id."
+        },
+        "statusId": {
+          "type": "string",
+          "description": "Estado en el que nace (v0.8.0), p. ej. la columna del tablero donde se\nescribió. Vacío: el primer estado de la categoría TODO, como antes. Uno\nque no es del proyecto es INVALID_ARGUMENT (reason\nSTATUS_NOT_IN_PROJECT). Uno de categoría CANCELED es INVALID_ARGUMENT\n(reason CANCELED_STATUS): descartar pide motivo, con DiscardIssue. El\nlímite WIP no se hace cumplir (como en MoveIssue)."
         }
       }
     },
@@ -1784,7 +1788,7 @@
         "doneWithoutDates": {
           "type": "integer",
           "format": "int32",
-          "description": "En DONE sin ninguna transición con fecha que lo lleve ahí (p. ej.\nimportados ya cerrados y sin histórico): no entran a lead time, cycle\ntime ni cerrados."
+          "description": "En DONE sin ninguna transición con fecha que lo lleve ahí ni un alta en\nvivo en DONE (p. ej. importados ya cerrados y sin histórico): no entran\na lead time, cycle time ni cerrados."
         }
       }
     },
@@ -2082,7 +2086,19 @@
       }
     },
     "v1IssueCreated": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "statusId": {
+          "type": "string"
+        },
+        "statusName": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/v1IssueState"
+        }
+      },
+      "description": "Estado en el que nació el issue (v0.8.0). Vacío en los creados antes de\nv0.8.0 y en los de ImportIssue. Los nombres se guardan como en\nStatusChanged. Las métricas de flujo toman el alta como la entrada a ese\nestado, con su fecha (ver GetFlowMetrics)."
     },
     "v1IssueDiscarded": {
       "type": "object",
