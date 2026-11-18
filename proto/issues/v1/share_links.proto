@@ -1,0 +1,254 @@
+// Enlaces de solo lectura de un proyecto (issue 009).
+//
+// Dos servicios con modelos de seguridad distintos:
+//   - ShareLinkService: gestión de los enlaces. Autenticada; solo el dueño del
+//     proyecto (en la rebanada 3b, un admin del proyecto).
+//   - SharedProjectService: lectura de un proyecto con el token de un enlace,
+//     sin identidad. El gateway la expone sin credenciales.
+//
+// Las respuestas públicas usan mensajes propios (Shared*) con una lista
+// cerrada de campos: nunca Project, Issue ni Actor. Así un campo nuevo en
+// esos mensajes no llega al enlace sin que alguien lo agregue a propósito.
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "issues/v1/actors.proto";
+import "issues/v1/issues.proto";
+
+// ShareLinkService gestiona los enlaces de solo lectura de un proyecto. Solo
+// el dueño del proyecto: uno ajeno o inexistente responde NOT_FOUND.
+service ShareLinkService {
+  // Crea un enlace. El token en claro viaja solo en la respuesta, una vez:
+  // el servicio guarda su hash. RESOURCE_EXHAUSTED (motivo SHARE_LINK_LIMIT)
+  // si el proyecto ya tiene 20 enlaces activos.
+  rpc CreateShareLink(CreateShareLinkRequest) returns (CreateShareLinkResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/share-links"
+      body: "*"
+    };
+  }
+  // Enlaces del proyecto, los más nuevos primero, también los revocados y
+  // los vencidos. Sin el token ni su hash.
+  rpc ListShareLinks(ListShareLinksRequest) returns (ListShareLinksResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/share-links"};
+  }
+  // Revoca un enlace: el siguiente request con su token responde NOT_FOUND.
+  // No se deshace; uno ya revocado se devuelve tal cual.
+  rpc RevokeShareLink(RevokeShareLinkRequest) returns (RevokeShareLinkResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/share-links/{share_link_id}:revoke"
+      body: "*"
+    };
+  }
+}
+
+// SharedProjectService lee un proyecto con el token de un enlace. No usa la
+// identidad del request (x-user-id): el proyecto sale del enlace, nunca del
+// request. Un token mal formado, desconocido, vencido o revocado responde
+// NOT_FOUND, siempre con el mismo mensaje (no revela si el enlace existió).
+//
+// Los RPCs son POST con el token en el cuerpo, aunque solo leen: el access
+// log del gateway registra el path pero nunca el cuerpo, así el token no
+// queda en logs ni en cachés.
+service SharedProjectService {
+  // Proyecto, alcance del enlace, estados y etiquetas.
+  rpc GetSharedProject(GetSharedProjectRequest) returns (GetSharedProjectResponse) {
+    option (google.api.http) = {
+      post: "/v1/shared/project:get"
+      body: "*"
+    };
+  }
+  // Issues del proyecto en el orden manual (rank), sin los descartados.
+  // Paginado: 100 por página como máximo.
+  rpc ListSharedIssues(ListSharedIssuesRequest) returns (ListSharedIssuesResponse) {
+    option (google.api.http) = {
+      post: "/v1/shared/issues:list"
+      body: "*"
+    };
+  }
+  // Un issue por su número. Solo con alcance PANEL: con PLAN, o si el issue
+  // no existe o está descartado, NOT_FOUND.
+  rpc GetSharedIssue(GetSharedIssueRequest) returns (GetSharedIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/shared/issues:get"
+      body: "*"
+    };
+  }
+}
+
+// Qué ve quien abre el enlace. No se cambia: para otro alcance se crea otro
+// enlace.
+enum ShareLinkScope {
+  SHARE_LINK_SCOPE_UNSPECIFIED = 0;
+  // Solo la vista Plan del proyecto (issue 039).
+  SHARE_LINK_SCOPE_PLAN = 1;
+  // Tablero, detalle de issues y Plan.
+  SHARE_LINK_SCOPE_PANEL = 2;
+}
+
+// Vencimiento de un enlace al crearlo. El servicio calcula expires_at.
+enum ShareLinkDuration {
+  SHARE_LINK_DURATION_UNSPECIFIED = 0;
+  SHARE_LINK_DURATION_SEVEN_DAYS = 1;
+  SHARE_LINK_DURATION_THIRTY_DAYS = 2;
+  SHARE_LINK_DURATION_NINETY_DAYS = 3;
+  // Sin vencimiento: vale hasta que se revoca.
+  SHARE_LINK_DURATION_NEVER = 4;
+}
+
+// Un enlace de solo lectura, sin el token ni su hash.
+message ShareLink {
+  string id = 1;
+  string project_id = 2;
+  ShareLinkScope scope = 3;
+  // Para quién es (p. ej. «jefe»). Sin espacios en los extremos, 1 a 80
+  // caracteres.
+  string note = 4;
+  google.protobuf.Timestamp created_at = 5;
+  // Ausente: sin vencimiento.
+  google.protobuf.Timestamp expires_at = 6;
+  // Último uso. Ausente si nunca se usó. Aproximado: se actualiza como mucho
+  // una vez por minuto.
+  google.protobuf.Timestamp last_used_at = 7;
+  // Ausente si no está revocado.
+  google.protobuf.Timestamp revoked_at = 8;
+  // Nombre con el que se muestra a la persona dueña en las vistas públicas
+  // (el servicio no conoce los nombres). 0 a 40 caracteres; vacío: la vista
+  // pública no muestra nombre.
+  string owner_display_name = 9;
+}
+
+message CreateShareLinkRequest {
+  string project_id = 1;
+  // Obligatorio: UNSPECIFIED es INVALID_ARGUMENT.
+  ShareLinkScope scope = 2;
+  // Obligatorio: UNSPECIFIED es INVALID_ARGUMENT.
+  ShareLinkDuration duration = 3;
+  // Ver ShareLink.note.
+  string note = 4;
+  // Ver ShareLink.owner_display_name.
+  string owner_display_name = 5;
+}
+
+message CreateShareLinkResponse {
+  ShareLink share_link = 1;
+  // Token en claro (`tks_…`). Es la única vez que sale: el panel arma la URL
+  // con él. Nunca se registra en logs.
+  string token = 2;
+}
+
+message ListShareLinksRequest {
+  string project_id = 1;
+}
+
+message ListShareLinksResponse {
+  repeated ShareLink share_links = 1;
+}
+
+message RevokeShareLinkRequest {
+  string project_id = 1;
+  string share_link_id = 2;
+}
+
+message RevokeShareLinkResponse {
+  ShareLink share_link = 1;
+}
+
+// Proyecto visto por un enlace: sin ids internos.
+message SharedProject {
+  // Clave del proyecto, p. ej. "RND".
+  string key = 1;
+  string name = 2;
+  string description = 3;
+}
+
+// Estado (columna) visto por un enlace.
+message SharedStatus {
+  // El de Status.id: SharedIssue.status_id lo referencia.
+  string id = 1;
+  string name = 2;
+  IssueState category = 3;
+  LabelColor color = 4;
+  // 0 = sin límite.
+  int32 wip_limit = 5;
+  bool hidden = 6;
+}
+
+// Etiqueta vista por un enlace.
+message SharedLabel {
+  // El de Label.id: SharedIssue.label_ids lo referencia.
+  string id = 1;
+  string name = 2;
+  LabelColor color = 3;
+}
+
+// Asignado visto por un enlace: sin id ni uid.
+message SharedActor {
+  ActorKind kind = 1;
+  // Persona: el owner_display_name del enlace (vacío si no se puso). Agente:
+  // el nombre que le puso su dueño.
+  string display_name = 2;
+  // Solo en agentes.
+  AgentTool tool = 3;
+}
+
+// Issue visto por un enlace.
+message SharedIssue {
+  // Número dentro del proyecto: el issue se nombra <clave>-<número>.
+  int32 number = 1;
+  string title = 2;
+  // Markdown. Solo con alcance PANEL; vacío con PLAN.
+  string description = 3;
+  // Lo que espera el issue: la primera línea `**Qué espera:** …` (con o sin
+  // `>`) de la descripción antes del primer encabezado `##` (issue 039), sin
+  // el rótulo. Solo con alcance PLAN; vacío si no hay o con PANEL (el panel
+  // la saca de description).
+  string waiting_note = 4;
+  IssueState state = 5;
+  Priority priority = 6;
+  string status_id = 7;
+  // Ordenadas por nombre de etiqueta.
+  repeated string label_ids = 8;
+  // Ausente: sin asignar.
+  SharedActor assignee = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message GetSharedProjectRequest {
+  // Token del enlace (`tks_…`). Nunca se registra en logs.
+  string token = 1;
+}
+
+message GetSharedProjectResponse {
+  SharedProject project = 1;
+  ShareLinkScope scope = 2;
+  // En el orden de las columnas.
+  repeated SharedStatus statuses = 3;
+  // Ordenadas por nombre.
+  repeated SharedLabel labels = 4;
+}
+
+message ListSharedIssuesRequest {
+  // Ver GetSharedProjectRequest.token.
+  string token = 1;
+  PageRequest page = 2;
+}
+
+message ListSharedIssuesResponse {
+  repeated SharedIssue issues = 1;
+  PageResponse page = 2;
+}
+
+message GetSharedIssueRequest {
+  // Ver GetSharedProjectRequest.token.
+  string token = 1;
+  int32 number = 2;
+}
+
+message GetSharedIssueResponse {
+  SharedIssue issue = 1;
+}
