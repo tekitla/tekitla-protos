@@ -107,3 +107,9 @@ commitear `proto/` y `gen/` juntos.
 `proto/issues/v1/issues.proto` (`issues.v1.IssueService`): proyectos e issues
 de Tekitla, rebanada 1 del issue 002 (plan en el repo `docs`). Lo implementa
 `tekitla-issues`.
+
+`proto/issues/v1/share_links.proto` (issue 009): `ShareLinkService` gestiona
+los enlaces de solo lectura (autenticado, solo el dueño del proyecto) y
+`SharedProjectService` lee un proyecto por el token del enlace, sin identidad
+(ruta pública del gateway). Las respuestas públicas usan mensajes `Shared*`
+propios: un campo nuevo en `Project`, `Issue` o `Actor` no sale en el enlace.
