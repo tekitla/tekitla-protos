@@ -14,6 +14,14 @@
       "description": "IssueService gestiona los proyectos y sus issues.\n\nTodo acceso se limita a los espacios de trabajo del usuario autenticado (el\ngateway propaga su identidad en la metadata). En la rebanada 1 cada usuario\ntiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant\nde la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no\nvisible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no\nrevelar que existe.\n\nLas opciones google.api.http definen las rutas REST que expone el\napi-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar\nacá: el gateway la expone solo si figura en su routes.yaml."
     },
     {
+      "name": "ShareLinkService",
+      "description": "ShareLinkService gestiona los enlaces de solo lectura de un proyecto. Solo\nel dueño del proyecto: uno ajeno o inexistente responde NOT_FOUND."
+    },
+    {
+      "name": "SharedProjectService",
+      "description": "SharedProjectService lee un proyecto con el token de un enlace. No usa la\nidentidad del request (x-user-id): el proyecto sale del enlace, nunca del\nrequest. Un token mal formado, desconocido, vencido o revocado responde\nNOT_FOUND, siempre con el mismo mensaje (no revela si el enlace existió).\n\nLos RPCs son POST con el token en el cuerpo, aunque solo leen: el access\nlog del gateway registra el path pero nunca el cuerpo, así el token no\nqueda en logs ni en cachés."
+    },
+    {
       "name": "TokenAuthService",
       "description": "TokenAuthService resuelve un token `tka_…` a la identidad que propaga el\ngateway. Solo interno: no requiere x-user-id (el gateway lo llama antes de\nsaber quién es) y no se expone por REST."
     }
@@ -897,6 +905,101 @@
         ]
       }
     },
+    "/v1/projects/{projectId}/share-links": {
+      "get": {
+        "summary": "Enlaces del proyecto, los más nuevos primero, también los revocados y\nlos vencidos. Sin el token ni su hash.",
+        "operationId": "ShareLinkService_ListShareLinks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListShareLinksResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ShareLinkService"
+        ]
+      },
+      "post": {
+        "summary": "Crea un enlace. El token en claro viaja solo en la respuesta, una vez:\nel servicio guarda su hash. FAILED_PRECONDITION (motivo\nSHARE_LINK_LIMIT) si el proyecto ya tiene 20 enlaces activos.",
+        "operationId": "ShareLinkService_CreateShareLink",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateShareLinkResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ShareLinkServiceCreateShareLinkBody"
+            }
+          }
+        ],
+        "tags": [
+          "ShareLinkService"
+        ]
+      }
+    },
+    "/v1/projects/{projectId}/share-links/{shareLinkId}:revoke": {
+      "post": {
+        "summary": "Revoca un enlace: el siguiente request con su token responde NOT_FOUND.\nNo se deshace; uno ya revocado se devuelve tal cual.",
+        "operationId": "ShareLinkService_RevokeShareLink",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeShareLinkResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "shareLinkId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ShareLinkServiceRevokeShareLinkBody"
+            }
+          }
+        ],
+        "tags": [
+          "ShareLinkService"
+        ]
+      }
+    },
     "/v1/projects/{projectId}/statuses": {
       "get": {
         "summary": "Estados del proyecto (las columnas del tablero), en orden. Todo proyecto\nnace con cuatro, uno por categoría: Por hacer, En curso, Hecho y\nDescartado.",
@@ -1058,6 +1161,87 @@
         ],
         "tags": [
           "IssueService"
+        ]
+      }
+    },
+    "/v1/shared/issues:get": {
+      "post": {
+        "summary": "Un issue por su número. Solo con alcance PANEL: con PLAN, o si el issue\nno existe o está descartado, NOT_FOUND.",
+        "operationId": "SharedProjectService_GetSharedIssue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSharedIssueResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GetSharedIssueRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SharedProjectService"
+        ]
+      }
+    },
+    "/v1/shared/issues:list": {
+      "post": {
+        "summary": "Issues del proyecto en el orden manual (rank), sin los descartados.\nPaginado: 100 por página como máximo.",
+        "operationId": "SharedProjectService_ListSharedIssues",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSharedIssuesResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ListSharedIssuesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SharedProjectService"
+        ]
+      }
+    },
+    "/v1/shared/project:get": {
+      "post": {
+        "summary": "Proyecto, alcance del enlace, estados y etiquetas.",
+        "operationId": "SharedProjectService_GetSharedProject",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSharedProjectResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GetSharedProjectRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SharedProjectService"
         ]
       }
     },
@@ -1420,6 +1604,30 @@
         }
       }
     },
+    "ShareLinkServiceCreateShareLinkBody": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/v1ShareLinkScope",
+          "description": "Obligatorio: UNSPECIFIED es INVALID_ARGUMENT."
+        },
+        "duration": {
+          "$ref": "#/definitions/v1ShareLinkDuration",
+          "description": "Obligatorio: UNSPECIFIED es INVALID_ARGUMENT."
+        },
+        "note": {
+          "type": "string",
+          "description": "Ver ShareLink.note."
+        },
+        "ownerDisplayName": {
+          "type": "string",
+          "description": "Ver ShareLink.owner_display_name."
+        }
+      }
+    },
+    "ShareLinkServiceRevokeShareLinkBody": {
+      "type": "object"
+    },
     "issuesV1Label": {
       "type": "object",
       "properties": {
@@ -1664,6 +1872,18 @@
       "properties": {
         "project": {
           "$ref": "#/definitions/v1Project"
+        }
+      }
+    },
+    "v1CreateShareLinkResponse": {
+      "type": "object",
+      "properties": {
+        "shareLink": {
+          "$ref": "#/definitions/v1ShareLink"
+        },
+        "token": {
+          "type": "string",
+          "description": "Token en claro (`tks_…`). Es la única vez que sale: el panel arma la URL\ncon él. Nunca se registra en logs."
         }
       }
     },
@@ -1934,6 +2154,63 @@
       "properties": {
         "issue": {
           "$ref": "#/definitions/v1Issue"
+        }
+      }
+    },
+    "v1GetSharedIssueRequest": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Ver GetSharedProjectRequest.token."
+        },
+        "number": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1GetSharedIssueResponse": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/definitions/v1SharedIssue"
+        }
+      }
+    },
+    "v1GetSharedProjectRequest": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Token del enlace (`tks_…`). Nunca se registra en logs."
+        }
+      }
+    },
+    "v1GetSharedProjectResponse": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "$ref": "#/definitions/v1SharedProject"
+        },
+        "scope": {
+          "$ref": "#/definitions/v1ShareLinkScope"
+        },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SharedStatus"
+          },
+          "description": "En el orden de las columnas."
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SharedLabel"
+          },
+          "description": "Ordenadas por nombre."
         }
       }
     },
@@ -2358,6 +2635,45 @@
         }
       }
     },
+    "v1ListShareLinksResponse": {
+      "type": "object",
+      "properties": {
+        "shareLinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ShareLink"
+          }
+        }
+      }
+    },
+    "v1ListSharedIssuesRequest": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Ver GetSharedProjectRequest.token."
+        },
+        "page": {
+          "$ref": "#/definitions/v1PageRequest"
+        }
+      }
+    },
+    "v1ListSharedIssuesResponse": {
+      "type": "object",
+      "properties": {
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SharedIssue"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1PageResponse"
+        }
+      }
+    },
     "v1ListStatusesResponse": {
       "type": "object",
       "properties": {
@@ -2522,6 +2838,14 @@
         }
       }
     },
+    "v1RevokeShareLinkResponse": {
+      "type": "object",
+      "properties": {
+        "shareLink": {
+          "$ref": "#/definitions/v1ShareLink"
+        }
+      }
+    },
     "v1RevokeTokenResponse": {
       "type": "object",
       "properties": {
@@ -2529,6 +2853,196 @@
           "$ref": "#/definitions/v1Token"
         }
       }
+    },
+    "v1ShareLink": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/definitions/v1ShareLinkScope"
+        },
+        "note": {
+          "type": "string",
+          "description": "Para quién es (p. ej. «jefe»). Sin espacios en los extremos, 1 a 80\ncaracteres."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Ausente: sin vencimiento."
+        },
+        "lastUsedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Último uso. Ausente si nunca se usó. Aproximado: se actualiza como mucho\nuna vez por minuto."
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Ausente si no está revocado."
+        },
+        "ownerDisplayName": {
+          "type": "string",
+          "description": "Nombre con el que se muestra a la persona dueña en las vistas públicas\n(el servicio no conoce los nombres). 0 a 40 caracteres; vacío: la vista\npública no muestra nombre."
+        }
+      },
+      "description": "Un enlace de solo lectura, sin el token ni su hash."
+    },
+    "v1ShareLinkDuration": {
+      "type": "string",
+      "enum": [
+        "SHARE_LINK_DURATION_UNSPECIFIED",
+        "SHARE_LINK_DURATION_SEVEN_DAYS",
+        "SHARE_LINK_DURATION_THIRTY_DAYS",
+        "SHARE_LINK_DURATION_NINETY_DAYS",
+        "SHARE_LINK_DURATION_NEVER"
+      ],
+      "default": "SHARE_LINK_DURATION_UNSPECIFIED",
+      "description": "Vencimiento de un enlace al crearlo. El servicio calcula expires_at.\n\n - SHARE_LINK_DURATION_NEVER: Sin vencimiento: vale hasta que se revoca."
+    },
+    "v1ShareLinkScope": {
+      "type": "string",
+      "enum": [
+        "SHARE_LINK_SCOPE_UNSPECIFIED",
+        "SHARE_LINK_SCOPE_PLAN",
+        "SHARE_LINK_SCOPE_PANEL"
+      ],
+      "default": "SHARE_LINK_SCOPE_UNSPECIFIED",
+      "description": "Qué ve quien abre el enlace. No se cambia: para otro alcance se crea otro\nenlace.\n\n - SHARE_LINK_SCOPE_PLAN: Solo la vista Plan del proyecto (issue 039).\n - SHARE_LINK_SCOPE_PANEL: Tablero, detalle de issues y Plan."
+    },
+    "v1SharedActor": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/v1ActorKind"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Persona: el owner_display_name del enlace (vacío si no se puso). Agente:\nel nombre que le puso su dueño."
+        },
+        "tool": {
+          "$ref": "#/definitions/v1AgentTool",
+          "description": "Solo en agentes."
+        }
+      },
+      "description": "Asignado visto por un enlace: sin id ni uid."
+    },
+    "v1SharedIssue": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Número dentro del proyecto: el issue se nombra \u003cclave\u003e-\u003cnúmero\u003e."
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "description": "Markdown. Solo con alcance PANEL; vacío con PLAN."
+        },
+        "waitingNote": {
+          "type": "string",
+          "description": "Lo que espera el issue: la primera línea `**Qué espera:** …` (con o sin\n`\u003e`) de la descripción antes del primer encabezado `##` (issue 039), sin\nel rótulo. Solo con alcance PLAN; vacío si no hay o con PANEL (el panel\nla saca de description)."
+        },
+        "state": {
+          "$ref": "#/definitions/v1IssueState"
+        },
+        "priority": {
+          "$ref": "#/definitions/v1Priority"
+        },
+        "statusId": {
+          "type": "string"
+        },
+        "labelIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordenadas por nombre de etiqueta."
+        },
+        "assignee": {
+          "$ref": "#/definitions/v1SharedActor",
+          "description": "Ausente: sin asignar."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Issue visto por un enlace."
+    },
+    "v1SharedLabel": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "El de Label.id: SharedIssue.label_ids lo referencia."
+        },
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor"
+        }
+      },
+      "description": "Etiqueta vista por un enlace."
+    },
+    "v1SharedProject": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Clave del proyecto, p. ej. \"RND\"."
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "description": "Proyecto visto por un enlace: sin ids internos."
+    },
+    "v1SharedStatus": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "El de Status.id: SharedIssue.status_id lo referencia."
+        },
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/definitions/v1IssueState"
+        },
+        "color": {
+          "$ref": "#/definitions/v1LabelColor"
+        },
+        "wipLimit": {
+          "type": "integer",
+          "format": "int32",
+          "description": "0 = sin límite."
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      },
+      "description": "Estado (columna) visto por un enlace."
     },
     "v1StaleIssue": {
       "type": "object",
