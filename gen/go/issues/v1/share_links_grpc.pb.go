@@ -44,8 +44,8 @@ const (
 // el dueño del proyecto: uno ajeno o inexistente responde NOT_FOUND.
 type ShareLinkServiceClient interface {
 	// Crea un enlace. El token en claro viaja solo en la respuesta, una vez:
-	// el servicio guarda su hash. RESOURCE_EXHAUSTED (motivo SHARE_LINK_LIMIT)
-	// si el proyecto ya tiene 20 enlaces activos.
+	// el servicio guarda su hash. FAILED_PRECONDITION (motivo
+	// SHARE_LINK_LIMIT) si el proyecto ya tiene 20 enlaces activos.
 	CreateShareLink(ctx context.Context, in *CreateShareLinkRequest, opts ...grpc.CallOption) (*CreateShareLinkResponse, error)
 	// Enlaces del proyecto, los más nuevos primero, también los revocados y
 	// los vencidos. Sin el token ni su hash.
@@ -101,8 +101,8 @@ func (c *shareLinkServiceClient) RevokeShareLink(ctx context.Context, in *Revoke
 // el dueño del proyecto: uno ajeno o inexistente responde NOT_FOUND.
 type ShareLinkServiceServer interface {
 	// Crea un enlace. El token en claro viaja solo en la respuesta, una vez:
-	// el servicio guarda su hash. RESOURCE_EXHAUSTED (motivo SHARE_LINK_LIMIT)
-	// si el proyecto ya tiene 20 enlaces activos.
+	// el servicio guarda su hash. FAILED_PRECONDITION (motivo
+	// SHARE_LINK_LIMIT) si el proyecto ya tiene 20 enlaces activos.
 	CreateShareLink(context.Context, *CreateShareLinkRequest) (*CreateShareLinkResponse, error)
 	// Enlaces del proyecto, los más nuevos primero, también los revocados y
 	// los vencidos. Sin el token ni su hash.

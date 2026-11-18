@@ -671,8 +671,8 @@ export declare const ShareLinkDurationSchema: GenEnum<ShareLinkDuration>;
 export declare const ShareLinkService: GenService<{
   /**
    * Crea un enlace. El token en claro viaja solo en la respuesta, una vez:
-   * el servicio guarda su hash. RESOURCE_EXHAUSTED (motivo SHARE_LINK_LIMIT)
-   * si el proyecto ya tiene 20 enlaces activos.
+   * el servicio guarda su hash. FAILED_PRECONDITION (motivo
+   * SHARE_LINK_LIMIT) si el proyecto ya tiene 20 enlaces activos.
    *
    * @generated from rpc issues.v1.ShareLinkService.CreateShareLink
    */

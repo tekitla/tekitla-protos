@@ -930,7 +930,7 @@
         ]
       },
       "post": {
-        "summary": "Crea un enlace. El token en claro viaja solo en la respuesta, una vez:\nel servicio guarda su hash. RESOURCE_EXHAUSTED (motivo SHARE_LINK_LIMIT)\nsi el proyecto ya tiene 20 enlaces activos.",
+        "summary": "Crea un enlace. El token en claro viaja solo en la respuesta, una vez:\nel servicio guarda su hash. FAILED_PRECONDITION (motivo\nSHARE_LINK_LIMIT) si el proyecto ya tiene 20 enlaces activos.",
         "operationId": "ShareLinkService_CreateShareLink",
         "responses": {
           "200": {

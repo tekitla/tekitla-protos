@@ -22,8 +22,8 @@ import "issues/v1/issues.proto";
 // el dueño del proyecto: uno ajeno o inexistente responde NOT_FOUND.
 service ShareLinkService {
   // Crea un enlace. El token en claro viaja solo en la respuesta, una vez:
-  // el servicio guarda su hash. RESOURCE_EXHAUSTED (motivo SHARE_LINK_LIMIT)
-  // si el proyecto ya tiene 20 enlaces activos.
+  // el servicio guarda su hash. FAILED_PRECONDITION (motivo
+  // SHARE_LINK_LIMIT) si el proyecto ya tiene 20 enlaces activos.
   rpc CreateShareLink(CreateShareLinkRequest) returns (CreateShareLinkResponse) {
     option (google.api.http) = {
       post: "/v1/projects/{project_id}/share-links"
