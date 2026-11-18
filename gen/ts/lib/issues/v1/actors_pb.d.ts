@@ -485,7 +485,8 @@ export declare const AgentToolSchema: GenEnum<AgentTool>;
 
 /**
  * Alcance de un token. Write no implica read: se piden los dos. En el gateway
- * se propagan en x-roles como "issues:read" e "issues:write".
+ * se propagan en x-roles como "issues:read", "issues:write" y
+ * "sessions:write".
  *
  * @generated from enum issues.v1.TokenScope
  */
@@ -496,7 +497,7 @@ export enum TokenScope {
   UNSPECIFIED = 0,
 
   /**
-   * issues:read: leer proyectos e issues.
+   * issues:read: leer proyectos e issues (y las sesiones de agentes).
    *
    * @generated from enum value: TOKEN_SCOPE_ISSUES_READ = 1;
    */
@@ -508,6 +509,15 @@ export enum TokenScope {
    * @generated from enum value: TOKEN_SCOPE_ISSUES_WRITE = 2;
    */
   ISSUES_WRITE = 2,
+
+  /**
+   * sessions:write: reportar sesiones de agentes (issue 026,
+   * AgentSessionService.ReportSessions). No da permiso para leer ni para
+   * cambiar issues. Es para el recolector local, con un token de persona.
+   *
+   * @generated from enum value: TOKEN_SCOPE_SESSIONS_WRITE = 3;
+   */
+  SESSIONS_WRITE = 3,
 }
 
 /**

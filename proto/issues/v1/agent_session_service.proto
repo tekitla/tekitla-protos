@@ -1,0 +1,159 @@
+// AgentSessionService (issue 026): el recolector local reporta las sesiones
+// de agentes de su máquina, y los clientes (panel, MCP) las leen. Los tipos
+// están en agent_sessions.proto.
+//
+// Mismas reglas que issues.proto (ver CLAUDE.md): solo cambios aditivos en v1.
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/api/annotations.proto";
+import "issues/v1/actors.proto";
+import "issues/v1/agent_sessions.proto";
+import "issues/v1/issues.proto";
+
+// Sesiones de agentes de una persona.
+//
+// Toda sesión es de una persona (el x-user-id que propaga el gateway) y de
+// uno de sus agentes. Un usuario ve solo las suyas.
+service AgentSessionService {
+  // Reemplaza las sesiones de una máquina con la lista completa que ve su
+  // recolector.
+  //
+  // Solo con un token de persona con TOKEN_SCOPE_SESSIONS_WRITE: con
+  // x-agent-id (un token de agente) responde PERMISSION_DENIED. El gateway
+  // no la expone a la sesión de Firebase.
+  //
+  // Reglas:
+  // - Idempotente: la clave de cada sesión es (persona, source, machine,
+  //   external_id). El mismo reporte dos veces da el mismo resultado, y el
+  //   segundo cuenta todas en unchanged (salvo last_seen_at, que siempre se
+  //   actualiza y no cuenta como cambio).
+  // - status_changed_at cambia solo si cambia status.
+  // - Una sesión de esta persona, source y machine que no está ENDED y no
+  //   viene en el reporte pasa a ENDED con ended_at. Las de otras máquinas
+  //   no se tocan. Una ENDED que vuelve a aparecer se reabre con
+  //   started_at nuevo.
+  // - Con status WORKING, waiting_on se guarda NONE (y waiting_target y
+  //   waiting_text vacíos) aunque venga otra cosa: un token de espera de un
+  //   turno anterior no cuenta mientras la sesión trabaja.
+  // - Actor: busca el actor AGENT de la persona con esa herramienta y
+  //   máquina y, si no hay, lo crea con nombre «<herramienta> <machine>»
+  //   (p. ej. «Claude Code PC-01»). Es la única forma en que un token crea
+  //   un agente. Si ese actor está revocado, sus sesiones se rechazan (ver
+  //   rejected) hasta que la persona cree otro desde el panel.
+  // - project_key se busca entre los proyectos visibles de la persona, sin
+  //   distinguir mayúsculas. Si no existe, la sesión se guarda sin issue
+  //   (link NONE) y además aparece en rejected con el motivo, para que el
+  //   recolector lo anote.
+  // Un error de validación en cualquier sesión es INVALID_ARGUMENT y no se
+  // guarda nada.
+  rpc ReportSessions(ReportSessionsRequest) returns (ReportSessionsResponse) {
+    option (google.api.http) = {
+      post: "/v1/agentSessions:report"
+      body: "*"
+    };
+  }
+
+  // Sesiones de la persona, filtradas. Sin filtros: las activas (no ENDED y
+  // con un reporte en las últimas 24 horas), de la más nueva a la más vieja
+  // por last_seen_at. Los filtros se combinan con Y.
+  rpc ListAgentSessions(ListAgentSessionsRequest) returns (ListAgentSessionsResponse) {
+    option (google.api.http) = {get: "/v1/agentSessions"};
+  }
+}
+
+message ReportSessionsRequest {
+  // UNSPECIFIED es INVALID_ARGUMENT.
+  SessionSource source = 1;
+  // Nombre corto de la máquina: 1 a 40 caracteres de [A-Za-z0-9._-]. Si no,
+  // INVALID_ARGUMENT.
+  string machine = 2;
+  // La lista completa de sesiones que ve la máquina, hasta 200 (más es
+  // INVALID_ARGUMENT). Vacía: todas las de la máquina pasan a ENDED.
+  repeated ReportedSession sessions = 3;
+}
+
+// Lo que ve el recolector de una sesión, ya traducido a los valores de
+// Tekitla (issue 026, §1 y §2).
+message ReportedSession {
+  // Obligatorio, 1 a 200 caracteres, sin repetirse en el reporte.
+  string external_id = 1;
+  // UNSPECIFIED es INVALID_ARGUMENT.
+  AgentTool tool = 2;
+  // Relativo a la raíz, con "/", hasta 500 caracteres. Vacío fuera de la
+  // raíz. Una ruta absoluta (empieza con "/", "\" o una letra de unidad) o
+  // con un segmento ".." es INVALID_ARGUMENT.
+  string cwd_rel = 3;
+  // Hasta 200 caracteres.
+  string session_name = 4;
+  // Hasta 200 caracteres.
+  string workspace_label = 5;
+  // Clave del proyecto ya resuelta con el mapa del recolector (p. ej.
+  // "RND"). Vacía: sin issue (issue_number tiene que ser 0 y link NONE).
+  string project_key = 6;
+  // Número del issue; 0 con project_key vacía. Negativo, o 0 con
+  // project_key, es INVALID_ARGUMENT.
+  int32 issue_number = 7;
+  // UNSPECIFIED es INVALID_ARGUMENT. NONE con project_key, u otro sin ella,
+  // también.
+  SessionLink link = 8;
+  // UNSPECIFIED y STALLED son INVALID_ARGUMENT.
+  SessionStatus status = 9;
+  // UNSPECIFIED se guarda como NONE.
+  WaitingOn waiting_on = 10;
+  // Hasta 80 caracteres. Solo con waiting_on SESSION u OTHER; con los demás
+  // se ignora.
+  string waiting_target = 11;
+  // Hasta 200 caracteres. Se ignora con waiting_on NONE.
+  string waiting_text = 12;
+}
+
+message ReportSessionsResponse {
+  // Sesiones nuevas.
+  int32 created = 1;
+  // Sesiones con algún cambio aparte de last_seen_at.
+  int32 updated = 2;
+  // Sesiones sin cambios.
+  int32 unchanged = 3;
+  // Las que pasaron a ENDED por no venir en el reporte.
+  int32 ended = 4;
+  // Sesiones que no se guardaron, o que se guardaron sin issue, con el
+  // motivo. No hacen fallar el reporte.
+  repeated SessionRejection rejected = 5;
+}
+
+// Una sesión del reporte con un problema.
+message SessionRejection {
+  string external_id = 1;
+  // Si se guardó o no.
+  bool saved = 2;
+  // Texto para el log del recolector, p. ej. "proyecto XYZ desconocido: se
+  // guardó sin issue" o "agente revocado".
+  string reason = 3;
+}
+
+message ListAgentSessionsRequest {
+  // Solo las ligadas a este proyecto.
+  string project_id = 1;
+  // Solo las ligadas a este issue; necesita project_id (si no,
+  // INVALID_ARGUMENT).
+  int32 issue_number = 2;
+  // Estados, con STALLED como uno más (y WORKING sin las colgadas). Vacío:
+  // todos menos ENDED, o todos con include_inactive. ENDED en la lista
+  // necesita include_inactive (si no, INVALID_ARGUMENT). UNSPECIFIED dentro
+  // de la lista es INVALID_ARGUMENT.
+  repeated SessionStatus statuses = 3;
+  // Solo las de este agente.
+  string agent_actor_id = 4;
+  // Incluye las ENDED y las que no reportan hace más de 24 horas.
+  bool include_inactive = 5;
+  // Solo las sin issue. Con project_id es INVALID_ARGUMENT.
+  bool unlinked = 6;
+  PageRequest page = 7;
+}
+
+message ListAgentSessionsResponse {
+  repeated AgentSession sessions = 1;
+  PageResponse page = 2;
+}

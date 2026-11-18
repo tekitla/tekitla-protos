@@ -7,6 +7,8 @@
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 // Issue 025: asignado (un actor, persona o agente), autoría con agente en el
 // historial e importación desde otro tracker (actors.proto, token_auth.proto).
+// Issue 026: resumen de las sesiones de agentes de cada issue
+// (agent_sessions.proto; el servicio está en agent_session_service.proto).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -542,7 +544,14 @@ type Issue struct {
 	AssigneeActorId string `protobuf:"bytes,14,opt,name=assignee_actor_id,json=assigneeActorId,proto3" json:"assignee_actor_id,omitempty"`
 	// Clave en el tracker de origen si se importó con ImportIssue (p. ej.
 	// "236-claude-md-en-capas"); vacía si se creó en Tekitla.
-	SourceKey     string `protobuf:"bytes,15,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
+	SourceKey string `protobuf:"bytes,15,opt,name=source_key,json=sourceKey,proto3" json:"source_key,omitempty"`
+	// Sesiones de agentes activas ligadas a este issue (issue 026,
+	// agent_sessions.proto): quién lo está atendiendo y si alguna espera a su
+	// persona. Ausente si no hay ninguna. GetIssue trae además la lista
+	// (IssueSessions.items); ListIssues y las demás respuestas, solo los
+	// contadores. No es el asignado: assignee_actor_id dice quién debería
+	// hacerlo, esto dice quién lo está haciendo.
+	Sessions      *IssueSessions `protobuf:"bytes,16,opt,name=sessions,proto3" json:"sessions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -680,6 +689,13 @@ func (x *Issue) GetSourceKey() string {
 		return x.SourceKey
 	}
 	return ""
+}
+
+func (x *Issue) GetSessions() *IssueSessions {
+	if x != nil {
+		return x.Sessions
+	}
+	return nil
 }
 
 // Quién descartó un issue con DiscardIssue, cuándo y por qué.
@@ -5043,7 +5059,7 @@ var File_issues_v1_issues_proto protoreflect.FileDescriptor
 
 const file_issues_v1_issues_proto_rawDesc = "" +
 	"\n" +
-	"\x16issues/v1/issues.proto\x12\tissues.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cissues/v1/flow_metrics.proto\"\xfa\x01\n" +
+	"\x16issues/v1/issues.proto\x12\tissues.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1eissues/v1/agent_sessions.proto\x1a\x1cissues/v1/flow_metrics.proto\"\xfa\x01\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x12\n" +
@@ -5053,7 +5069,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
-	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\xa5\x04\n" +
+	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"\xdb\x04\n" +
 	"\x05Issue\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -5074,7 +5090,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\adiscard\x18\r \x01(\v2\x16.issues.v1.DiscardInfoR\adiscard\x12*\n" +
 	"\x11assignee_actor_id\x18\x0e \x01(\tR\x0fassigneeActorId\x12\x1d\n" +
 	"\n" +
-	"source_key\x18\x0f \x01(\tR\tsourceKey\"\x7f\n" +
+	"source_key\x18\x0f \x01(\tR\tsourceKey\x124\n" +
+	"\bsessions\x18\x10 \x01(\v2\x18.issues.v1.IssueSessionsR\bsessions\"\x7f\n" +
 	"\vDiscardInfo\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\x12\x19\n" +
 	"\bactor_id\x18\x02 \x01(\tR\aactorId\x12=\n" +
@@ -5576,8 +5593,9 @@ var file_issues_v1_issues_proto_goTypes = []any{
 	(*ImportedStatusChange)(nil),        // 71: issues.v1.ImportedStatusChange
 	(*ImportIssueEventsResponse)(nil),   // 72: issues.v1.ImportIssueEventsResponse
 	(*timestamppb.Timestamp)(nil),       // 73: google.protobuf.Timestamp
-	(*GetFlowMetricsRequest)(nil),       // 74: issues.v1.GetFlowMetricsRequest
-	(*GetFlowMetricsResponse)(nil),      // 75: issues.v1.GetFlowMetricsResponse
+	(*IssueSessions)(nil),               // 74: issues.v1.IssueSessions
+	(*GetFlowMetricsRequest)(nil),       // 75: issues.v1.GetFlowMetricsRequest
+	(*GetFlowMetricsResponse)(nil),      // 76: issues.v1.GetFlowMetricsResponse
 }
 var file_issues_v1_issues_proto_depIdxs = []int32{
 	73,  // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
@@ -5587,132 +5605,133 @@ var file_issues_v1_issues_proto_depIdxs = []int32{
 	73,  // 4: issues.v1.Issue.created_at:type_name -> google.protobuf.Timestamp
 	73,  // 5: issues.v1.Issue.updated_at:type_name -> google.protobuf.Timestamp
 	8,   // 6: issues.v1.Issue.discard:type_name -> issues.v1.DiscardInfo
-	73,  // 7: issues.v1.DiscardInfo.discarded_at:type_name -> google.protobuf.Timestamp
-	0,   // 8: issues.v1.Status.category:type_name -> issues.v1.IssueState
-	2,   // 9: issues.v1.Status.color:type_name -> issues.v1.LabelColor
-	2,   // 10: issues.v1.Label.color:type_name -> issues.v1.LabelColor
-	73,  // 11: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
-	73,  // 12: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
-	13,  // 13: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
-	14,  // 14: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
-	17,  // 15: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
-	19,  // 16: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
-	20,  // 17: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
-	21,  // 18: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
-	11,  // 19: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
-	15,  // 20: issues.v1.IssueEvent.discarded:type_name -> issues.v1.IssueDiscarded
-	16,  // 21: issues.v1.IssueEvent.restored:type_name -> issues.v1.IssueRestored
-	18,  // 22: issues.v1.IssueEvent.assignee_changed:type_name -> issues.v1.AssigneeChanged
-	3,   // 23: issues.v1.IssueEvent.source:type_name -> issues.v1.EventSource
-	0,   // 24: issues.v1.IssueCreated.state:type_name -> issues.v1.IssueState
-	0,   // 25: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
-	0,   // 26: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
-	0,   // 27: issues.v1.IssueDiscarded.from_state:type_name -> issues.v1.IssueState
-	1,   // 28: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
-	1,   // 29: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
-	22,  // 30: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
-	6,   // 31: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
-	23,  // 32: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
-	6,   // 33: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
-	0,   // 34: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
-	22,  // 35: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
-	0,   // 36: issues.v1.ListIssuesRequest.states:type_name -> issues.v1.IssueState
-	1,   // 37: issues.v1.ListIssuesRequest.priorities:type_name -> issues.v1.Priority
-	4,   // 38: issues.v1.ListIssuesRequest.order_by:type_name -> issues.v1.IssueOrder
-	7,   // 39: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
-	23,  // 40: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
-	7,   // 41: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
-	1,   // 42: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
-	7,   // 43: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
-	0,   // 44: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
-	7,   // 45: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
-	1,   // 46: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
-	37,  // 47: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
-	7,   // 48: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
-	7,   // 49: issues.v1.DiscardIssueResponse.issue:type_name -> issues.v1.Issue
-	7,   // 50: issues.v1.RestoreIssueResponse.issue:type_name -> issues.v1.Issue
-	9,   // 51: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
-	0,   // 52: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
-	2,   // 53: issues.v1.CreateStatusRequest.color:type_name -> issues.v1.LabelColor
-	9,   // 54: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
-	2,   // 55: issues.v1.UpdateStatusRequest.color:type_name -> issues.v1.LabelColor
-	9,   // 56: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
-	52,  // 57: issues.v1.BatchUpdateStatusesRequest.statuses:type_name -> issues.v1.StatusSpec
-	53,  // 58: issues.v1.BatchUpdateStatusesRequest.deletions:type_name -> issues.v1.StatusDeletion
-	0,   // 59: issues.v1.StatusSpec.category:type_name -> issues.v1.IssueState
-	2,   // 60: issues.v1.StatusSpec.color:type_name -> issues.v1.LabelColor
-	9,   // 61: issues.v1.BatchUpdateStatusesResponse.statuses:type_name -> issues.v1.Status
-	10,  // 62: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
-	2,   // 63: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
-	10,  // 64: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
-	2,   // 65: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
-	10,  // 66: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
-	11,  // 67: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
-	22,  // 68: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
-	12,  // 69: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
-	23,  // 70: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
-	73,  // 71: issues.v1.ImportIssueRequest.created_at:type_name -> google.protobuf.Timestamp
-	1,   // 72: issues.v1.ImportIssueRequest.priority:type_name -> issues.v1.Priority
-	0,   // 73: issues.v1.ImportIssueRequest.state:type_name -> issues.v1.IssueState
-	7,   // 74: issues.v1.ImportIssueResponse.issue:type_name -> issues.v1.Issue
-	5,   // 75: issues.v1.ImportIssueResponse.outcome:type_name -> issues.v1.ImportOutcome
-	70,  // 76: issues.v1.ImportIssueEventsRequest.events:type_name -> issues.v1.ImportedEvent
-	3,   // 77: issues.v1.ImportedEvent.source:type_name -> issues.v1.EventSource
-	73,  // 78: issues.v1.ImportedEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	71,  // 79: issues.v1.ImportedEvent.status_changed:type_name -> issues.v1.ImportedStatusChange
-	0,   // 80: issues.v1.ImportedStatusChange.from_state:type_name -> issues.v1.IssueState
-	0,   // 81: issues.v1.ImportedStatusChange.to_state:type_name -> issues.v1.IssueState
-	24,  // 82: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
-	26,  // 83: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
-	28,  // 84: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
-	30,  // 85: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
-	32,  // 86: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
-	34,  // 87: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
-	36,  // 88: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
-	39,  // 89: issues.v1.IssueService.DiscardIssue:input_type -> issues.v1.DiscardIssueRequest
-	41,  // 90: issues.v1.IssueService.RestoreIssue:input_type -> issues.v1.RestoreIssueRequest
-	43,  // 91: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
-	45,  // 92: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
-	47,  // 93: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
-	49,  // 94: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
-	51,  // 95: issues.v1.IssueService.BatchUpdateStatuses:input_type -> issues.v1.BatchUpdateStatusesRequest
-	55,  // 96: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
-	57,  // 97: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
-	59,  // 98: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
-	61,  // 99: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
-	63,  // 100: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
-	65,  // 101: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
-	67,  // 102: issues.v1.IssueService.ImportIssue:input_type -> issues.v1.ImportIssueRequest
-	69,  // 103: issues.v1.IssueService.ImportIssueEvents:input_type -> issues.v1.ImportIssueEventsRequest
-	74,  // 104: issues.v1.IssueService.GetFlowMetrics:input_type -> issues.v1.GetFlowMetricsRequest
-	25,  // 105: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
-	27,  // 106: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
-	29,  // 107: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
-	31,  // 108: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
-	33,  // 109: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
-	35,  // 110: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
-	38,  // 111: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
-	40,  // 112: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
-	42,  // 113: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
-	44,  // 114: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
-	46,  // 115: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
-	48,  // 116: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
-	50,  // 117: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
-	54,  // 118: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
-	56,  // 119: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
-	58,  // 120: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
-	60,  // 121: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
-	62,  // 122: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
-	64,  // 123: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
-	66,  // 124: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
-	68,  // 125: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
-	72,  // 126: issues.v1.IssueService.ImportIssueEvents:output_type -> issues.v1.ImportIssueEventsResponse
-	75,  // 127: issues.v1.IssueService.GetFlowMetrics:output_type -> issues.v1.GetFlowMetricsResponse
-	105, // [105:128] is the sub-list for method output_type
-	82,  // [82:105] is the sub-list for method input_type
-	82,  // [82:82] is the sub-list for extension type_name
-	82,  // [82:82] is the sub-list for extension extendee
-	0,   // [0:82] is the sub-list for field type_name
+	74,  // 7: issues.v1.Issue.sessions:type_name -> issues.v1.IssueSessions
+	73,  // 8: issues.v1.DiscardInfo.discarded_at:type_name -> google.protobuf.Timestamp
+	0,   // 9: issues.v1.Status.category:type_name -> issues.v1.IssueState
+	2,   // 10: issues.v1.Status.color:type_name -> issues.v1.LabelColor
+	2,   // 11: issues.v1.Label.color:type_name -> issues.v1.LabelColor
+	73,  // 12: issues.v1.Comment.created_at:type_name -> google.protobuf.Timestamp
+	73,  // 13: issues.v1.IssueEvent.created_at:type_name -> google.protobuf.Timestamp
+	13,  // 14: issues.v1.IssueEvent.created:type_name -> issues.v1.IssueCreated
+	14,  // 15: issues.v1.IssueEvent.status_changed:type_name -> issues.v1.StatusChanged
+	17,  // 16: issues.v1.IssueEvent.title_changed:type_name -> issues.v1.TitleChanged
+	19,  // 17: issues.v1.IssueEvent.description_changed:type_name -> issues.v1.DescriptionChanged
+	20,  // 18: issues.v1.IssueEvent.priority_changed:type_name -> issues.v1.PriorityChanged
+	21,  // 19: issues.v1.IssueEvent.labels_changed:type_name -> issues.v1.LabelsChanged
+	11,  // 20: issues.v1.IssueEvent.commented:type_name -> issues.v1.Comment
+	15,  // 21: issues.v1.IssueEvent.discarded:type_name -> issues.v1.IssueDiscarded
+	16,  // 22: issues.v1.IssueEvent.restored:type_name -> issues.v1.IssueRestored
+	18,  // 23: issues.v1.IssueEvent.assignee_changed:type_name -> issues.v1.AssigneeChanged
+	3,   // 24: issues.v1.IssueEvent.source:type_name -> issues.v1.EventSource
+	0,   // 25: issues.v1.IssueCreated.state:type_name -> issues.v1.IssueState
+	0,   // 26: issues.v1.StatusChanged.from_state:type_name -> issues.v1.IssueState
+	0,   // 27: issues.v1.StatusChanged.to_state:type_name -> issues.v1.IssueState
+	0,   // 28: issues.v1.IssueDiscarded.from_state:type_name -> issues.v1.IssueState
+	1,   // 29: issues.v1.PriorityChanged.from:type_name -> issues.v1.Priority
+	1,   // 30: issues.v1.PriorityChanged.to:type_name -> issues.v1.Priority
+	22,  // 31: issues.v1.ListProjectsRequest.page:type_name -> issues.v1.PageRequest
+	6,   // 32: issues.v1.ListProjectsResponse.projects:type_name -> issues.v1.Project
+	23,  // 33: issues.v1.ListProjectsResponse.page:type_name -> issues.v1.PageResponse
+	6,   // 34: issues.v1.CreateProjectResponse.project:type_name -> issues.v1.Project
+	0,   // 35: issues.v1.ListIssuesRequest.state:type_name -> issues.v1.IssueState
+	22,  // 36: issues.v1.ListIssuesRequest.page:type_name -> issues.v1.PageRequest
+	0,   // 37: issues.v1.ListIssuesRequest.states:type_name -> issues.v1.IssueState
+	1,   // 38: issues.v1.ListIssuesRequest.priorities:type_name -> issues.v1.Priority
+	4,   // 39: issues.v1.ListIssuesRequest.order_by:type_name -> issues.v1.IssueOrder
+	7,   // 40: issues.v1.ListIssuesResponse.issues:type_name -> issues.v1.Issue
+	23,  // 41: issues.v1.ListIssuesResponse.page:type_name -> issues.v1.PageResponse
+	7,   // 42: issues.v1.GetIssueResponse.issue:type_name -> issues.v1.Issue
+	1,   // 43: issues.v1.CreateIssueRequest.priority:type_name -> issues.v1.Priority
+	7,   // 44: issues.v1.CreateIssueResponse.issue:type_name -> issues.v1.Issue
+	0,   // 45: issues.v1.MoveIssueRequest.state:type_name -> issues.v1.IssueState
+	7,   // 46: issues.v1.MoveIssueResponse.issue:type_name -> issues.v1.Issue
+	1,   // 47: issues.v1.UpdateIssueRequest.priority:type_name -> issues.v1.Priority
+	37,  // 48: issues.v1.UpdateIssueRequest.labels:type_name -> issues.v1.LabelIds
+	7,   // 49: issues.v1.UpdateIssueResponse.issue:type_name -> issues.v1.Issue
+	7,   // 50: issues.v1.DiscardIssueResponse.issue:type_name -> issues.v1.Issue
+	7,   // 51: issues.v1.RestoreIssueResponse.issue:type_name -> issues.v1.Issue
+	9,   // 52: issues.v1.ListStatusesResponse.statuses:type_name -> issues.v1.Status
+	0,   // 53: issues.v1.CreateStatusRequest.category:type_name -> issues.v1.IssueState
+	2,   // 54: issues.v1.CreateStatusRequest.color:type_name -> issues.v1.LabelColor
+	9,   // 55: issues.v1.CreateStatusResponse.status:type_name -> issues.v1.Status
+	2,   // 56: issues.v1.UpdateStatusRequest.color:type_name -> issues.v1.LabelColor
+	9,   // 57: issues.v1.UpdateStatusResponse.status:type_name -> issues.v1.Status
+	52,  // 58: issues.v1.BatchUpdateStatusesRequest.statuses:type_name -> issues.v1.StatusSpec
+	53,  // 59: issues.v1.BatchUpdateStatusesRequest.deletions:type_name -> issues.v1.StatusDeletion
+	0,   // 60: issues.v1.StatusSpec.category:type_name -> issues.v1.IssueState
+	2,   // 61: issues.v1.StatusSpec.color:type_name -> issues.v1.LabelColor
+	9,   // 62: issues.v1.BatchUpdateStatusesResponse.statuses:type_name -> issues.v1.Status
+	10,  // 63: issues.v1.ListLabelsResponse.labels:type_name -> issues.v1.Label
+	2,   // 64: issues.v1.CreateLabelRequest.color:type_name -> issues.v1.LabelColor
+	10,  // 65: issues.v1.CreateLabelResponse.label:type_name -> issues.v1.Label
+	2,   // 66: issues.v1.UpdateLabelRequest.color:type_name -> issues.v1.LabelColor
+	10,  // 67: issues.v1.UpdateLabelResponse.label:type_name -> issues.v1.Label
+	11,  // 68: issues.v1.CreateCommentResponse.comment:type_name -> issues.v1.Comment
+	22,  // 69: issues.v1.ListIssueEventsRequest.page:type_name -> issues.v1.PageRequest
+	12,  // 70: issues.v1.ListIssueEventsResponse.events:type_name -> issues.v1.IssueEvent
+	23,  // 71: issues.v1.ListIssueEventsResponse.page:type_name -> issues.v1.PageResponse
+	73,  // 72: issues.v1.ImportIssueRequest.created_at:type_name -> google.protobuf.Timestamp
+	1,   // 73: issues.v1.ImportIssueRequest.priority:type_name -> issues.v1.Priority
+	0,   // 74: issues.v1.ImportIssueRequest.state:type_name -> issues.v1.IssueState
+	7,   // 75: issues.v1.ImportIssueResponse.issue:type_name -> issues.v1.Issue
+	5,   // 76: issues.v1.ImportIssueResponse.outcome:type_name -> issues.v1.ImportOutcome
+	70,  // 77: issues.v1.ImportIssueEventsRequest.events:type_name -> issues.v1.ImportedEvent
+	3,   // 78: issues.v1.ImportedEvent.source:type_name -> issues.v1.EventSource
+	73,  // 79: issues.v1.ImportedEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	71,  // 80: issues.v1.ImportedEvent.status_changed:type_name -> issues.v1.ImportedStatusChange
+	0,   // 81: issues.v1.ImportedStatusChange.from_state:type_name -> issues.v1.IssueState
+	0,   // 82: issues.v1.ImportedStatusChange.to_state:type_name -> issues.v1.IssueState
+	24,  // 83: issues.v1.IssueService.ListProjects:input_type -> issues.v1.ListProjectsRequest
+	26,  // 84: issues.v1.IssueService.CreateProject:input_type -> issues.v1.CreateProjectRequest
+	28,  // 85: issues.v1.IssueService.ListIssues:input_type -> issues.v1.ListIssuesRequest
+	30,  // 86: issues.v1.IssueService.GetIssue:input_type -> issues.v1.GetIssueRequest
+	32,  // 87: issues.v1.IssueService.CreateIssue:input_type -> issues.v1.CreateIssueRequest
+	34,  // 88: issues.v1.IssueService.MoveIssue:input_type -> issues.v1.MoveIssueRequest
+	36,  // 89: issues.v1.IssueService.UpdateIssue:input_type -> issues.v1.UpdateIssueRequest
+	39,  // 90: issues.v1.IssueService.DiscardIssue:input_type -> issues.v1.DiscardIssueRequest
+	41,  // 91: issues.v1.IssueService.RestoreIssue:input_type -> issues.v1.RestoreIssueRequest
+	43,  // 92: issues.v1.IssueService.ListStatuses:input_type -> issues.v1.ListStatusesRequest
+	45,  // 93: issues.v1.IssueService.CreateStatus:input_type -> issues.v1.CreateStatusRequest
+	47,  // 94: issues.v1.IssueService.UpdateStatus:input_type -> issues.v1.UpdateStatusRequest
+	49,  // 95: issues.v1.IssueService.DeleteStatus:input_type -> issues.v1.DeleteStatusRequest
+	51,  // 96: issues.v1.IssueService.BatchUpdateStatuses:input_type -> issues.v1.BatchUpdateStatusesRequest
+	55,  // 97: issues.v1.IssueService.ListLabels:input_type -> issues.v1.ListLabelsRequest
+	57,  // 98: issues.v1.IssueService.CreateLabel:input_type -> issues.v1.CreateLabelRequest
+	59,  // 99: issues.v1.IssueService.UpdateLabel:input_type -> issues.v1.UpdateLabelRequest
+	61,  // 100: issues.v1.IssueService.DeleteLabel:input_type -> issues.v1.DeleteLabelRequest
+	63,  // 101: issues.v1.IssueService.CreateComment:input_type -> issues.v1.CreateCommentRequest
+	65,  // 102: issues.v1.IssueService.ListIssueEvents:input_type -> issues.v1.ListIssueEventsRequest
+	67,  // 103: issues.v1.IssueService.ImportIssue:input_type -> issues.v1.ImportIssueRequest
+	69,  // 104: issues.v1.IssueService.ImportIssueEvents:input_type -> issues.v1.ImportIssueEventsRequest
+	75,  // 105: issues.v1.IssueService.GetFlowMetrics:input_type -> issues.v1.GetFlowMetricsRequest
+	25,  // 106: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
+	27,  // 107: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
+	29,  // 108: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
+	31,  // 109: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
+	33,  // 110: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
+	35,  // 111: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
+	38,  // 112: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
+	40,  // 113: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
+	42,  // 114: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
+	44,  // 115: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
+	46,  // 116: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
+	48,  // 117: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
+	50,  // 118: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
+	54,  // 119: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
+	56,  // 120: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
+	58,  // 121: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
+	60,  // 122: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
+	62,  // 123: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
+	64,  // 124: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
+	66,  // 125: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
+	68,  // 126: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
+	72,  // 127: issues.v1.IssueService.ImportIssueEvents:output_type -> issues.v1.ImportIssueEventsResponse
+	76,  // 128: issues.v1.IssueService.GetFlowMetrics:output_type -> issues.v1.GetFlowMetricsResponse
+	106, // [106:129] is the sub-list for method output_type
+	83,  // [83:106] is the sub-list for method input_type
+	83,  // [83:83] is the sub-list for extension type_name
+	83,  // [83:83] is the sub-list for extension extendee
+	0,   // [0:83] is the sub-list for field type_name
 }
 
 func init() { file_issues_v1_issues_proto_init() }
@@ -5720,6 +5739,7 @@ func file_issues_v1_issues_proto_init() {
 	if File_issues_v1_issues_proto != nil {
 		return
 	}
+	file_issues_v1_agent_sessions_proto_init()
 	file_issues_v1_flow_metrics_proto_init()
 	file_issues_v1_issues_proto_msgTypes[6].OneofWrappers = []any{
 		(*IssueEvent_Created)(nil),

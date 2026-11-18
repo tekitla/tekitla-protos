@@ -1,0 +1,166 @@
+// Sesiones de agentes (issue 026): qué está haciendo cada agente, por
+// proyecto e issue. Una sesión es una corrida de una herramienta (Claude Code,
+// Codex) en una terminal; cuelga de un actor AGENT (actors.proto, ADR 0009),
+// uno por herramienta y máquina, no uno por sesión.
+//
+// Este archivo tiene solo los tipos: issues.proto los importa para el resumen
+// de Issue.sessions, y el servicio (AgentSessionService) está en
+// agent_session_service.proto, que importa issues.proto por la paginación.
+// Así no hay imports circulares.
+//
+// Mismas reglas que issues.proto (ver CLAUDE.md): solo cambios aditivos en v1.
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/protobuf/timestamp.proto";
+import "issues/v1/actors.proto";
+
+// Estado de una sesión: los de docs/03 §4 de dev-plantillas. Entre paréntesis,
+// el nombre en español con el que se muestra y el estado de herdr del que sale.
+enum SessionStatus {
+  SESSION_STATUS_UNSPECIFIED = 0;
+  // trabajando (herdr working).
+  SESSION_STATUS_WORKING = 1;
+  // esperando-ok (herdr blocked): espera algo; waiting_on dice qué.
+  SESSION_STATUS_WAITING_OK = 2;
+  // en-reposo (herdr idle).
+  SESSION_STATUS_IDLE = 3;
+  // terminada (herdr done, o dejó de aparecer en el reporte de su máquina).
+  SESSION_STATUS_ENDED = 4;
+  // desconocido (herdr unknown).
+  SESSION_STATUS_UNKNOWN = 5;
+  // colgado: WORKING sin reporte durante más del umbral del servicio (10
+  // minutos por defecto, configurable en tekitla-issues). No se guarda ni se
+  // reporta: solo lo devuelve el servicio al leer.
+  SESSION_STATUS_STALLED = 6;
+}
+
+// Qué espera una sesión. Sale de los tokens que escribe espera.ps1 en el panel
+// de herdr (espera_tipo y espera_a; issue 026, §1).
+enum WaitingOn {
+  WAITING_ON_UNSPECIFIED = 0;
+  // Libre: no espera nada.
+  WAITING_ON_NONE = 1;
+  // Bloqueada por su persona (una pregunta o una decisión).
+  WAITING_ON_PERSON = 2;
+  // Espera a otra sesión; waiting_target dice a cuál.
+  WAITING_ON_SESSION = 3;
+  // Espera otra cosa (un CI, un merge); waiting_target dice qué.
+  WAITING_ON_OTHER = 4;
+}
+
+// De dónde sale una sesión.
+enum SessionSource {
+  SESSION_SOURCE_UNSPECIFIED = 0;
+  // El recolector local que lee herdr (tekitla-issues/tools/herdr-collector).
+  SESSION_SOURCE_HERDR = 1;
+}
+
+// Qué regla ligó la sesión a su proyecto e issue (issue 026, §2). Sirve para
+// revisar ligados raros.
+enum SessionLink {
+  SESSION_LINK_UNSPECIFIED = 0;
+  // Sin issue: ninguna regla la reconoció.
+  SESSION_LINK_NONE = 1;
+  // Nombre del agente de herdr: <proyecto>-issue-<n>.
+  SESSION_LINK_AGENT_NAME = 2;
+  // Nombre del workspace de herdr: <proyecto> #<n>.
+  SESSION_LINK_WORKSPACE = 3;
+  // Directorio: worktrees/issue-<n> o <repo>-wt/issue-<n>.
+  SESSION_LINK_CWD = 4;
+}
+
+// Una sesión de agente tal como la guarda Tekitla.
+//
+// Datos personales: no hay rutas absolutas ni el usuario del sistema.
+// cwd_rel es relativo a la raíz que configura la persona en el recolector, y
+// los nombres de herdr son los que ella les puso.
+message AgentSession {
+  string id = 1;
+  SessionSource source = 2;
+  // Id de la sesión en su origen (en herdr, agent_session.value). Único por
+  // persona, source y machine.
+  string external_id = 3;
+  // Actor AGENT de la sesión: uno por herramienta y máquina de la persona,
+  // creado por ReportSessions la primera vez.
+  string agent_actor_id = 4;
+  // Nombre de ese actor, p. ej. «Claude Code PC-01», para mostrarlo sin
+  // resolver el actor.
+  string agent_display_name = 5;
+  AgentTool tool = 6;
+  // Nombre corto de la máquina, el que configura la persona en el recolector.
+  string machine = 7;
+  // Directorio de trabajo relativo a la raíz configurada, con "/" (p. ej.
+  // "round/worktrees/issue-231/front"). Vacío fuera de la raíz; "." en la
+  // raíz.
+  string cwd_rel = 8;
+  // Nombre del agente en herdr, p. ej. "tekitla-issue-26". Puede estar vacío.
+  string session_name = 9;
+  // Nombre del workspace de herdr, p. ej. "tekitla #26". Puede estar vacío.
+  string workspace_label = 10;
+  // Proyecto al que se ligó. Vacío: sin issue.
+  string project_id = 11;
+  // Número del issue dentro de project_id. 0: sin issue. Puede no existir
+  // todavía en el proyecto: se guarda igual.
+  int32 issue_number = 12;
+  SessionLink link = 13;
+  // Estado actual. STALLED si es WORKING y last_seen_at es más viejo que el
+  // umbral (calculado al leer).
+  SessionStatus status = 14;
+  // Último cambio del estado guardado (no cambia al pasar a STALLED, que no
+  // se guarda).
+  google.protobuf.Timestamp status_changed_at = 15;
+  // Último reporte que la incluyó.
+  google.protobuf.Timestamp last_seen_at = 16;
+  // Primer reporte que la incluyó.
+  google.protobuf.Timestamp started_at = 17;
+  // Cuándo pasó a ENDED. Ausente si no terminó.
+  google.protobuf.Timestamp ended_at = 18;
+  // Qué espera. Siempre NONE si el estado guardado es WORKING o ENDED.
+  WaitingOn waiting_on = 19;
+  // Con waiting_on SESSION u OTHER: a quién o qué espera (token espera_a).
+  // Vacío en los demás.
+  string waiting_target = 20;
+  // El texto de la barra lateral de herdr (token espera) tal cual, solo para
+  // mostrar: no se interpreta. Vacío si waiting_on es NONE.
+  string waiting_text = 21;
+}
+
+// Resumen de las sesiones activas ligadas a un issue (Issue.sessions).
+//
+// Activa: no ENDED y con un reporte en las últimas 24 horas. Una sesión que
+// dejó de reportar hace más (p. ej. su máquina está apagada) no cuenta,
+// aunque su estado guardado no cambie.
+message IssueSessions {
+  // Total de sesiones activas. Es la suma de los cuatro contadores
+  // siguientes más las de estado UNKNOWN.
+  int32 active = 1;
+  int32 working = 2;
+  // En WAITING_OK, espere lo que espere.
+  int32 waiting = 3;
+  int32 stalled = 4;
+  int32 idle = 5;
+  // Alguna sesión activa espera a su persona (waiting_on = PERSON).
+  bool needs_person = 6;
+  // Hasta 5 sesiones: primero las que esperan a una persona, después las
+  // colgadas, después por last_seen_at, de la más nueva a la más vieja. Solo
+  // en GetIssue; en las demás respuestas viene vacía (solo los contadores).
+  repeated SessionBrief items = 7;
+}
+
+// Una sesión dentro del resumen de un issue: quién la atiende y cómo está.
+message SessionBrief {
+  // AgentSession.id.
+  string session_id = 1;
+  string agent_actor_id = 2;
+  // P. ej. «Claude Code PC-01».
+  string agent_display_name = 3;
+  // Nombre del agente en herdr, p. ej. "tekitla-issue-26".
+  string session_name = 4;
+  string machine = 5;
+  SessionStatus status = 6;
+  WaitingOn waiting_on = 7;
+  string waiting_target = 8;
+  google.protobuf.Timestamp status_changed_at = 9;
+}

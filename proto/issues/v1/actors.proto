@@ -116,13 +116,18 @@ message Actor {
 }
 
 // Alcance de un token. Write no implica read: se piden los dos. En el gateway
-// se propagan en x-roles como "issues:read" e "issues:write".
+// se propagan en x-roles como "issues:read", "issues:write" y
+// "sessions:write".
 enum TokenScope {
   TOKEN_SCOPE_UNSPECIFIED = 0;
-  // issues:read: leer proyectos e issues.
+  // issues:read: leer proyectos e issues (y las sesiones de agentes).
   TOKEN_SCOPE_ISSUES_READ = 1;
   // issues:write: crear y cambiar issues.
   TOKEN_SCOPE_ISSUES_WRITE = 2;
+  // sessions:write: reportar sesiones de agentes (issue 026,
+  // AgentSessionService.ReportSessions). No da permiso para leer ni para
+  // cambiar issues. Es para el recolector local, con un token de persona.
+  TOKEN_SCOPE_SESSIONS_WRITE = 3;
 }
 
 // Un token de Tekitla, sin el secreto ni su hash.
