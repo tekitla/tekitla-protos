@@ -7,6 +7,8 @@
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 // Issue 025: asignado (un actor, persona o agente), autoría con agente en el
 // historial e importación desde otro tracker (actors.proto, token_auth.proto).
+// Issue 026: resumen de las sesiones de agentes de cada issue
+// (agent_sessions.proto; el servicio está en agent_session_service.proto).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
@@ -22,6 +24,7 @@
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import type { IssueSessions } from "./agent_sessions_pb.js";
 import type { GetFlowMetricsRequestSchema, GetFlowMetricsResponseSchema } from "./flow_metrics_pb.js";
 
 /**
@@ -183,6 +186,18 @@ export declare type Issue = Message<"issues.v1.Issue"> & {
    * @generated from field: string source_key = 15;
    */
   sourceKey: string;
+
+  /**
+   * Sesiones de agentes activas ligadas a este issue (issue 026,
+   * agent_sessions.proto): quién lo está atendiendo y si alguna espera a su
+   * persona. Ausente si no hay ninguna. GetIssue trae además la lista
+   * (IssueSessions.items); ListIssues y las demás respuestas, solo los
+   * contadores. No es el asignado: assignee_actor_id dice quién debería
+   * hacerlo, esto dice quién lo está haciendo.
+   *
+   * @generated from field: issues.v1.IssueSessions sessions = 16;
+   */
+  sessions?: IssueSessions | undefined;
 };
 
 /**

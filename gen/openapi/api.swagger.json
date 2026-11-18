@@ -14,6 +14,10 @@
       "description": "IssueService gestiona los proyectos y sus issues.\n\nTodo acceso se limita a los espacios de trabajo del usuario autenticado (el\ngateway propaga su identidad en la metadata). En la rebanada 1 cada usuario\ntiene solo su espacio personal; desde la rebanada 3 un espacio es un tenant\nde la plataforma (issue 005) y workspace_id es su id. Un proyecto ajeno o no\nvisible para el usuario responde NOT_FOUND, nunca PERMISSION_DENIED, para no\nrevelar que existe.\n\nLas opciones google.api.http definen las rutas REST que expone el\napi-gateway (grpc-gateway). Una ruta anotada NO queda pública por estar\nacá: el gateway la expone solo si figura en su routes.yaml."
     },
     {
+      "name": "AgentSessionService",
+      "description": "Sesiones de agentes de una persona.\n\nToda sesión es de una persona (el x-user-id que propaga el gateway) y de\nuno de sus agentes. Un usuario ve solo las suyas."
+    },
+    {
       "name": "TokenAuthService",
       "description": "TokenAuthService resuelve un token `tka_…` a la identidad que propaga el\ngateway. Solo interno: no requiere x-user-id (el gateway lo llama antes de\nsaber quién es) y no se expone por REST."
     }
@@ -149,6 +153,122 @@
         ],
         "tags": [
           "IssueService"
+        ]
+      }
+    },
+    "/v1/agentSessions": {
+      "get": {
+        "summary": "Sesiones de la persona, filtradas. Sin filtros: las activas (no ENDED y\ncon un reporte en las últimas 24 horas), de la más nueva a la más vieja\npor last_seen_at. Los filtros se combinan con Y.",
+        "operationId": "AgentSessionService_ListAgentSessions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAgentSessionsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "description": "Solo las ligadas a este proyecto.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "issueNumber",
+            "description": "Solo las ligadas a este issue; necesita project_id (si no,\nINVALID_ARGUMENT).",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "statuses",
+            "description": "Estados, con STALLED como uno más (y WORKING sin las colgadas). Vacío:\ntodos menos ENDED, o todos con include_inactive. ENDED en la lista\nnecesita include_inactive (si no, INVALID_ARGUMENT). UNSPECIFIED dentro\nde la lista es INVALID_ARGUMENT.\n\n - SESSION_STATUS_WORKING: trabajando (herdr working).\n - SESSION_STATUS_WAITING_OK: esperando-ok (herdr blocked): espera algo; waiting_on dice qué.\n - SESSION_STATUS_IDLE: en-reposo (herdr idle).\n - SESSION_STATUS_ENDED: terminada (herdr done, o dejó de aparecer en el reporte de su máquina).\n - SESSION_STATUS_UNKNOWN: desconocido (herdr unknown).\n - SESSION_STATUS_STALLED: colgado: WORKING sin reporte durante más del umbral del servicio (10\nminutos por defecto, configurable en tekitla-issues). No se guarda ni se\nreporta: solo lo devuelve el servicio al leer.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "SESSION_STATUS_UNSPECIFIED",
+                "SESSION_STATUS_WORKING",
+                "SESSION_STATUS_WAITING_OK",
+                "SESSION_STATUS_IDLE",
+                "SESSION_STATUS_ENDED",
+                "SESSION_STATUS_UNKNOWN",
+                "SESSION_STATUS_STALLED"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "agentActorId",
+            "description": "Solo las de este agente.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "includeInactive",
+            "description": "Incluye las ENDED y las que no reportan hace más de 24 horas.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "unlinked",
+            "description": "Solo las sin issue. Con project_id es INVALID_ARGUMENT.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "page.cursor",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "page.limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "AgentSessionService"
+        ]
+      }
+    },
+    "/v1/agentSessions:report": {
+      "post": {
+        "summary": "Reemplaza las sesiones de una máquina con la lista completa que ve su\nrecolector.",
+        "description": "Solo con un token de persona con TOKEN_SCOPE_SESSIONS_WRITE: con\nx-agent-id (un token de agente) responde PERMISSION_DENIED. El gateway\nno la expone a la sesión de Firebase.\n\nReglas:\n- Idempotente: la clave de cada sesión es (persona, source, machine,\n  external_id). El mismo reporte dos veces da el mismo resultado, y el\n  segundo cuenta todas en unchanged (salvo last_seen_at, que siempre se\n  actualiza y no cuenta como cambio).\n- status_changed_at cambia solo si cambia status.\n- Una sesión de esta persona, source y machine que no está ENDED y no\n  viene en el reporte pasa a ENDED con ended_at. Las de otras máquinas\n  no se tocan. Una ENDED que vuelve a aparecer se reabre con\n  started_at nuevo.\n- Con status WORKING, waiting_on se guarda NONE (y waiting_target y\n  waiting_text vacíos) aunque venga otra cosa: un token de espera de un\n  turno anterior no cuenta mientras la sesión trabaja.\n- Actor: busca el actor AGENT de la persona con esa herramienta y\n  máquina y, si no hay, lo crea con nombre «\u003cherramienta\u003e \u003cmachine\u003e»\n  (p. ej. «Claude Code PC-01»). Es la única forma en que un token crea\n  un agente. Si ese actor está revocado, sus sesiones se rechazan (ver\n  rejected) hasta que la persona cree otro desde el panel.\n- project_key se busca entre los proyectos visibles de la persona, sin\n  distinguir mayúsculas. Si no existe, la sesión se guarda sin issue\n  (link NONE) y además aparece en rejected con el motivo, para que el\n  recolector lo anote.\nUn error de validación en cualquier sesión es INVALID_ARGUMENT y no se\nguarda nada.",
+        "operationId": "AgentSessionService_ReportSessions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ReportSessionsResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ReportSessionsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AgentSessionService"
         ]
       }
     },
@@ -1526,6 +1646,97 @@
       "default": "ACTOR_KIND_UNSPECIFIED",
       "description": "Tipo de actor.\n\n - ACTOR_KIND_PERSON: Una persona, ligada a su uid de Firebase.\n - ACTOR_KIND_AGENT: Un agente: una identidad configurada por su dueño, no una sesión."
     },
+    "v1AgentSession": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/definitions/v1SessionSource"
+        },
+        "externalId": {
+          "type": "string",
+          "description": "Id de la sesión en su origen (en herdr, agent_session.value). Único por\npersona, source y machine."
+        },
+        "agentActorId": {
+          "type": "string",
+          "description": "Actor AGENT de la sesión: uno por herramienta y máquina de la persona,\ncreado por ReportSessions la primera vez."
+        },
+        "agentDisplayName": {
+          "type": "string",
+          "description": "Nombre de ese actor, p. ej. «Claude Code PC-01», para mostrarlo sin\nresolver el actor."
+        },
+        "tool": {
+          "$ref": "#/definitions/v1AgentTool"
+        },
+        "machine": {
+          "type": "string",
+          "description": "Nombre corto de la máquina, el que configura la persona en el recolector."
+        },
+        "cwdRel": {
+          "type": "string",
+          "description": "Directorio de trabajo relativo a la raíz configurada, con \"/\" (p. ej.\n\"round/worktrees/issue-231/front\"). Vacío fuera de la raíz; \".\" en la\nraíz."
+        },
+        "sessionName": {
+          "type": "string",
+          "description": "Nombre del agente en herdr, p. ej. \"tekitla-issue-26\". Puede estar vacío."
+        },
+        "workspaceLabel": {
+          "type": "string",
+          "description": "Nombre del workspace de herdr, p. ej. \"tekitla #26\". Puede estar vacío."
+        },
+        "projectId": {
+          "type": "string",
+          "description": "Proyecto al que se ligó. Vacío: sin issue."
+        },
+        "issueNumber": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Número del issue dentro de project_id. 0: sin issue. Puede no existir\ntodavía en el proyecto: se guarda igual."
+        },
+        "link": {
+          "$ref": "#/definitions/v1SessionLink"
+        },
+        "status": {
+          "$ref": "#/definitions/v1SessionStatus",
+          "description": "Estado actual. STALLED si es WORKING y last_seen_at es más viejo que el\numbral (calculado al leer)."
+        },
+        "statusChangedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Último cambio del estado guardado (no cambia al pasar a STALLED, que no\nse guarda)."
+        },
+        "lastSeenAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Último reporte que la incluyó."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Primer reporte que la incluyó."
+        },
+        "endedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Cuándo pasó a ENDED. Ausente si no terminó."
+        },
+        "waitingOn": {
+          "$ref": "#/definitions/v1WaitingOn",
+          "description": "Qué espera. Siempre NONE si el estado guardado es WORKING o ENDED."
+        },
+        "waitingTarget": {
+          "type": "string",
+          "description": "Con waiting_on SESSION u OTHER: a quién o qué espera (token espera_a).\nVacío en los demás."
+        },
+        "waitingText": {
+          "type": "string",
+          "description": "El texto de la barra lateral de herdr (token espera) tal cual, solo para\nmostrar: no se interpreta. Vacío si waiting_on es NONE."
+        }
+      },
+      "description": "Una sesión de agente tal como la guarda Tekitla.\n\nDatos personales: no hay rutas absolutas ni el usuario del sistema.\ncwd_rel es relativo a la raíz que configura la persona en el recolector, y\nlos nombres de herdr son los que ella les puso."
+    },
     "v1AgentTool": {
       "type": "string",
       "enum": [
@@ -2082,6 +2293,10 @@
         "sourceKey": {
           "type": "string",
           "description": "Clave en el tracker de origen si se importó con ImportIssue (p. ej.\n\"236-claude-md-en-capas\"); vacía si se creó en Tekitla."
+        },
+        "sessions": {
+          "$ref": "#/definitions/v1IssueSessions",
+          "description": "Sesiones de agentes activas ligadas a este issue (issue 026,\nagent_sessions.proto): quién lo está atendiendo y si alguna espera a su\npersona. Ausente si no hay ninguna. GetIssue trae además la lista\n(IssueSessions.items); ListIssues y las demás respuestas, solo los\ncontadores. No es el asignado: assignee_actor_id dice quién debería\nhacerlo, esto dice quién lo está haciendo."
         }
       }
     },
@@ -2218,6 +2433,46 @@
       },
       "description": "Restaurado con RestoreIssue. Los nombres se guardan como en StatusChanged."
     },
+    "v1IssueSessions": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Total de sesiones activas. Es la suma de los cuatro contadores\nsiguientes más las de estado UNKNOWN."
+        },
+        "working": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "waiting": {
+          "type": "integer",
+          "format": "int32",
+          "description": "En WAITING_OK, espere lo que espere."
+        },
+        "stalled": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "idle": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "needsPerson": {
+          "type": "boolean",
+          "description": "Alguna sesión activa espera a su persona (waiting_on = PERSON)."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SessionBrief"
+          },
+          "description": "Hasta 5 sesiones: primero las que esperan a una persona, después las\ncolgadas, después por last_seen_at, de la más nueva a la más vieja. Solo\nen GetIssue; en las demás respuestas viene vacía (solo los contadores)."
+        }
+      },
+      "description": "Resumen de las sesiones activas ligadas a un issue (Issue.sessions).\n\nActiva: no ENDED y con un reporte en las últimas 24 horas. Una sesión que\ndejó de reportar hace más (p. ej. su máquina está apagada) no cuenta,\naunque su estado guardado no cambie."
+    },
     "v1IssueState": {
       "type": "string",
       "enum": [
@@ -2299,6 +2554,21 @@
         }
       },
       "description": "Sin paginar: una persona y sus agentes."
+    },
+    "v1ListAgentSessionsResponse": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AgentSession"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1PageResponse"
+        }
+      }
     },
     "v1ListIssueEventsResponse": {
       "type": "object",
@@ -2506,6 +2776,115 @@
         }
       }
     },
+    "v1ReportSessionsRequest": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/v1SessionSource",
+          "description": "UNSPECIFIED es INVALID_ARGUMENT."
+        },
+        "machine": {
+          "type": "string",
+          "description": "Nombre corto de la máquina: 1 a 40 caracteres de [A-Za-z0-9._-]. Si no,\nINVALID_ARGUMENT."
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ReportedSession"
+          },
+          "description": "La lista completa de sesiones que ve la máquina, hasta 200 (más es\nINVALID_ARGUMENT). Vacía: todas las de la máquina pasan a ENDED."
+        }
+      }
+    },
+    "v1ReportSessionsResponse": {
+      "type": "object",
+      "properties": {
+        "created": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Sesiones nuevas."
+        },
+        "updated": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Sesiones con algún cambio aparte de last_seen_at."
+        },
+        "unchanged": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Sesiones sin cambios."
+        },
+        "ended": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Las que pasaron a ENDED por no venir en el reporte."
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SessionRejection"
+          },
+          "description": "Sesiones que no se guardaron, o que se guardaron sin issue, con el\nmotivo. No hacen fallar el reporte."
+        }
+      }
+    },
+    "v1ReportedSession": {
+      "type": "object",
+      "properties": {
+        "externalId": {
+          "type": "string",
+          "description": "Obligatorio, 1 a 200 caracteres, sin repetirse en el reporte."
+        },
+        "tool": {
+          "$ref": "#/definitions/v1AgentTool",
+          "description": "UNSPECIFIED es INVALID_ARGUMENT."
+        },
+        "cwdRel": {
+          "type": "string",
+          "description": "Relativo a la raíz, con \"/\", hasta 500 caracteres. Vacío fuera de la\nraíz. Una ruta absoluta (empieza con \"/\", \"\\\" o una letra de unidad) o\ncon un segmento \"..\" es INVALID_ARGUMENT."
+        },
+        "sessionName": {
+          "type": "string",
+          "description": "Hasta 200 caracteres."
+        },
+        "workspaceLabel": {
+          "type": "string",
+          "description": "Hasta 200 caracteres."
+        },
+        "projectKey": {
+          "type": "string",
+          "description": "Clave del proyecto ya resuelta con el mapa del recolector (p. ej.\n\"RND\"). Vacía: sin issue (issue_number tiene que ser 0 y link NONE)."
+        },
+        "issueNumber": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Número del issue; 0 con project_key vacía. Negativo, o 0 con\nproject_key, es INVALID_ARGUMENT."
+        },
+        "link": {
+          "$ref": "#/definitions/v1SessionLink",
+          "description": "UNSPECIFIED es INVALID_ARGUMENT. NONE con project_key, u otro sin ella,\ntambién."
+        },
+        "status": {
+          "$ref": "#/definitions/v1SessionStatus",
+          "description": "UNSPECIFIED y STALLED son INVALID_ARGUMENT."
+        },
+        "waitingOn": {
+          "$ref": "#/definitions/v1WaitingOn",
+          "description": "UNSPECIFIED se guarda como NONE."
+        },
+        "waitingTarget": {
+          "type": "string",
+          "description": "Hasta 80 caracteres. Solo con waiting_on SESSION u OTHER; con los demás\nse ignora."
+        },
+        "waitingText": {
+          "type": "string",
+          "description": "Hasta 200 caracteres. Se ignora con waiting_on NONE."
+        }
+      },
+      "description": "Lo que ve el recolector de una sesión, ya traducido a los valores de\nTekitla (issue 026, §1 y §2)."
+    },
     "v1RestoreIssueResponse": {
       "type": "object",
       "properties": {
@@ -2529,6 +2908,95 @@
           "$ref": "#/definitions/v1Token"
         }
       }
+    },
+    "v1SessionBrief": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "AgentSession.id."
+        },
+        "agentActorId": {
+          "type": "string"
+        },
+        "agentDisplayName": {
+          "type": "string",
+          "description": "P. ej. «Claude Code PC-01»."
+        },
+        "sessionName": {
+          "type": "string",
+          "description": "Nombre del agente en herdr, p. ej. \"tekitla-issue-26\"."
+        },
+        "machine": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1SessionStatus"
+        },
+        "waitingOn": {
+          "$ref": "#/definitions/v1WaitingOn"
+        },
+        "waitingTarget": {
+          "type": "string"
+        },
+        "statusChangedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Una sesión dentro del resumen de un issue: quién la atiende y cómo está."
+    },
+    "v1SessionLink": {
+      "type": "string",
+      "enum": [
+        "SESSION_LINK_UNSPECIFIED",
+        "SESSION_LINK_NONE",
+        "SESSION_LINK_AGENT_NAME",
+        "SESSION_LINK_WORKSPACE",
+        "SESSION_LINK_CWD"
+      ],
+      "default": "SESSION_LINK_UNSPECIFIED",
+      "description": "Qué regla ligó la sesión a su proyecto e issue (issue 026, §2). Sirve para\nrevisar ligados raros.\n\n - SESSION_LINK_NONE: Sin issue: ninguna regla la reconoció.\n - SESSION_LINK_AGENT_NAME: Nombre del agente de herdr: \u003cproyecto\u003e-issue-\u003cn\u003e.\n - SESSION_LINK_WORKSPACE: Nombre del workspace de herdr: \u003cproyecto\u003e #\u003cn\u003e.\n - SESSION_LINK_CWD: Directorio: worktrees/issue-\u003cn\u003e o \u003crepo\u003e-wt/issue-\u003cn\u003e."
+    },
+    "v1SessionRejection": {
+      "type": "object",
+      "properties": {
+        "externalId": {
+          "type": "string"
+        },
+        "saved": {
+          "type": "boolean",
+          "description": "Si se guardó o no."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Texto para el log del recolector, p. ej. \"proyecto XYZ desconocido: se\nguardó sin issue\" o \"agente revocado\"."
+        }
+      },
+      "description": "Una sesión del reporte con un problema."
+    },
+    "v1SessionSource": {
+      "type": "string",
+      "enum": [
+        "SESSION_SOURCE_UNSPECIFIED",
+        "SESSION_SOURCE_HERDR"
+      ],
+      "default": "SESSION_SOURCE_UNSPECIFIED",
+      "description": "De dónde sale una sesión.\n\n - SESSION_SOURCE_HERDR: El recolector local que lee herdr (tekitla-issues/tools/herdr-collector)."
+    },
+    "v1SessionStatus": {
+      "type": "string",
+      "enum": [
+        "SESSION_STATUS_UNSPECIFIED",
+        "SESSION_STATUS_WORKING",
+        "SESSION_STATUS_WAITING_OK",
+        "SESSION_STATUS_IDLE",
+        "SESSION_STATUS_ENDED",
+        "SESSION_STATUS_UNKNOWN",
+        "SESSION_STATUS_STALLED"
+      ],
+      "default": "SESSION_STATUS_UNSPECIFIED",
+      "description": "Estado de una sesión: los de docs/03 §4 de dev-plantillas. Entre paréntesis,\nel nombre en español con el que se muestra y el estado de herdr del que sale.\n\n - SESSION_STATUS_WORKING: trabajando (herdr working).\n - SESSION_STATUS_WAITING_OK: esperando-ok (herdr blocked): espera algo; waiting_on dice qué.\n - SESSION_STATUS_IDLE: en-reposo (herdr idle).\n - SESSION_STATUS_ENDED: terminada (herdr done, o dejó de aparecer en el reporte de su máquina).\n - SESSION_STATUS_UNKNOWN: desconocido (herdr unknown).\n - SESSION_STATUS_STALLED: colgado: WORKING sin reporte durante más del umbral del servicio (10\nminutos por defecto, configurable en tekitla-issues). No se guarda ni se\nreporta: solo lo devuelve el servicio al leer."
     },
     "v1StaleIssue": {
       "type": "object",
@@ -2684,10 +3152,11 @@
       "enum": [
         "TOKEN_SCOPE_UNSPECIFIED",
         "TOKEN_SCOPE_ISSUES_READ",
-        "TOKEN_SCOPE_ISSUES_WRITE"
+        "TOKEN_SCOPE_ISSUES_WRITE",
+        "TOKEN_SCOPE_SESSIONS_WRITE"
       ],
       "default": "TOKEN_SCOPE_UNSPECIFIED",
-      "description": "Alcance de un token. Write no implica read: se piden los dos. En el gateway\nse propagan en x-roles como \"issues:read\" e \"issues:write\".\n\n - TOKEN_SCOPE_ISSUES_READ: issues:read: leer proyectos e issues.\n - TOKEN_SCOPE_ISSUES_WRITE: issues:write: crear y cambiar issues."
+      "description": "Alcance de un token. Write no implica read: se piden los dos. En el gateway\nse propagan en x-roles como \"issues:read\", \"issues:write\" y\n\"sessions:write\".\n\n - TOKEN_SCOPE_ISSUES_READ: issues:read: leer proyectos e issues (y las sesiones de agentes).\n - TOKEN_SCOPE_ISSUES_WRITE: issues:write: crear y cambiar issues.\n - TOKEN_SCOPE_SESSIONS_WRITE: sessions:write: reportar sesiones de agentes (issue 026,\nAgentSessionService.ReportSessions). No da permiso para leer ni para\ncambiar issues. Es para el recolector local, con un token de persona."
     },
     "v1UpdateIssueResponse": {
       "type": "object",
@@ -2712,6 +3181,18 @@
           "$ref": "#/definitions/issuesV1Status"
         }
       }
+    },
+    "v1WaitingOn": {
+      "type": "string",
+      "enum": [
+        "WAITING_ON_UNSPECIFIED",
+        "WAITING_ON_NONE",
+        "WAITING_ON_PERSON",
+        "WAITING_ON_SESSION",
+        "WAITING_ON_OTHER"
+      ],
+      "default": "WAITING_ON_UNSPECIFIED",
+      "description": "Qué espera una sesión. Sale de los tokens que escribe espera.ps1 en el panel\nde herdr (espera_tipo y espera_a; issue 026, §1).\n\n - WAITING_ON_NONE: Libre: no espera nada.\n - WAITING_ON_PERSON: Bloqueada por su persona (una pregunta o una decisión).\n - WAITING_ON_SESSION: Espera a otra sesión; waiting_target dice a cuál.\n - WAITING_ON_OTHER: Espera otra cosa (un CI, un merge); waiting_target dice qué."
     }
   }
 }

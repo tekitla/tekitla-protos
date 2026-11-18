@@ -143,15 +143,20 @@ func (AgentTool) EnumDescriptor() ([]byte, []int) {
 }
 
 // Alcance de un token. Write no implica read: se piden los dos. En el gateway
-// se propagan en x-roles como "issues:read" e "issues:write".
+// se propagan en x-roles como "issues:read", "issues:write" y
+// "sessions:write".
 type TokenScope int32
 
 const (
 	TokenScope_TOKEN_SCOPE_UNSPECIFIED TokenScope = 0
-	// issues:read: leer proyectos e issues.
+	// issues:read: leer proyectos e issues (y las sesiones de agentes).
 	TokenScope_TOKEN_SCOPE_ISSUES_READ TokenScope = 1
 	// issues:write: crear y cambiar issues.
 	TokenScope_TOKEN_SCOPE_ISSUES_WRITE TokenScope = 2
+	// sessions:write: reportar sesiones de agentes (issue 026,
+	// AgentSessionService.ReportSessions). No da permiso para leer ni para
+	// cambiar issues. Es para el recolector local, con un token de persona.
+	TokenScope_TOKEN_SCOPE_SESSIONS_WRITE TokenScope = 3
 )
 
 // Enum value maps for TokenScope.
@@ -160,11 +165,13 @@ var (
 		0: "TOKEN_SCOPE_UNSPECIFIED",
 		1: "TOKEN_SCOPE_ISSUES_READ",
 		2: "TOKEN_SCOPE_ISSUES_WRITE",
+		3: "TOKEN_SCOPE_SESSIONS_WRITE",
 	}
 	TokenScope_value = map[string]int32{
-		"TOKEN_SCOPE_UNSPECIFIED":  0,
-		"TOKEN_SCOPE_ISSUES_READ":  1,
-		"TOKEN_SCOPE_ISSUES_WRITE": 2,
+		"TOKEN_SCOPE_UNSPECIFIED":    0,
+		"TOKEN_SCOPE_ISSUES_READ":    1,
+		"TOKEN_SCOPE_ISSUES_WRITE":   2,
+		"TOKEN_SCOPE_SESSIONS_WRITE": 3,
 	}
 )
 
@@ -1086,12 +1093,13 @@ const file_issues_v1_actors_proto_rawDesc = "" +
 	"\x16AGENT_TOOL_CLAUDE_CODE\x10\x01\x12\x14\n" +
 	"\x10AGENT_TOOL_CODEX\x10\x02\x12\x14\n" +
 	"\x10AGENT_TOOL_CLOUD\x10\x03\x12\x14\n" +
-	"\x10AGENT_TOOL_OTHER\x10\x04*d\n" +
+	"\x10AGENT_TOOL_OTHER\x10\x04*\x84\x01\n" +
 	"\n" +
 	"TokenScope\x12\x1b\n" +
 	"\x17TOKEN_SCOPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17TOKEN_SCOPE_ISSUES_READ\x10\x01\x12\x1c\n" +
-	"\x18TOKEN_SCOPE_ISSUES_WRITE\x10\x022\x84\x05\n" +
+	"\x18TOKEN_SCOPE_ISSUES_WRITE\x10\x02\x12\x1e\n" +
+	"\x1aTOKEN_SCOPE_SESSIONS_WRITE\x10\x032\x84\x05\n" +
 	"\fActorService\x12]\n" +
 	"\n" +
 	"ListActors\x12\x1c.issues.v1.ListActorsRequest\x1a\x1d.issues.v1.ListActorsResponse\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +

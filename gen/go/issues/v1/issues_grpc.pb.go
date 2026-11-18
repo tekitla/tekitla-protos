@@ -7,6 +7,8 @@
 // (sprints, tipos, jerarquía) llegan como campos y RPCs nuevos (aditivos).
 // Issue 025: asignado (un actor, persona o agente), autoría con agente en el
 // historial e importación desde otro tracker (actors.proto, token_auth.proto).
+// Issue 026: resumen de las sesiones de agentes de cada issue
+// (agent_sessions.proto; el servicio está en agent_session_service.proto).
 //
 // Reglas (detalle en CLAUDE.md):
 //   - Nunca reusar ni renumerar un número de campo. No borrar campos de un
