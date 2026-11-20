@@ -184,7 +184,9 @@ export declare type AgentSession = Message<"issues.v1.AgentSession"> & {
   waitingText: string;
 
   /**
-   * Para qué espera (issue 036). Siempre UNSPECIFIED si waiting_on es NONE.
+   * Para qué espera (issue 036). UNSPECIFIED si no espera: waiting_on NONE
+   * y estado distinto de WAITING_OK (esperando-ok sin token también es una
+   * espera a su persona y puede traer motivo).
    *
    * @generated from field: issues.v1.WaitingReason waiting_reason = 22;
    */
@@ -318,7 +320,7 @@ export declare type SessionBrief = Message<"issues.v1.SessionBrief"> & {
   statusChangedAt?: Timestamp | undefined;
 
   /**
-   * Para qué espera (issue 036). UNSPECIFIED si waiting_on es NONE.
+   * Para qué espera (issue 036). Misma regla que AgentSession.waiting_reason.
    *
    * @generated from field: issues.v1.WaitingReason waiting_reason = 10;
    */

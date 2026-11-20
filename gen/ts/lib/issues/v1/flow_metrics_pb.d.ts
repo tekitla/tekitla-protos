@@ -185,7 +185,8 @@ export declare type GetFlowMetricsResponse = Message<"issues.v1.GetFlowMetricsRe
   /**
    * Desde cuándo hay historia de sesiones de agentes en el proyecto (la
    * primera transición guardada, issue 036 parte 3). Ausente: ninguna. Las
-   * semanas que terminan antes no traen efficiency ni human_queue.
+   * semanas que terminan antes no traen efficiency ni human_queue; la que la
+   * contiene trae lo medido desde ahí (parcial).
    *
    * @generated from field: google.protobuf.Timestamp sessions_recorded_since = 10;
    */
@@ -350,7 +351,10 @@ export declare type FlowSummary = Message<"issues.v1.FlowSummary"> & {
   source?: MetricSource | undefined;
 
   /**
-   * Suma de las semanas. Ausente si ninguna semana tiene.
+   * Las semanas con efficiency juntas: las duraciones suman; issues cuenta
+   * los issues distintos del período (no la suma de las semanas);
+   * efficiency_bp sale de las duraciones sumadas y waiting_human_by_reason se
+   * vuelve a ordenar. Ausente si ninguna semana tiene.
    *
    * @generated from field: issues.v1.FlowEfficiency efficiency = 9;
    */
@@ -638,10 +642,12 @@ export declare const ReasonTimeSchema: GenMessage<ReasonTime>;
 
 /**
  * Esperas a una persona: la cola humana (issue 036). Una espera es un tramo
- * continuo en que el issue está en waiting_human (después de aplicar la
- * prioridad de FlowEfficiency). Termina cuando el issue pasa a otro estado;
- * si se corta porque sus sesiones dejan de reportar, no cuenta como
- * respuesta.
+ * en que el issue está en waiting_human (después de aplicar la prioridad de
+ * FlowEfficiency). Termina cuando el issue pasa a otro estado (eso es la
+ * respuesta). Un hueco sin reportes (máquina apagada) seguido de otra vez
+ * waiting_human no la corta: es la misma espera, y su duración va de punta a
+ * punta (aunque el hueco no sume a waiting_human). Si después del hueco no
+ * vuelve, no cuenta como respuesta.
  *
  * @generated from message issues.v1.HumanQueue
  */
@@ -694,10 +700,12 @@ export declare const HumanQueueSchema: GenMessage<HumanQueue>;
  *          creció 25 % o más contra previous;
  *       3. los agentes no son el cuello: working ≤ waiting_human.
  *   - REDUCE_WIP (CU-036-8): waiting_human < 15 % y wip_high.
- *   - wip_high: wip_median ≥ 2 × los cerrados por semana de current (más de
- *     dos semanas de trabajo empezado), o (no preliminar) wip_median creció
- *     25 % o más contra previous.
- *   - Si se cumplen las dos, NEEDS_PEOPLE (y wip_high lo dice).
+ *   - wip_high: wip_median > 0 y, además, wip_median ≥ 2 × los cerrados por
+ *     semana de current (al menos dos semanas de trabajo empezado), o (no
+ *     preliminar) wip_median creció 25 % o más contra previous.
+ *   - Con waiting_human entre 15 % y 30 %, o sin las otras condiciones:
+ *     NO_SIGNAL. NEEDS_PEOPLE puede venir con wip_high (falta gente y además
+ *     sobra trabajo empezado).
  *   - Los umbrales son constantes del servicio: cambiarlos no cambia el
  *     contrato.
  *
@@ -710,7 +718,8 @@ export declare type HiringSignal = Message<"issues.v1.HiringSignal"> & {
   verdict: HiringVerdict;
 
   /**
-   * Semanas completas con historia de sesiones antes de to (hasta 8).
+   * Semanas completas con historia de sesiones antes de to (hasta 8): las
+   * que empiezan en sessions_recorded_since o después. La parcial no cuenta.
    *
    * @generated from field: int32 live_weeks = 2;
    */
@@ -746,7 +755,8 @@ export declare type HiringSignal = Message<"issues.v1.HiringSignal"> & {
 
   /**
    * Dónde se junta la espera a personas en current: los motivos de
-   * waiting_human_by_reason sin UNSPECIFIED, con su parte de waiting_human.
+   * waiting_human_by_reason sin UNSPECIFIED, cada uno con su parte de todo
+   * waiting_human (incluida la sin motivo, así que no siempre suman 10 000).
    * De mayor a menor. Vacío si ninguna espera trae motivo.
    *
    * @generated from field: repeated issues.v1.ProfileShare profiles = 7;
@@ -837,7 +847,7 @@ export declare type ProfileShare = Message<"issues.v1.ProfileShare"> & {
   reason: WaitingReason;
 
   /**
-   * Parte de waiting_human, en puntos base.
+   * Parte de todo waiting_human, en puntos base (redondeo hacia abajo).
    *
    * @generated from field: int32 share_bp = 2;
    */
@@ -865,8 +875,10 @@ export declare type GetIssueFlowEfficiencyRequest = Message<"issues.v1.GetIssueF
   number: number;
 
   /**
-   * Período opcional. Sin from: desde el alta. Sin to, o con un to futuro:
-   * ahora. to antes de from: INVALID_ARGUMENT (INVALID_PERIOD).
+   * Período opcional. Sin from: desde el alta (con un to anterior al alta,
+   * la respuesta va vacía). Sin to, o con un to futuro: ahora. from no
+   * anterior a to, o un Timestamp fuera de rango: INVALID_ARGUMENT
+   * (INVALID_PERIOD).
    *
    * @generated from field: google.protobuf.Timestamp from = 3;
    */

@@ -141,7 +141,9 @@ message AgentSession {
   // El texto de la barra lateral de herdr (token espera) tal cual, solo para
   // mostrar: no se interpreta. Vacío si waiting_on es NONE.
   string waiting_text = 21;
-  // Para qué espera (issue 036). Siempre UNSPECIFIED si waiting_on es NONE.
+  // Para qué espera (issue 036). UNSPECIFIED si no espera: waiting_on NONE
+  // y estado distinto de WAITING_OK (esperando-ok sin token también es una
+  // espera a su persona y puede traer motivo).
   WaitingReason waiting_reason = 22;
 }
 
@@ -181,6 +183,6 @@ message SessionBrief {
   WaitingOn waiting_on = 7;
   string waiting_target = 8;
   google.protobuf.Timestamp status_changed_at = 9;
-  // Para qué espera (issue 036). UNSPECIFIED si waiting_on es NONE.
+  // Para qué espera (issue 036). Misma regla que AgentSession.waiting_reason.
   WaitingReason waiting_reason = 10;
 }

@@ -127,9 +127,11 @@ type ReportedSession struct {
 	WaitingTarget string `protobuf:"bytes,11,opt,name=waiting_target,json=waitingTarget,proto3" json:"waiting_target,omitempty"`
 	// Hasta 200 caracteres. Se ignora con waiting_on NONE.
 	WaitingText string `protobuf:"bytes,12,opt,name=waiting_text,json=waitingText,proto3" json:"waiting_text,omitempty"`
-	// Token espera_motivo ya traducido (issue 036). Se ignora y se guarda
-	// UNSPECIFIED con waiting_on NONE, igual que waiting_text (también con
-	// status WORKING, que guarda waiting_on NONE).
+	// Token espera_motivo ya traducido (issue 036). Se guarda si la sesión
+	// espera: waiting_on distinto de NONE, o status WAITING_OK (esperando-ok
+	// sin token). Si no (WORKING, ENDED, o IDLE/UNKNOWN sin espera), se ignora
+	// y se guarda UNSPECIFIED. Un valor desconocido se guarda UNSPECIFIED y no
+	// rechaza el reporte.
 	WaitingReason WaitingReason `protobuf:"varint,13,opt,name=waiting_reason,json=waitingReason,proto3,enum=issues.v1.WaitingReason" json:"waiting_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

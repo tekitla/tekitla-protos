@@ -151,9 +151,11 @@ export declare type ReportedSession = Message<"issues.v1.ReportedSession"> & {
   waitingText: string;
 
   /**
-   * Token espera_motivo ya traducido (issue 036). Se ignora y se guarda
-   * UNSPECIFIED con waiting_on NONE, igual que waiting_text (también con
-   * status WORKING, que guarda waiting_on NONE).
+   * Token espera_motivo ya traducido (issue 036). Se guarda si la sesión
+   * espera: waiting_on distinto de NONE, o status WAITING_OK (esperando-ok
+   * sin token). Si no (WORKING, ENDED, o IDLE/UNKNOWN sin espera), se ignora
+   * y se guarda UNSPECIFIED. Un valor desconocido se guarda UNSPECIFIED y no
+   * rechaza el reporte.
    *
    * @generated from field: issues.v1.WaitingReason waiting_reason = 13;
    */

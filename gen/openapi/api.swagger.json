@@ -1023,7 +1023,7 @@
           },
           {
             "name": "from",
-            "description": "Período opcional. Sin from: desde el alta. Sin to, o con un to futuro:\nahora. to antes de from: INVALID_ARGUMENT (INVALID_PERIOD).",
+            "description": "Período opcional. Sin from: desde el alta (con un to anterior al alta,\nla respuesta va vacía). Sin to, o con un to futuro: ahora. from no\nanterior a to, o un Timestamp fuera de rango: INVALID_ARGUMENT\n(INVALID_PERIOD).",
             "in": "query",
             "required": false,
             "type": "string",
@@ -2382,7 +2382,7 @@
         },
         "waitingReason": {
           "$ref": "#/definitions/v1WaitingReason",
-          "description": "Para qué espera (issue 036). Siempre UNSPECIFIED si waiting_on es NONE."
+          "description": "Para qué espera (issue 036). UNSPECIFIED si no espera: waiting_on NONE\ny estado distinto de WAITING_OK (esperando-ok sin token también es una\nespera a su persona y puede traer motivo)."
         }
       },
       "description": "Una sesión de agente tal como la guarda Tekitla.\n\nDatos personales: no hay rutas absolutas ni el usuario del sistema.\ncwd_rel es relativo a la raíz que configura la persona en el recolector, y\nlos nombres de herdr son los que ella les puso."
@@ -2854,7 +2854,7 @@
         },
         "efficiency": {
           "$ref": "#/definitions/v1FlowEfficiency",
-          "description": "Suma de las semanas. Ausente si ninguna semana tiene."
+          "description": "Las semanas con efficiency juntas: las duraciones suman; issues cuenta\nlos issues distintos del período (no la suma de las semanas);\nefficiency_bp sale de las duraciones sumadas y waiting_human_by_reason se\nvuelve a ordenar. Ausente si ninguna semana tiene."
         },
         "humanQueue": {
           "$ref": "#/definitions/v1HumanQueue",
@@ -2973,7 +2973,7 @@
         "sessionsRecordedSince": {
           "type": "string",
           "format": "date-time",
-          "description": "Desde cuándo hay historia de sesiones de agentes en el proyecto (la\nprimera transición guardada, issue 036 parte 3). Ausente: ninguna. Las\nsemanas que terminan antes no traen efficiency ni human_queue."
+          "description": "Desde cuándo hay historia de sesiones de agentes en el proyecto (la\nprimera transición guardada, issue 036 parte 3). Ausente: ninguna. Las\nsemanas que terminan antes no traen efficiency ni human_queue; la que la\ncontiene trae lo medido desde ahí (parcial)."
         },
         "hiringSignal": {
           "$ref": "#/definitions/v1HiringSignal",
@@ -3120,7 +3120,7 @@
         "liveWeeks": {
           "type": "integer",
           "format": "int32",
-          "description": "Semanas completas con historia de sesiones antes de to (hasta 8)."
+          "description": "Semanas completas con historia de sesiones antes de to (hasta 8): las\nque empiezan en sessions_recorded_since o después. La parcial no cuenta."
         },
         "weeksNeeded": {
           "type": "integer",
@@ -3146,7 +3146,7 @@
             "type": "object",
             "$ref": "#/definitions/v1ProfileShare"
           },
-          "description": "Dónde se junta la espera a personas en current: los motivos de\nwaiting_human_by_reason sin UNSPECIFIED, con su parte de waiting_human.\nDe mayor a menor. Vacío si ninguna espera trae motivo."
+          "description": "Dónde se junta la espera a personas en current: los motivos de\nwaiting_human_by_reason sin UNSPECIFIED, cada uno con su parte de todo\nwaiting_human (incluida la sin motivo, así que no siempre suman 10 000).\nDe mayor a menor. Vacío si ninguna espera trae motivo."
         },
         "current": {
           "$ref": "#/definitions/v1SignalWindow",
@@ -3157,7 +3157,7 @@
           "description": "Las 4 anteriores. Ausente si es preliminar o con INSUFFICIENT_DATA."
         }
       },
-      "description": "Señal de contratación (issue 036, parte 3): interpreta las métricas del\núltimo mes. Es una señal, no una decisión: trae los números que la\nsostienen.\n\nCómo se calcula (lo implementa tekitla-issues), sobre las semanas\ncompletas (lunes a lunes en time_zone) anteriores a to:\n  - current: las últimas 4; previous: las 4 anteriores.\n  - Menos de 4 semanas completas con historia de sesiones:\n    INSUFFICIENT_DATA. De 4 a 7: preliminary, sin previous y sin las\n    condiciones de crecimiento.\n  - NEEDS_PEOPLE (CU-036-7), todas:\n      1. waiting_human ≥ 30 % de working + waiting_human + blocked +\n         in_review en current;\n      2. (no preliminar) waiting_human o la mediana de human_response\n         creció 25 % o más contra previous;\n      3. los agentes no son el cuello: working ≤ waiting_human.\n  - REDUCE_WIP (CU-036-8): waiting_human \u003c 15 % y wip_high.\n  - wip_high: wip_median ≥ 2 × los cerrados por semana de current (más de\n    dos semanas de trabajo empezado), o (no preliminar) wip_median creció\n    25 % o más contra previous.\n  - Si se cumplen las dos, NEEDS_PEOPLE (y wip_high lo dice).\n  - Los umbrales son constantes del servicio: cambiarlos no cambia el\n    contrato."
+      "description": "Señal de contratación (issue 036, parte 3): interpreta las métricas del\núltimo mes. Es una señal, no una decisión: trae los números que la\nsostienen.\n\nCómo se calcula (lo implementa tekitla-issues), sobre las semanas\ncompletas (lunes a lunes en time_zone) anteriores a to:\n  - current: las últimas 4; previous: las 4 anteriores.\n  - Menos de 4 semanas completas con historia de sesiones:\n    INSUFFICIENT_DATA. De 4 a 7: preliminary, sin previous y sin las\n    condiciones de crecimiento.\n  - NEEDS_PEOPLE (CU-036-7), todas:\n      1. waiting_human ≥ 30 % de working + waiting_human + blocked +\n         in_review en current;\n      2. (no preliminar) waiting_human o la mediana de human_response\n         creció 25 % o más contra previous;\n      3. los agentes no son el cuello: working ≤ waiting_human.\n  - REDUCE_WIP (CU-036-8): waiting_human \u003c 15 % y wip_high.\n  - wip_high: wip_median \u003e 0 y, además, wip_median ≥ 2 × los cerrados por\n    semana de current (al menos dos semanas de trabajo empezado), o (no\n    preliminar) wip_median creció 25 % o más contra previous.\n  - Con waiting_human entre 15 % y 30 %, o sin las otras condiciones:\n    NO_SIGNAL. NEEDS_PEOPLE puede venir con wip_high (falta gente y además\n    sobra trabajo empezado).\n  - Los umbrales son constantes del servicio: cambiarlos no cambia el\n    contrato."
     },
     "v1HiringVerdict": {
       "type": "string",
@@ -3188,7 +3188,7 @@
           "description": "La espera abierta más vieja al final de la semana (o en to). Ausente si\npending es 0."
         }
       },
-      "description": "Esperas a una persona: la cola humana (issue 036). Una espera es un tramo\ncontinuo en que el issue está en waiting_human (después de aplicar la\nprioridad de FlowEfficiency). Termina cuando el issue pasa a otro estado;\nsi se corta porque sus sesiones dejan de reportar, no cuenta como\nrespuesta."
+      "description": "Esperas a una persona: la cola humana (issue 036). Una espera es un tramo\nen que el issue está en waiting_human (después de aplicar la prioridad de\nFlowEfficiency). Termina cuando el issue pasa a otro estado (eso es la\nrespuesta). Un hueco sin reportes (máquina apagada) seguido de otra vez\nwaiting_human no la corta: es la misma espera, y su duración va de punta a\npunta (aunque el hueco no sume a waiting_human). Si después del hueco no\nvuelve, no cuenta como respuesta."
     },
     "v1ImportIssueEventsResponse": {
       "type": "object",
@@ -3984,7 +3984,7 @@
         "shareBp": {
           "type": "integer",
           "format": "int32",
-          "description": "Parte de waiting_human, en puntos base."
+          "description": "Parte de todo waiting_human, en puntos base (redondeo hacia abajo)."
         }
       },
       "description": "Parte de la espera a personas con un motivo (el perfil que haría falta:\nrevisión → alguien senior que revise, pruebas → QA, decisión → producto,\ndeploy → DevOps)."
@@ -4169,7 +4169,7 @@
         },
         "waitingReason": {
           "$ref": "#/definitions/v1WaitingReason",
-          "description": "Token espera_motivo ya traducido (issue 036). Se ignora y se guarda\nUNSPECIFIED con waiting_on NONE, igual que waiting_text (también con\nstatus WORKING, que guarda waiting_on NONE)."
+          "description": "Token espera_motivo ya traducido (issue 036). Se guarda si la sesión\nespera: waiting_on distinto de NONE, o status WAITING_OK (esperando-ok\nsin token). Si no (WORKING, ENDED, o IDLE/UNKNOWN sin espera), se ignora\ny se guarda UNSPECIFIED. Un valor desconocido se guarda UNSPECIFIED y no\nrechaza el reporte."
         }
       },
       "description": "Lo que ve el recolector de una sesión, ya traducido a los valores de\nTekitla (issue 026, §1 y §2)."
@@ -4279,7 +4279,7 @@
         },
         "waitingReason": {
           "$ref": "#/definitions/v1WaitingReason",
-          "description": "Para qué espera (issue 036). UNSPECIFIED si waiting_on es NONE."
+          "description": "Para qué espera (issue 036). Misma regla que AgentSession.waiting_reason."
         }
       },
       "description": "Una sesión dentro del resumen de un issue: quién la atiende y cómo está."

@@ -393,7 +393,9 @@ type AgentSession struct {
 	// El texto de la barra lateral de herdr (token espera) tal cual, solo para
 	// mostrar: no se interpreta. Vacío si waiting_on es NONE.
 	WaitingText string `protobuf:"bytes,21,opt,name=waiting_text,json=waitingText,proto3" json:"waiting_text,omitempty"`
-	// Para qué espera (issue 036). Siempre UNSPECIFIED si waiting_on es NONE.
+	// Para qué espera (issue 036). UNSPECIFIED si no espera: waiting_on NONE
+	// y estado distinto de WAITING_OK (esperando-ok sin token también es una
+	// espera a su persona y puede traer motivo).
 	WaitingReason WaitingReason `protobuf:"varint,22,opt,name=waiting_reason,json=waitingReason,proto3,enum=issues.v1.WaitingReason" json:"waiting_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -702,7 +704,7 @@ type SessionBrief struct {
 	WaitingOn       WaitingOn              `protobuf:"varint,7,opt,name=waiting_on,json=waitingOn,proto3,enum=issues.v1.WaitingOn" json:"waiting_on,omitempty"`
 	WaitingTarget   string                 `protobuf:"bytes,8,opt,name=waiting_target,json=waitingTarget,proto3" json:"waiting_target,omitempty"`
 	StatusChangedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=status_changed_at,json=statusChangedAt,proto3" json:"status_changed_at,omitempty"`
-	// Para qué espera (issue 036). UNSPECIFIED si waiting_on es NONE.
+	// Para qué espera (issue 036). Misma regla que AgentSession.waiting_reason.
 	WaitingReason WaitingReason `protobuf:"varint,10,opt,name=waiting_reason,json=waitingReason,proto3,enum=issues.v1.WaitingReason" json:"waiting_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

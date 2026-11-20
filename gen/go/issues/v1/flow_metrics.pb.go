@@ -308,7 +308,8 @@ type GetFlowMetricsResponse struct {
 	Coverage *FlowCoverage `protobuf:"bytes,9,opt,name=coverage,proto3" json:"coverage,omitempty"`
 	// Desde cuándo hay historia de sesiones de agentes en el proyecto (la
 	// primera transición guardada, issue 036 parte 3). Ausente: ninguna. Las
-	// semanas que terminan antes no traen efficiency ni human_queue.
+	// semanas que terminan antes no traen efficiency ni human_queue; la que la
+	// contiene trae lo medido desde ahí (parcial).
 	SessionsRecordedSince *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=sessions_recorded_since,json=sessionsRecordedSince,proto3" json:"sessions_recorded_since,omitempty"`
 	// Señal de contratación de las 8 semanas completas anteriores a to (no
 	// depende de from).
@@ -584,7 +585,10 @@ type FlowSummary struct {
 	// En IN_PROGRESS en to.
 	Wip    int32         `protobuf:"varint,7,opt,name=wip,proto3" json:"wip,omitempty"`
 	Source *MetricSource `protobuf:"bytes,8,opt,name=source,proto3" json:"source,omitempty"`
-	// Suma de las semanas. Ausente si ninguna semana tiene.
+	// Las semanas con efficiency juntas: las duraciones suman; issues cuenta
+	// los issues distintos del período (no la suma de las semanas);
+	// efficiency_bp sale de las duraciones sumadas y waiting_human_by_reason se
+	// vuelve a ordenar. Ausente si ninguna semana tiene.
 	Efficiency *FlowEfficiency `protobuf:"bytes,9,opt,name=efficiency,proto3" json:"efficiency,omitempty"`
 	// pending y oldest_pending en to; response_time de todo el período.
 	// Ausente igual que efficiency.
@@ -1167,10 +1171,12 @@ func (x *ReasonTime) GetDuration() *durationpb.Duration {
 }
 
 // Esperas a una persona: la cola humana (issue 036). Una espera es un tramo
-// continuo en que el issue está en waiting_human (después de aplicar la
-// prioridad de FlowEfficiency). Termina cuando el issue pasa a otro estado;
-// si se corta porque sus sesiones dejan de reportar, no cuenta como
-// respuesta.
+// en que el issue está en waiting_human (después de aplicar la prioridad de
+// FlowEfficiency). Termina cuando el issue pasa a otro estado (eso es la
+// respuesta). Un hueco sin reportes (máquina apagada) seguido de otra vez
+// waiting_human no la corta: es la misma espera, y su duración va de punta a
+// punta (aunque el hueco no sume a waiting_human). Si después del hueco no
+// vuelve, no cuenta como respuesta.
 type HumanQueue struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Issues esperando a una persona al final de la semana (o en to).
@@ -1253,16 +1259,19 @@ func (x *HumanQueue) GetOldestPending() *durationpb.Duration {
 //     creció 25 % o más contra previous;
 //     3. los agentes no son el cuello: working ≤ waiting_human.
 //   - REDUCE_WIP (CU-036-8): waiting_human < 15 % y wip_high.
-//   - wip_high: wip_median ≥ 2 × los cerrados por semana de current (más de
-//     dos semanas de trabajo empezado), o (no preliminar) wip_median creció
-//     25 % o más contra previous.
-//   - Si se cumplen las dos, NEEDS_PEOPLE (y wip_high lo dice).
+//   - wip_high: wip_median > 0 y, además, wip_median ≥ 2 × los cerrados por
+//     semana de current (al menos dos semanas de trabajo empezado), o (no
+//     preliminar) wip_median creció 25 % o más contra previous.
+//   - Con waiting_human entre 15 % y 30 %, o sin las otras condiciones:
+//     NO_SIGNAL. NEEDS_PEOPLE puede venir con wip_high (falta gente y además
+//     sobra trabajo empezado).
 //   - Los umbrales son constantes del servicio: cambiarlos no cambia el
 //     contrato.
 type HiringSignal struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Verdict HiringVerdict          `protobuf:"varint,1,opt,name=verdict,proto3,enum=issues.v1.HiringVerdict" json:"verdict,omitempty"`
-	// Semanas completas con historia de sesiones antes de to (hasta 8).
+	// Semanas completas con historia de sesiones antes de to (hasta 8): las
+	// que empiezan en sessions_recorded_since o después. La parcial no cuenta.
 	LiveWeeks int32 `protobuf:"varint,2,opt,name=live_weeks,json=liveWeeks,proto3" json:"live_weeks,omitempty"`
 	// Semanas que hacen falta para la señal completa (8).
 	WeeksNeeded int32 `protobuf:"varint,3,opt,name=weeks_needed,json=weeksNeeded,proto3" json:"weeks_needed,omitempty"`
@@ -1273,7 +1282,8 @@ type HiringSignal struct {
 	// El WIP es alto (ver arriba). Falso con INSUFFICIENT_DATA.
 	WipHigh bool `protobuf:"varint,6,opt,name=wip_high,json=wipHigh,proto3" json:"wip_high,omitempty"`
 	// Dónde se junta la espera a personas en current: los motivos de
-	// waiting_human_by_reason sin UNSPECIFIED, con su parte de waiting_human.
+	// waiting_human_by_reason sin UNSPECIFIED, cada uno con su parte de todo
+	// waiting_human (incluida la sin motivo, así que no siempre suman 10 000).
 	// De mayor a menor. Vacío si ninguna espera trae motivo.
 	Profiles []*ProfileShare `protobuf:"bytes,7,rep,name=profiles,proto3" json:"profiles,omitempty"`
 	// Las últimas 4 semanas. Ausente con INSUFFICIENT_DATA.
@@ -1471,7 +1481,7 @@ func (x *SignalWindow) GetClosed() int32 {
 type ProfileShare struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Reason WaitingReason          `protobuf:"varint,1,opt,name=reason,proto3,enum=issues.v1.WaitingReason" json:"reason,omitempty"`
-	// Parte de waiting_human, en puntos base.
+	// Parte de todo waiting_human, en puntos base (redondeo hacia abajo).
 	ShareBp       int32 `protobuf:"varint,2,opt,name=share_bp,json=shareBp,proto3" json:"share_bp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1525,8 +1535,10 @@ type GetIssueFlowEfficiencyRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	Number    int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
-	// Período opcional. Sin from: desde el alta. Sin to, o con un to futuro:
-	// ahora. to antes de from: INVALID_ARGUMENT (INVALID_PERIOD).
+	// Período opcional. Sin from: desde el alta (con un to anterior al alta,
+	// la respuesta va vacía). Sin to, o con un to futuro: ahora. from no
+	// anterior a to, o un Timestamp fuera de rango: INVALID_ARGUMENT
+	// (INVALID_PERIOD).
 	From          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
 	To            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
 	unknownFields protoimpl.UnknownFields
