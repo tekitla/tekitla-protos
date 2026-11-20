@@ -113,3 +113,10 @@ los enlaces de solo lectura (autenticado, solo el dueño del proyecto) y
 `SharedProjectService` lee un proyecto por el token del enlace, sin identidad
 (ruta pública del gateway). Las respuestas públicas usan mensajes `Shared*`
 propios: un campo nuevo en `Project`, `Issue` o `Actor` no sale en el enlace.
+
+`proto/issues/v1/integrations.proto` (issue 016): `RepositoryService`
+gestiona conexiones de GitHub (App) y GitLab (grupo), repos e `IssueLink`
+(autenticado, solo el dueño del proyecto); `WebhookService` es interno (sin
+`google.api.http`): el handler de webhooks del gateway le pasa el cuerpo
+crudo y `tekitla-issues` verifica la firma. Ninguna respuesta lleva secretos
+salvo `ConnectOrganizationResponse.webhook_secret`, una vez.
