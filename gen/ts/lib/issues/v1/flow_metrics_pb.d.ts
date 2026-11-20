@@ -551,8 +551,9 @@ export declare type FlowEfficiency = Message<"issues.v1.FlowEfficiency"> & {
   working?: Duration | undefined;
 
   /**
-   * Ninguna trabaja y alguna espera a su persona (waiting_on PERSON, en
-   * WAITING_OK o en IDLE).
+   * Ninguna trabaja y alguna espera a su persona: waiting_on PERSON (en
+   * cualquier estado), o WAITING_OK sin waiting_on (esperando-ok: pide un
+   * permiso o una respuesta).
    *
    * @generated from field: google.protobuf.Duration waiting_human = 2;
    */

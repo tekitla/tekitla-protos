@@ -222,8 +222,9 @@ message FlowCoverage {
 message FlowEfficiency {
   // Alguna sesión del issue en WORKING.
   google.protobuf.Duration working = 1;
-  // Ninguna trabaja y alguna espera a su persona (waiting_on PERSON, en
-  // WAITING_OK o en IDLE).
+  // Ninguna trabaja y alguna espera a su persona: waiting_on PERSON (en
+  // cualquier estado), o WAITING_OK sin waiting_on (esperando-ok: pide un
+  // permiso o una respuesta).
   google.protobuf.Duration waiting_human = 2;
   // Ninguna trabaja ni espera a una persona, y alguna espera a otra sesión o
   // a otra cosa (waiting_on SESSION u OTHER: un CI, un merge).

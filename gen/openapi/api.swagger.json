@@ -2784,7 +2784,7 @@
         },
         "waitingHuman": {
           "type": "string",
-          "description": "Ninguna trabaja y alguna espera a su persona (waiting_on PERSON, en\nWAITING_OK o en IDLE)."
+          "description": "Ninguna trabaja y alguna espera a su persona: waiting_on PERSON (en\ncualquier estado), o WAITING_OK sin waiting_on (esperando-ok: pide un\npermiso o una respuesta)."
         },
         "blocked": {
           "type": "string",

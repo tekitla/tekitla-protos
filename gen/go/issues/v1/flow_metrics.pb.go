@@ -1002,8 +1002,9 @@ type FlowEfficiency struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Alguna sesión del issue en WORKING.
 	Working *durationpb.Duration `protobuf:"bytes,1,opt,name=working,proto3" json:"working,omitempty"`
-	// Ninguna trabaja y alguna espera a su persona (waiting_on PERSON, en
-	// WAITING_OK o en IDLE).
+	// Ninguna trabaja y alguna espera a su persona: waiting_on PERSON (en
+	// cualquier estado), o WAITING_OK sin waiting_on (esperando-ok: pide un
+	// permiso o una respuesta).
 	WaitingHuman *durationpb.Duration `protobuf:"bytes,2,opt,name=waiting_human,json=waitingHuman,proto3" json:"waiting_human,omitempty"`
 	// Ninguna trabaja ni espera a una persona, y alguna espera a otra sesión o
 	// a otra cosa (waiting_on SESSION u OTHER: un CI, un merge).
