@@ -1833,7 +1833,7 @@ func (x *ListRepositoriesResponse) GetRepositories() []*Repository {
 type ListIssueLinksRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	// > 0: los links de ese issue. 0: los de todos los issues no cerrados.
+	// > 0: los links de ese issue. 0: los de todo el proyecto.
 	IssueNumber   int32 `protobuf:"varint,2,opt,name=issue_number,json=issueNumber,proto3" json:"issue_number,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

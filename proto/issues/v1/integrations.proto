@@ -67,8 +67,9 @@ service RepositoryService {
   rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/repositories"};
   }
-  // Links de un issue (issue_number > 0) o de todos los issues no cerrados
-  // del proyecto (issue_number = 0, para el tablero). Sin los suprimidos.
+  // Links de un issue (issue_number > 0) o de todo el proyecto
+  // (issue_number = 0, para el tablero: los 2000 más recientes, sin los de
+  // issues descartados). Sin los suprimidos.
   rpc ListIssueLinks(ListIssueLinksRequest) returns (ListIssueLinksResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/issueLinks"};
   }
@@ -358,7 +359,7 @@ message ListRepositoriesResponse {
 
 message ListIssueLinksRequest {
   string project_id = 1;
-  // > 0: los links de ese issue. 0: los de todos los issues no cerrados.
+  // > 0: los links de ese issue. 0: los de todo el proyecto.
   int32 issue_number = 2;
 }
 

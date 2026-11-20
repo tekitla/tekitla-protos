@@ -73,8 +73,9 @@ type RepositoryServiceClient interface {
 	SyncRepositories(ctx context.Context, in *SyncRepositoriesRequest, opts ...grpc.CallOption) (*SyncRepositoriesResponse, error)
 	// Repos conectados del proyecto, por owner y nombre.
 	ListRepositories(ctx context.Context, in *ListRepositoriesRequest, opts ...grpc.CallOption) (*ListRepositoriesResponse, error)
-	// Links de un issue (issue_number > 0) o de todos los issues no cerrados
-	// del proyecto (issue_number = 0, para el tablero). Sin los suprimidos.
+	// Links de un issue (issue_number > 0) o de todo el proyecto
+	// (issue_number = 0, para el tablero: los 2000 más recientes, sin los de
+	// issues descartados). Sin los suprimidos.
 	ListIssueLinks(ctx context.Context, in *ListIssueLinksRequest, opts ...grpc.CallOption) (*ListIssueLinksResponse, error)
 	// Liga a mano una rama de un repo del proyecto a un issue. Si el link
 	// existía suprimido, lo vuelve a mostrar. FAILED_PRECONDITION (motivo
@@ -212,8 +213,9 @@ type RepositoryServiceServer interface {
 	SyncRepositories(context.Context, *SyncRepositoriesRequest) (*SyncRepositoriesResponse, error)
 	// Repos conectados del proyecto, por owner y nombre.
 	ListRepositories(context.Context, *ListRepositoriesRequest) (*ListRepositoriesResponse, error)
-	// Links de un issue (issue_number > 0) o de todos los issues no cerrados
-	// del proyecto (issue_number = 0, para el tablero). Sin los suprimidos.
+	// Links de un issue (issue_number > 0) o de todo el proyecto
+	// (issue_number = 0, para el tablero: los 2000 más recientes, sin los de
+	// issues descartados). Sin los suprimidos.
 	ListIssueLinks(context.Context, *ListIssueLinksRequest) (*ListIssueLinksResponse, error)
 	// Liga a mano una rama de un repo del proyecto a un issue. Si el link
 	// existía suprimido, lo vuelve a mostrar. FAILED_PRECONDITION (motivo

@@ -697,7 +697,7 @@ export declare type ListIssueLinksRequest = Message<"issues.v1.ListIssueLinksReq
   projectId: string;
 
   /**
-   * > 0: los links de ese issue. 0: los de todos los issues no cerrados.
+   * > 0: los links de ese issue. 0: los de todo el proyecto.
    *
    * @generated from field: int32 issue_number = 2;
    */
@@ -1283,8 +1283,9 @@ export declare const RepositoryService: GenService<{
     output: typeof ListRepositoriesResponseSchema;
   },
   /**
-   * Links de un issue (issue_number > 0) o de todos los issues no cerrados
-   * del proyecto (issue_number = 0, para el tablero). Sin los suprimidos.
+   * Links de un issue (issue_number > 0) o de todo el proyecto
+   * (issue_number = 0, para el tablero: los 2000 más recientes, sin los de
+   * issues descartados). Sin los suprimidos.
    *
    * @generated from rpc issues.v1.RepositoryService.ListIssueLinks
    */

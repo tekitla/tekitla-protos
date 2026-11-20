@@ -628,7 +628,7 @@
     },
     "/v1/projects/{projectId}/issueLinks": {
       "get": {
-        "summary": "Links de un issue (issue_number \u003e 0) o de todos los issues no cerrados\ndel proyecto (issue_number = 0, para el tablero). Sin los suprimidos.",
+        "summary": "Links de un issue (issue_number \u003e 0) o de todo el proyecto\n(issue_number = 0, para el tablero: los 2000 más recientes, sin los de\nissues descartados). Sin los suprimidos.",
         "operationId": "RepositoryService_ListIssueLinks",
         "responses": {
           "200": {
@@ -647,7 +647,7 @@
           },
           {
             "name": "issueNumber",
-            "description": "\u003e 0: los links de ese issue. 0: los de todos los issues no cerrados.",
+            "description": "\u003e 0: los links de ese issue. 0: los de todo el proyecto.",
             "in": "query",
             "required": false,
             "type": "integer",
