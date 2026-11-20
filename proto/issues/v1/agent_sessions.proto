@@ -50,6 +50,22 @@ enum WaitingOn {
   WAITING_ON_OTHER = 4;
 }
 
+// Para qué espera una sesión a su persona (issue 036). Sale del token
+// espera_motivo que escribe espera.ps1 -Motivo en el panel de herdr. Define
+// el perfil de la señal de contratación (HiringSignal.profiles).
+enum WaitingReason {
+  // Sin motivo (el panel no lo trae, o trae uno desconocido).
+  WAITING_REASON_UNSPECIFIED = 0;
+  // revision: revisar código.
+  WAITING_REASON_REVIEW = 1;
+  // pruebas.
+  WAITING_REASON_TESTING = 2;
+  // decision: una decisión de producto.
+  WAITING_REASON_DECISION = 3;
+  // deploy: deploys e infraestructura.
+  WAITING_REASON_DEPLOY = 4;
+}
+
 // De dónde sale una sesión.
 enum SessionSource {
   SESSION_SOURCE_UNSPECIFIED = 0;
@@ -125,6 +141,10 @@ message AgentSession {
   // El texto de la barra lateral de herdr (token espera) tal cual, solo para
   // mostrar: no se interpreta. Vacío si waiting_on es NONE.
   string waiting_text = 21;
+  // Para qué espera (issue 036). UNSPECIFIED si no espera: waiting_on NONE
+  // y estado distinto de WAITING_OK (esperando-ok sin token también es una
+  // espera a su persona y puede traer motivo).
+  WaitingReason waiting_reason = 22;
 }
 
 // Resumen de las sesiones activas ligadas a un issue (Issue.sessions).
@@ -163,4 +183,6 @@ message SessionBrief {
   WaitingOn waiting_on = 7;
   string waiting_target = 8;
   google.protobuf.Timestamp status_changed_at = 9;
+  // Para qué espera (issue 036). Misma regla que AgentSession.waiting_reason.
+  WaitingReason waiting_reason = 10;
 }

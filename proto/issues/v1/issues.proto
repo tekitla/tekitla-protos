@@ -241,6 +241,14 @@ service IssueService {
   rpc GetFlowMetrics(GetFlowMetricsRequest) returns (GetFlowMetricsResponse) {
     option (google.api.http) = {get: "/v1/projects/{project_id}/flowMetrics"};
   }
+
+  // Eficiencia del flujo de un issue (issue 036, CU-036-6): cuánto tiempo
+  // trabajó y cuánto esperó según sus sesiones de agentes (issue 026). Solo
+  // en vivo, desde que existe la historia de sesiones. Mismas reglas que
+  // FlowEfficiency (flow_metrics.proto). Issue inexistente: NOT_FOUND.
+  rpc GetIssueFlowEfficiency(GetIssueFlowEfficiencyRequest) returns (GetIssueFlowEfficiencyResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/issues/{number}/flowEfficiency"};
+  }
 }
 
 // Categoría del estado de un issue. Es fija y la entienden todos los clientes

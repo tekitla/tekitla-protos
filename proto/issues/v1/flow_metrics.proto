@@ -34,6 +34,7 @@ package issues.v1;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
+import "issues/v1/agent_sessions.proto";
 
 message GetFlowMetricsRequest {
   string project_id = 1;
@@ -87,6 +88,14 @@ message GetFlowMetricsResponse {
   repeated string value_label_ids = 8;
   // Issues que entran al cálculo y los que no tienen fechas para él.
   FlowCoverage coverage = 9;
+  // Desde cuándo hay historia de sesiones de agentes en el proyecto (la
+  // primera transición guardada, issue 036 parte 3). Ausente: ninguna. Las
+  // semanas que terminan antes no traen efficiency ni human_queue; la que la
+  // contiene trae lo medido desde ahí (parcial).
+  google.protobuf.Timestamp sessions_recorded_since = 10;
+  // Señal de contratación de las 8 semanas completas anteriores a to (no
+  // depende de from).
+  HiringSignal hiring_signal = 11;
 }
 
 // Métricas de una semana.
@@ -107,6 +116,11 @@ message FlowWeek {
   // En IN_PROGRESS al final de la semana.
   int32 wip = 9;
   MetricSource source = 10;
+  // Dónde se fue el tiempo esta semana, según las sesiones de agentes.
+  // Ausente si la semana termina antes de sessions_recorded_since.
+  FlowEfficiency efficiency = 11;
+  // Esperas a una persona. Ausente igual que efficiency.
+  HumanQueue human_queue = 12;
 }
 
 // Métricas de todo el período: las semanas juntas. Los conteos son la suma
@@ -126,6 +140,14 @@ message FlowSummary {
   // En IN_PROGRESS en to.
   int32 wip = 7;
   MetricSource source = 8;
+  // Las semanas con efficiency juntas: las duraciones suman; issues cuenta
+  // los issues distintos del período (no la suma de las semanas);
+  // efficiency_bp sale de las duraciones sumadas y waiting_human_by_reason se
+  // vuelve a ordenar. Ausente si ninguna semana tiene.
+  FlowEfficiency efficiency = 9;
+  // pending y oldest_pending en to; response_time de todo el período.
+  // Ausente igual que efficiency.
+  HumanQueue human_queue = 10;
 }
 
 // Mediana y percentil 85 de una duración.
@@ -183,4 +205,175 @@ message FlowCoverage {
   // vivo en DONE (p. ej. importados ya cerrados y sin histórico): no entran
   // a lead time, cycle time ni cerrados.
   int32 done_without_dates = 2;
+}
+
+// Dónde se va el tiempo de un issue (o de los issues de un período) según
+// el estado de sus sesiones de agentes (issue 026). Issue 036, CU-036-6.
+// Siempre registrado en vivo: el histórico importado no tiene sesiones.
+//
+// Cómo se calcula (lo implementa tekitla-issues):
+//   - Tiempo de reloj del issue, no suma de horas de agente: en cada
+//     instante el issue está en un solo estado, el de mayor prioridad entre
+//     sus sesiones: working > waiting_human > blocked > in_review > idle.
+//     Dos sesiones trabajando a la vez una hora dan una hora.
+//   - Cuentan las sesiones de todas las personas con acceso al proyecto, sin
+//     detalle por persona (CU-036-9). Solo las ligadas a issues que existen.
+//   - Noches y fines de semana cuentan como cualquier otra hora.
+//   - Una sesión deja de contar desde su último reporte si pasa más de 10
+//     minutos sin reportar (máquina apagada o recolector parado), hasta que
+//     vuelve a reportar. Ese tiempo no es trabajo ni espera.
+//   - Nada cuenta después de ahora.
+message FlowEfficiency {
+  // Alguna sesión del issue en WORKING.
+  google.protobuf.Duration working = 1;
+  // Ninguna trabaja y alguna espera a su persona: waiting_on PERSON (en
+  // cualquier estado), o WAITING_OK sin waiting_on (esperando-ok: pide un
+  // permiso o una respuesta).
+  google.protobuf.Duration waiting_human = 2;
+  // Ninguna trabaja ni espera a una persona, y alguna espera a otra sesión o
+  // a otra cosa (waiting_on SESSION u OTHER: un CI, un merge).
+  google.protobuf.Duration blocked = 3;
+  // MR abierto en revisión (issue 016). 0 hasta que exista esa fuente.
+  google.protobuf.Duration in_review = 4;
+  // Solo sesiones en IDLE o UNKNOWN sin esperar nada: no entra en la
+  // eficiencia.
+  google.protobuf.Duration idle = 5;
+  // working / (working + waiting_human + blocked + in_review) × 10 000, en
+  // puntos base (redondeado hacia abajo). Ausente si el denominador es 0.
+  // Con 3 h en WORKING y 5 h esperando a su persona: 3750.
+  optional int32 efficiency_bp = 6;
+  // Issues con algún tiempo medido.
+  int32 issues = 7;
+  // Cómo se reparte waiting_human por motivo, de mayor a menor. Las partes
+  // suman waiting_human (incluye UNSPECIFIED: sin motivo).
+  repeated ReasonTime waiting_human_by_reason = 8;
+}
+
+// Tiempo de espera a una persona con un motivo.
+message ReasonTime {
+  WaitingReason reason = 1;
+  google.protobuf.Duration duration = 2;
+}
+
+// Esperas a una persona: la cola humana (issue 036). Una espera es un tramo
+// en que el issue está en waiting_human (después de aplicar la prioridad de
+// FlowEfficiency). Termina cuando el issue pasa a otro estado (eso es la
+// respuesta). Un hueco sin reportes (máquina apagada) seguido de otra vez
+// waiting_human no la corta: es la misma espera, y su duración va de punta a
+// punta (aunque el hueco no sume a waiting_human). Si después del hueco no
+// vuelve, no cuenta como respuesta.
+message HumanQueue {
+  // Issues esperando a una persona al final de la semana (o en to).
+  int32 pending = 1;
+  // De las esperas que terminaron en la semana (o en el período): cuánto
+  // duraron, de entrar a salir.
+  DurationStats response_time = 2;
+  // La espera abierta más vieja al final de la semana (o en to). Ausente si
+  // pending es 0.
+  google.protobuf.Duration oldest_pending = 3;
+}
+
+// Señal de contratación (issue 036, parte 3): interpreta las métricas del
+// último mes. Es una señal, no una decisión: trae los números que la
+// sostienen.
+//
+// Cómo se calcula (lo implementa tekitla-issues), sobre las semanas
+// completas (lunes a lunes en time_zone) anteriores a to:
+//   - current: las últimas 4; previous: las 4 anteriores.
+//   - Menos de 4 semanas completas con historia de sesiones:
+//     INSUFFICIENT_DATA. De 4 a 7: preliminary, sin previous y sin las
+//     condiciones de crecimiento.
+//   - NEEDS_PEOPLE (CU-036-7), todas:
+//       1. waiting_human ≥ 30 % de working + waiting_human + blocked +
+//          in_review en current;
+//       2. (no preliminar) waiting_human o la mediana de human_response
+//          creció 25 % o más contra previous;
+//       3. los agentes no son el cuello: working ≤ waiting_human.
+//   - REDUCE_WIP (CU-036-8): waiting_human < 15 % y wip_high.
+//   - wip_high: wip_median > 0 y, además, wip_median ≥ 2 × los cerrados por
+//     semana de current (al menos dos semanas de trabajo empezado), o (no
+//     preliminar) wip_median creció 25 % o más contra previous.
+//   - Con waiting_human entre 15 % y 30 %, o sin las otras condiciones:
+//     NO_SIGNAL. NEEDS_PEOPLE puede venir con wip_high (falta gente y además
+//     sobra trabajo empezado).
+//   - Los umbrales son constantes del servicio: cambiarlos no cambia el
+//     contrato.
+message HiringSignal {
+  HiringVerdict verdict = 1;
+  // Semanas completas con historia de sesiones antes de to (hasta 8): las
+  // que empiezan en sessions_recorded_since o después. La parcial no cuenta.
+  int32 live_weeks = 2;
+  // Semanas que hacen falta para la señal completa (8).
+  int32 weeks_needed = 3;
+  // Semanas que hacen falta para la lectura preliminar (4).
+  int32 weeks_needed_preliminary = 4;
+  // De 4 a 7 semanas: lectura preliminar, sin comparar con el mes anterior.
+  bool preliminary = 5;
+  // El WIP es alto (ver arriba). Falso con INSUFFICIENT_DATA.
+  bool wip_high = 6;
+  // Dónde se junta la espera a personas en current: los motivos de
+  // waiting_human_by_reason sin UNSPECIFIED, cada uno con su parte de todo
+  // waiting_human (incluida la sin motivo, así que no siempre suman 10 000).
+  // De mayor a menor. Vacío si ninguna espera trae motivo.
+  repeated ProfileShare profiles = 7;
+  // Las últimas 4 semanas. Ausente con INSUFFICIENT_DATA.
+  SignalWindow current = 8;
+  // Las 4 anteriores. Ausente si es preliminar o con INSUFFICIENT_DATA.
+  SignalWindow previous = 9;
+}
+
+// Qué dice la señal de contratación.
+enum HiringVerdict {
+  HIRING_VERDICT_UNSPECIFIED = 0;
+  // Menos de 4 semanas completas con historia de sesiones.
+  HIRING_VERDICT_INSUFFICIENT_DATA = 1;
+  // El flujo no pide nada.
+  HIRING_VERDICT_NO_SIGNAL = 2;
+  // El trabajo espera a personas: falta gente (el perfil, en profiles).
+  HIRING_VERDICT_NEEDS_PEOPLE = 3;
+  // No falta gente, sobra trabajo empezado: bajar el WIP.
+  HIRING_VERDICT_REDUCE_WIP = 4;
+}
+
+// Los números de 4 semanas que sostienen la señal.
+message SignalWindow {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  FlowEfficiency efficiency = 3;
+  // De las esperas a una persona que terminaron en la ventana.
+  DurationStats human_response = 4;
+  // Mediana del WIP de fin de semana.
+  int32 wip_median = 5;
+  // Terminados en la ventana (valor y otros).
+  int32 closed = 6;
+}
+
+// Parte de la espera a personas con un motivo (el perfil que haría falta:
+// revisión → alguien senior que revise, pruebas → QA, decisión → producto,
+// deploy → DevOps).
+message ProfileShare {
+  WaitingReason reason = 1;
+  // Parte de todo waiting_human, en puntos base (redondeo hacia abajo).
+  int32 share_bp = 2;
+}
+
+message GetIssueFlowEfficiencyRequest {
+  string project_id = 1;
+  int32 number = 2;
+  // Período opcional. Sin from: desde el alta (con un to anterior al alta,
+  // la respuesta va vacía). Sin to, o con un to futuro: ahora. from no
+  // anterior a to, o un Timestamp fuera de rango: INVALID_ARGUMENT
+  // (INVALID_PERIOD).
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+}
+
+message GetIssueFlowEfficiencyResponse {
+  // Ausente si el issue no tiene historia de sesiones en el período.
+  FlowEfficiency efficiency = 1;
+  // Desde cuándo hay historia de sesiones del issue. Ausente: ninguna.
+  google.protobuf.Timestamp recorded_since = 2;
+  // Esperas a una persona del issue en el período (pending es 0 o 1).
+  // Ausente igual que efficiency.
+  HumanQueue human_queue = 3;
 }

@@ -5474,7 +5474,7 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x1aIMPORT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_CREATED\x10\x01\x12\x1a\n" +
 	"\x16IMPORT_OUTCOME_UPDATED\x10\x02\x12\x1c\n" +
-	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xfe\x17\n" +
+	"\x18IMPORT_OUTCOME_UNCHANGED\x10\x032\xb0\x19\n" +
 	"\fIssueService\x12e\n" +
 	"\fListProjects\x12\x1e.issues.v1.ListProjectsRequest\x1a\x1f.issues.v1.ListProjectsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12k\n" +
 	"\rCreateProject\x12\x1f.issues.v1.CreateProjectRequest\x1a .issues.v1.CreateProjectResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12s\n" +
@@ -5500,7 +5500,8 @@ const file_issues_v1_issues_proto_rawDesc = "" +
 	"\x0fListIssueEvents\x12!.issues.v1.ListIssueEventsRequest\x1a\".issues.v1.ListIssueEventsResponse\"8\x82\xd3\xe4\x93\x022\x120/v1/projects/{project_id}/issues/{number}/events\x12\x86\x01\n" +
 	"\vImportIssue\x12\x1d.issues.v1.ImportIssueRequest\x1a\x1e.issues.v1.ImportIssueResponse\"8\x82\xd3\xe4\x93\x022:\x01*\"-/v1/admin/projects/{project_id}/issues:import\x12\x9e\x01\n" +
 	"\x11ImportIssueEvents\x12#.issues.v1.ImportIssueEventsRequest\x1a$.issues.v1.ImportIssueEventsResponse\">\x82\xd3\xe4\x93\x028:\x01*\"3/v1/admin/projects/{project_id}/issues:importEvents\x12\x84\x01\n" +
-	"\x0eGetFlowMetrics\x12 .issues.v1.GetFlowMetricsRequest\x1a!.issues.v1.GetFlowMetricsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/projects/{project_id}/flowMetricsB\x9e\x01\n" +
+	"\x0eGetFlowMetrics\x12 .issues.v1.GetFlowMetricsRequest\x1a!.issues.v1.GetFlowMetricsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/projects/{project_id}/flowMetrics\x12\xaf\x01\n" +
+	"\x16GetIssueFlowEfficiency\x12(.issues.v1.GetIssueFlowEfficiencyRequest\x1a).issues.v1.GetIssueFlowEfficiencyResponse\"@\x82\xd3\xe4\x93\x02:\x128/v1/projects/{project_id}/issues/{number}/flowEfficiencyB\x9e\x01\n" +
 	"\rcom.issues.v1B\vIssuesProtoP\x01Z;github.com/tekitla/tekitla-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
 	"Issues::V1b\x06proto3"
 
@@ -5519,83 +5520,85 @@ func file_issues_v1_issues_proto_rawDescGZIP() []byte {
 var file_issues_v1_issues_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
 var file_issues_v1_issues_proto_msgTypes = make([]protoimpl.MessageInfo, 67)
 var file_issues_v1_issues_proto_goTypes = []any{
-	(IssueState)(0),                     // 0: issues.v1.IssueState
-	(Priority)(0),                       // 1: issues.v1.Priority
-	(LabelColor)(0),                     // 2: issues.v1.LabelColor
-	(EventSource)(0),                    // 3: issues.v1.EventSource
-	(IssueOrder)(0),                     // 4: issues.v1.IssueOrder
-	(ImportOutcome)(0),                  // 5: issues.v1.ImportOutcome
-	(*Project)(nil),                     // 6: issues.v1.Project
-	(*Issue)(nil),                       // 7: issues.v1.Issue
-	(*DiscardInfo)(nil),                 // 8: issues.v1.DiscardInfo
-	(*Status)(nil),                      // 9: issues.v1.Status
-	(*Label)(nil),                       // 10: issues.v1.Label
-	(*Comment)(nil),                     // 11: issues.v1.Comment
-	(*IssueEvent)(nil),                  // 12: issues.v1.IssueEvent
-	(*IssueCreated)(nil),                // 13: issues.v1.IssueCreated
-	(*StatusChanged)(nil),               // 14: issues.v1.StatusChanged
-	(*IssueDiscarded)(nil),              // 15: issues.v1.IssueDiscarded
-	(*IssueRestored)(nil),               // 16: issues.v1.IssueRestored
-	(*TitleChanged)(nil),                // 17: issues.v1.TitleChanged
-	(*AssigneeChanged)(nil),             // 18: issues.v1.AssigneeChanged
-	(*DescriptionChanged)(nil),          // 19: issues.v1.DescriptionChanged
-	(*PriorityChanged)(nil),             // 20: issues.v1.PriorityChanged
-	(*LabelsChanged)(nil),               // 21: issues.v1.LabelsChanged
-	(*PageRequest)(nil),                 // 22: issues.v1.PageRequest
-	(*PageResponse)(nil),                // 23: issues.v1.PageResponse
-	(*ListProjectsRequest)(nil),         // 24: issues.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),        // 25: issues.v1.ListProjectsResponse
-	(*CreateProjectRequest)(nil),        // 26: issues.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),       // 27: issues.v1.CreateProjectResponse
-	(*ListIssuesRequest)(nil),           // 28: issues.v1.ListIssuesRequest
-	(*ListIssuesResponse)(nil),          // 29: issues.v1.ListIssuesResponse
-	(*GetIssueRequest)(nil),             // 30: issues.v1.GetIssueRequest
-	(*GetIssueResponse)(nil),            // 31: issues.v1.GetIssueResponse
-	(*CreateIssueRequest)(nil),          // 32: issues.v1.CreateIssueRequest
-	(*CreateIssueResponse)(nil),         // 33: issues.v1.CreateIssueResponse
-	(*MoveIssueRequest)(nil),            // 34: issues.v1.MoveIssueRequest
-	(*MoveIssueResponse)(nil),           // 35: issues.v1.MoveIssueResponse
-	(*UpdateIssueRequest)(nil),          // 36: issues.v1.UpdateIssueRequest
-	(*LabelIds)(nil),                    // 37: issues.v1.LabelIds
-	(*UpdateIssueResponse)(nil),         // 38: issues.v1.UpdateIssueResponse
-	(*DiscardIssueRequest)(nil),         // 39: issues.v1.DiscardIssueRequest
-	(*DiscardIssueResponse)(nil),        // 40: issues.v1.DiscardIssueResponse
-	(*RestoreIssueRequest)(nil),         // 41: issues.v1.RestoreIssueRequest
-	(*RestoreIssueResponse)(nil),        // 42: issues.v1.RestoreIssueResponse
-	(*ListStatusesRequest)(nil),         // 43: issues.v1.ListStatusesRequest
-	(*ListStatusesResponse)(nil),        // 44: issues.v1.ListStatusesResponse
-	(*CreateStatusRequest)(nil),         // 45: issues.v1.CreateStatusRequest
-	(*CreateStatusResponse)(nil),        // 46: issues.v1.CreateStatusResponse
-	(*UpdateStatusRequest)(nil),         // 47: issues.v1.UpdateStatusRequest
-	(*UpdateStatusResponse)(nil),        // 48: issues.v1.UpdateStatusResponse
-	(*DeleteStatusRequest)(nil),         // 49: issues.v1.DeleteStatusRequest
-	(*DeleteStatusResponse)(nil),        // 50: issues.v1.DeleteStatusResponse
-	(*BatchUpdateStatusesRequest)(nil),  // 51: issues.v1.BatchUpdateStatusesRequest
-	(*StatusSpec)(nil),                  // 52: issues.v1.StatusSpec
-	(*StatusDeletion)(nil),              // 53: issues.v1.StatusDeletion
-	(*BatchUpdateStatusesResponse)(nil), // 54: issues.v1.BatchUpdateStatusesResponse
-	(*ListLabelsRequest)(nil),           // 55: issues.v1.ListLabelsRequest
-	(*ListLabelsResponse)(nil),          // 56: issues.v1.ListLabelsResponse
-	(*CreateLabelRequest)(nil),          // 57: issues.v1.CreateLabelRequest
-	(*CreateLabelResponse)(nil),         // 58: issues.v1.CreateLabelResponse
-	(*UpdateLabelRequest)(nil),          // 59: issues.v1.UpdateLabelRequest
-	(*UpdateLabelResponse)(nil),         // 60: issues.v1.UpdateLabelResponse
-	(*DeleteLabelRequest)(nil),          // 61: issues.v1.DeleteLabelRequest
-	(*DeleteLabelResponse)(nil),         // 62: issues.v1.DeleteLabelResponse
-	(*CreateCommentRequest)(nil),        // 63: issues.v1.CreateCommentRequest
-	(*CreateCommentResponse)(nil),       // 64: issues.v1.CreateCommentResponse
-	(*ListIssueEventsRequest)(nil),      // 65: issues.v1.ListIssueEventsRequest
-	(*ListIssueEventsResponse)(nil),     // 66: issues.v1.ListIssueEventsResponse
-	(*ImportIssueRequest)(nil),          // 67: issues.v1.ImportIssueRequest
-	(*ImportIssueResponse)(nil),         // 68: issues.v1.ImportIssueResponse
-	(*ImportIssueEventsRequest)(nil),    // 69: issues.v1.ImportIssueEventsRequest
-	(*ImportedEvent)(nil),               // 70: issues.v1.ImportedEvent
-	(*ImportedStatusChange)(nil),        // 71: issues.v1.ImportedStatusChange
-	(*ImportIssueEventsResponse)(nil),   // 72: issues.v1.ImportIssueEventsResponse
-	(*timestamppb.Timestamp)(nil),       // 73: google.protobuf.Timestamp
-	(*IssueSessions)(nil),               // 74: issues.v1.IssueSessions
-	(*GetFlowMetricsRequest)(nil),       // 75: issues.v1.GetFlowMetricsRequest
-	(*GetFlowMetricsResponse)(nil),      // 76: issues.v1.GetFlowMetricsResponse
+	(IssueState)(0),                        // 0: issues.v1.IssueState
+	(Priority)(0),                          // 1: issues.v1.Priority
+	(LabelColor)(0),                        // 2: issues.v1.LabelColor
+	(EventSource)(0),                       // 3: issues.v1.EventSource
+	(IssueOrder)(0),                        // 4: issues.v1.IssueOrder
+	(ImportOutcome)(0),                     // 5: issues.v1.ImportOutcome
+	(*Project)(nil),                        // 6: issues.v1.Project
+	(*Issue)(nil),                          // 7: issues.v1.Issue
+	(*DiscardInfo)(nil),                    // 8: issues.v1.DiscardInfo
+	(*Status)(nil),                         // 9: issues.v1.Status
+	(*Label)(nil),                          // 10: issues.v1.Label
+	(*Comment)(nil),                        // 11: issues.v1.Comment
+	(*IssueEvent)(nil),                     // 12: issues.v1.IssueEvent
+	(*IssueCreated)(nil),                   // 13: issues.v1.IssueCreated
+	(*StatusChanged)(nil),                  // 14: issues.v1.StatusChanged
+	(*IssueDiscarded)(nil),                 // 15: issues.v1.IssueDiscarded
+	(*IssueRestored)(nil),                  // 16: issues.v1.IssueRestored
+	(*TitleChanged)(nil),                   // 17: issues.v1.TitleChanged
+	(*AssigneeChanged)(nil),                // 18: issues.v1.AssigneeChanged
+	(*DescriptionChanged)(nil),             // 19: issues.v1.DescriptionChanged
+	(*PriorityChanged)(nil),                // 20: issues.v1.PriorityChanged
+	(*LabelsChanged)(nil),                  // 21: issues.v1.LabelsChanged
+	(*PageRequest)(nil),                    // 22: issues.v1.PageRequest
+	(*PageResponse)(nil),                   // 23: issues.v1.PageResponse
+	(*ListProjectsRequest)(nil),            // 24: issues.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),           // 25: issues.v1.ListProjectsResponse
+	(*CreateProjectRequest)(nil),           // 26: issues.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),          // 27: issues.v1.CreateProjectResponse
+	(*ListIssuesRequest)(nil),              // 28: issues.v1.ListIssuesRequest
+	(*ListIssuesResponse)(nil),             // 29: issues.v1.ListIssuesResponse
+	(*GetIssueRequest)(nil),                // 30: issues.v1.GetIssueRequest
+	(*GetIssueResponse)(nil),               // 31: issues.v1.GetIssueResponse
+	(*CreateIssueRequest)(nil),             // 32: issues.v1.CreateIssueRequest
+	(*CreateIssueResponse)(nil),            // 33: issues.v1.CreateIssueResponse
+	(*MoveIssueRequest)(nil),               // 34: issues.v1.MoveIssueRequest
+	(*MoveIssueResponse)(nil),              // 35: issues.v1.MoveIssueResponse
+	(*UpdateIssueRequest)(nil),             // 36: issues.v1.UpdateIssueRequest
+	(*LabelIds)(nil),                       // 37: issues.v1.LabelIds
+	(*UpdateIssueResponse)(nil),            // 38: issues.v1.UpdateIssueResponse
+	(*DiscardIssueRequest)(nil),            // 39: issues.v1.DiscardIssueRequest
+	(*DiscardIssueResponse)(nil),           // 40: issues.v1.DiscardIssueResponse
+	(*RestoreIssueRequest)(nil),            // 41: issues.v1.RestoreIssueRequest
+	(*RestoreIssueResponse)(nil),           // 42: issues.v1.RestoreIssueResponse
+	(*ListStatusesRequest)(nil),            // 43: issues.v1.ListStatusesRequest
+	(*ListStatusesResponse)(nil),           // 44: issues.v1.ListStatusesResponse
+	(*CreateStatusRequest)(nil),            // 45: issues.v1.CreateStatusRequest
+	(*CreateStatusResponse)(nil),           // 46: issues.v1.CreateStatusResponse
+	(*UpdateStatusRequest)(nil),            // 47: issues.v1.UpdateStatusRequest
+	(*UpdateStatusResponse)(nil),           // 48: issues.v1.UpdateStatusResponse
+	(*DeleteStatusRequest)(nil),            // 49: issues.v1.DeleteStatusRequest
+	(*DeleteStatusResponse)(nil),           // 50: issues.v1.DeleteStatusResponse
+	(*BatchUpdateStatusesRequest)(nil),     // 51: issues.v1.BatchUpdateStatusesRequest
+	(*StatusSpec)(nil),                     // 52: issues.v1.StatusSpec
+	(*StatusDeletion)(nil),                 // 53: issues.v1.StatusDeletion
+	(*BatchUpdateStatusesResponse)(nil),    // 54: issues.v1.BatchUpdateStatusesResponse
+	(*ListLabelsRequest)(nil),              // 55: issues.v1.ListLabelsRequest
+	(*ListLabelsResponse)(nil),             // 56: issues.v1.ListLabelsResponse
+	(*CreateLabelRequest)(nil),             // 57: issues.v1.CreateLabelRequest
+	(*CreateLabelResponse)(nil),            // 58: issues.v1.CreateLabelResponse
+	(*UpdateLabelRequest)(nil),             // 59: issues.v1.UpdateLabelRequest
+	(*UpdateLabelResponse)(nil),            // 60: issues.v1.UpdateLabelResponse
+	(*DeleteLabelRequest)(nil),             // 61: issues.v1.DeleteLabelRequest
+	(*DeleteLabelResponse)(nil),            // 62: issues.v1.DeleteLabelResponse
+	(*CreateCommentRequest)(nil),           // 63: issues.v1.CreateCommentRequest
+	(*CreateCommentResponse)(nil),          // 64: issues.v1.CreateCommentResponse
+	(*ListIssueEventsRequest)(nil),         // 65: issues.v1.ListIssueEventsRequest
+	(*ListIssueEventsResponse)(nil),        // 66: issues.v1.ListIssueEventsResponse
+	(*ImportIssueRequest)(nil),             // 67: issues.v1.ImportIssueRequest
+	(*ImportIssueResponse)(nil),            // 68: issues.v1.ImportIssueResponse
+	(*ImportIssueEventsRequest)(nil),       // 69: issues.v1.ImportIssueEventsRequest
+	(*ImportedEvent)(nil),                  // 70: issues.v1.ImportedEvent
+	(*ImportedStatusChange)(nil),           // 71: issues.v1.ImportedStatusChange
+	(*ImportIssueEventsResponse)(nil),      // 72: issues.v1.ImportIssueEventsResponse
+	(*timestamppb.Timestamp)(nil),          // 73: google.protobuf.Timestamp
+	(*IssueSessions)(nil),                  // 74: issues.v1.IssueSessions
+	(*GetFlowMetricsRequest)(nil),          // 75: issues.v1.GetFlowMetricsRequest
+	(*GetIssueFlowEfficiencyRequest)(nil),  // 76: issues.v1.GetIssueFlowEfficiencyRequest
+	(*GetFlowMetricsResponse)(nil),         // 77: issues.v1.GetFlowMetricsResponse
+	(*GetIssueFlowEfficiencyResponse)(nil), // 78: issues.v1.GetIssueFlowEfficiencyResponse
 }
 var file_issues_v1_issues_proto_depIdxs = []int32{
 	73,  // 0: issues.v1.Project.created_at:type_name -> google.protobuf.Timestamp
@@ -5704,31 +5707,33 @@ var file_issues_v1_issues_proto_depIdxs = []int32{
 	67,  // 103: issues.v1.IssueService.ImportIssue:input_type -> issues.v1.ImportIssueRequest
 	69,  // 104: issues.v1.IssueService.ImportIssueEvents:input_type -> issues.v1.ImportIssueEventsRequest
 	75,  // 105: issues.v1.IssueService.GetFlowMetrics:input_type -> issues.v1.GetFlowMetricsRequest
-	25,  // 106: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
-	27,  // 107: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
-	29,  // 108: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
-	31,  // 109: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
-	33,  // 110: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
-	35,  // 111: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
-	38,  // 112: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
-	40,  // 113: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
-	42,  // 114: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
-	44,  // 115: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
-	46,  // 116: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
-	48,  // 117: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
-	50,  // 118: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
-	54,  // 119: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
-	56,  // 120: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
-	58,  // 121: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
-	60,  // 122: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
-	62,  // 123: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
-	64,  // 124: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
-	66,  // 125: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
-	68,  // 126: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
-	72,  // 127: issues.v1.IssueService.ImportIssueEvents:output_type -> issues.v1.ImportIssueEventsResponse
-	76,  // 128: issues.v1.IssueService.GetFlowMetrics:output_type -> issues.v1.GetFlowMetricsResponse
-	106, // [106:129] is the sub-list for method output_type
-	83,  // [83:106] is the sub-list for method input_type
+	76,  // 106: issues.v1.IssueService.GetIssueFlowEfficiency:input_type -> issues.v1.GetIssueFlowEfficiencyRequest
+	25,  // 107: issues.v1.IssueService.ListProjects:output_type -> issues.v1.ListProjectsResponse
+	27,  // 108: issues.v1.IssueService.CreateProject:output_type -> issues.v1.CreateProjectResponse
+	29,  // 109: issues.v1.IssueService.ListIssues:output_type -> issues.v1.ListIssuesResponse
+	31,  // 110: issues.v1.IssueService.GetIssue:output_type -> issues.v1.GetIssueResponse
+	33,  // 111: issues.v1.IssueService.CreateIssue:output_type -> issues.v1.CreateIssueResponse
+	35,  // 112: issues.v1.IssueService.MoveIssue:output_type -> issues.v1.MoveIssueResponse
+	38,  // 113: issues.v1.IssueService.UpdateIssue:output_type -> issues.v1.UpdateIssueResponse
+	40,  // 114: issues.v1.IssueService.DiscardIssue:output_type -> issues.v1.DiscardIssueResponse
+	42,  // 115: issues.v1.IssueService.RestoreIssue:output_type -> issues.v1.RestoreIssueResponse
+	44,  // 116: issues.v1.IssueService.ListStatuses:output_type -> issues.v1.ListStatusesResponse
+	46,  // 117: issues.v1.IssueService.CreateStatus:output_type -> issues.v1.CreateStatusResponse
+	48,  // 118: issues.v1.IssueService.UpdateStatus:output_type -> issues.v1.UpdateStatusResponse
+	50,  // 119: issues.v1.IssueService.DeleteStatus:output_type -> issues.v1.DeleteStatusResponse
+	54,  // 120: issues.v1.IssueService.BatchUpdateStatuses:output_type -> issues.v1.BatchUpdateStatusesResponse
+	56,  // 121: issues.v1.IssueService.ListLabels:output_type -> issues.v1.ListLabelsResponse
+	58,  // 122: issues.v1.IssueService.CreateLabel:output_type -> issues.v1.CreateLabelResponse
+	60,  // 123: issues.v1.IssueService.UpdateLabel:output_type -> issues.v1.UpdateLabelResponse
+	62,  // 124: issues.v1.IssueService.DeleteLabel:output_type -> issues.v1.DeleteLabelResponse
+	64,  // 125: issues.v1.IssueService.CreateComment:output_type -> issues.v1.CreateCommentResponse
+	66,  // 126: issues.v1.IssueService.ListIssueEvents:output_type -> issues.v1.ListIssueEventsResponse
+	68,  // 127: issues.v1.IssueService.ImportIssue:output_type -> issues.v1.ImportIssueResponse
+	72,  // 128: issues.v1.IssueService.ImportIssueEvents:output_type -> issues.v1.ImportIssueEventsResponse
+	77,  // 129: issues.v1.IssueService.GetFlowMetrics:output_type -> issues.v1.GetFlowMetricsResponse
+	78,  // 130: issues.v1.IssueService.GetIssueFlowEfficiency:output_type -> issues.v1.GetIssueFlowEfficiencyResponse
+	107, // [107:131] is the sub-list for method output_type
+	83,  // [83:107] is the sub-list for method input_type
 	83,  // [83:83] is the sub-list for extension type_name
 	83,  // [83:83] is the sub-list for extension extendee
 	0,   // [0:83] is the sub-list for field type_name

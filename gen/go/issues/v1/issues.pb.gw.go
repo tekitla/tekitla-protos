@@ -1226,6 +1226,75 @@ func local_request_IssueService_GetFlowMetrics_0(ctx context.Context, marshaler 
 	return msg, metadata, err
 }
 
+var filter_IssueService_GetIssueFlowEfficiency_0 = &utilities.DoubleArray{Encoding: map[string]int{"project_id": 0, "number": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+
+func request_IssueService_GetIssueFlowEfficiency_0(ctx context.Context, marshaler runtime.Marshaler, client IssueServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetIssueFlowEfficiencyRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["project_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
+	}
+	protoReq.ProjectId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
+	}
+	val, ok = pathParams["number"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "number")
+	}
+	protoReq.Number, err = runtime.Int32(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "number", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IssueService_GetIssueFlowEfficiency_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.GetIssueFlowEfficiency(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_IssueService_GetIssueFlowEfficiency_0(ctx context.Context, marshaler runtime.Marshaler, server IssueServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetIssueFlowEfficiencyRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["project_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "project_id")
+	}
+	protoReq.ProjectId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
+	}
+	val, ok = pathParams["number"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "number")
+	}
+	protoReq.Number, err = runtime.Int32(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "number", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IssueService_GetIssueFlowEfficiency_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.GetIssueFlowEfficiency(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterIssueServiceHandlerServer registers the http handlers for service IssueService to "mux".
 // UnaryRPC     :call IssueServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -1692,6 +1761,26 @@ func RegisterIssueServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		}
 		forward_IssueService_GetFlowMetrics_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_IssueService_GetIssueFlowEfficiency_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/issues.v1.IssueService/GetIssueFlowEfficiency", runtime.WithHTTPPathPattern("/v1/projects/{project_id}/issues/{number}/flowEfficiency"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_IssueService_GetIssueFlowEfficiency_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_IssueService_GetIssueFlowEfficiency_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 
 	return nil
 }
@@ -2123,57 +2212,76 @@ func RegisterIssueServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		}
 		forward_IssueService_GetFlowMetrics_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_IssueService_GetIssueFlowEfficiency_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/issues.v1.IssueService/GetIssueFlowEfficiency", runtime.WithHTTPPathPattern("/v1/projects/{project_id}/issues/{number}/flowEfficiency"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_IssueService_GetIssueFlowEfficiency_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_IssueService_GetIssueFlowEfficiency_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
 var (
-	pattern_IssueService_ListProjects_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
-	pattern_IssueService_CreateProject_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
-	pattern_IssueService_ListIssues_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "issues"}, ""))
-	pattern_IssueService_GetIssue_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, ""))
-	pattern_IssueService_CreateIssue_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "issues"}, ""))
-	pattern_IssueService_MoveIssue_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, "move"))
-	pattern_IssueService_UpdateIssue_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, ""))
-	pattern_IssueService_DiscardIssue_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, "discard"))
-	pattern_IssueService_RestoreIssue_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, "restore"))
-	pattern_IssueService_ListStatuses_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "statuses"}, ""))
-	pattern_IssueService_CreateStatus_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "statuses"}, ""))
-	pattern_IssueService_UpdateStatus_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "statuses", "status_id"}, ""))
-	pattern_IssueService_DeleteStatus_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "statuses", "status_id"}, ""))
-	pattern_IssueService_BatchUpdateStatuses_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "statuses"}, "batchUpdate"))
-	pattern_IssueService_ListLabels_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "labels"}, ""))
-	pattern_IssueService_CreateLabel_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "labels"}, ""))
-	pattern_IssueService_UpdateLabel_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "labels", "label_id"}, ""))
-	pattern_IssueService_DeleteLabel_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "labels", "label_id"}, ""))
-	pattern_IssueService_CreateComment_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "projects", "project_id", "issues", "number", "comments"}, ""))
-	pattern_IssueService_ListIssueEvents_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "projects", "project_id", "issues", "number", "events"}, ""))
-	pattern_IssueService_ImportIssue_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "admin", "projects", "project_id", "issues"}, "import"))
-	pattern_IssueService_ImportIssueEvents_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "admin", "projects", "project_id", "issues"}, "importEvents"))
-	pattern_IssueService_GetFlowMetrics_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "flowMetrics"}, ""))
+	pattern_IssueService_ListProjects_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
+	pattern_IssueService_CreateProject_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
+	pattern_IssueService_ListIssues_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "issues"}, ""))
+	pattern_IssueService_GetIssue_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, ""))
+	pattern_IssueService_CreateIssue_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "issues"}, ""))
+	pattern_IssueService_MoveIssue_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, "move"))
+	pattern_IssueService_UpdateIssue_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, ""))
+	pattern_IssueService_DiscardIssue_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, "discard"))
+	pattern_IssueService_RestoreIssue_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "issues", "number"}, "restore"))
+	pattern_IssueService_ListStatuses_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "statuses"}, ""))
+	pattern_IssueService_CreateStatus_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "statuses"}, ""))
+	pattern_IssueService_UpdateStatus_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "statuses", "status_id"}, ""))
+	pattern_IssueService_DeleteStatus_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "statuses", "status_id"}, ""))
+	pattern_IssueService_BatchUpdateStatuses_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "statuses"}, "batchUpdate"))
+	pattern_IssueService_ListLabels_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "labels"}, ""))
+	pattern_IssueService_CreateLabel_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "labels"}, ""))
+	pattern_IssueService_UpdateLabel_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "labels", "label_id"}, ""))
+	pattern_IssueService_DeleteLabel_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "labels", "label_id"}, ""))
+	pattern_IssueService_CreateComment_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "projects", "project_id", "issues", "number", "comments"}, ""))
+	pattern_IssueService_ListIssueEvents_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "projects", "project_id", "issues", "number", "events"}, ""))
+	pattern_IssueService_ImportIssue_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "admin", "projects", "project_id", "issues"}, "import"))
+	pattern_IssueService_ImportIssueEvents_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "admin", "projects", "project_id", "issues"}, "importEvents"))
+	pattern_IssueService_GetFlowMetrics_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "flowMetrics"}, ""))
+	pattern_IssueService_GetIssueFlowEfficiency_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "projects", "project_id", "issues", "number", "flowEfficiency"}, ""))
 )
 
 var (
-	forward_IssueService_ListProjects_0        = runtime.ForwardResponseMessage
-	forward_IssueService_CreateProject_0       = runtime.ForwardResponseMessage
-	forward_IssueService_ListIssues_0          = runtime.ForwardResponseMessage
-	forward_IssueService_GetIssue_0            = runtime.ForwardResponseMessage
-	forward_IssueService_CreateIssue_0         = runtime.ForwardResponseMessage
-	forward_IssueService_MoveIssue_0           = runtime.ForwardResponseMessage
-	forward_IssueService_UpdateIssue_0         = runtime.ForwardResponseMessage
-	forward_IssueService_DiscardIssue_0        = runtime.ForwardResponseMessage
-	forward_IssueService_RestoreIssue_0        = runtime.ForwardResponseMessage
-	forward_IssueService_ListStatuses_0        = runtime.ForwardResponseMessage
-	forward_IssueService_CreateStatus_0        = runtime.ForwardResponseMessage
-	forward_IssueService_UpdateStatus_0        = runtime.ForwardResponseMessage
-	forward_IssueService_DeleteStatus_0        = runtime.ForwardResponseMessage
-	forward_IssueService_BatchUpdateStatuses_0 = runtime.ForwardResponseMessage
-	forward_IssueService_ListLabels_0          = runtime.ForwardResponseMessage
-	forward_IssueService_CreateLabel_0         = runtime.ForwardResponseMessage
-	forward_IssueService_UpdateLabel_0         = runtime.ForwardResponseMessage
-	forward_IssueService_DeleteLabel_0         = runtime.ForwardResponseMessage
-	forward_IssueService_CreateComment_0       = runtime.ForwardResponseMessage
-	forward_IssueService_ListIssueEvents_0     = runtime.ForwardResponseMessage
-	forward_IssueService_ImportIssue_0         = runtime.ForwardResponseMessage
-	forward_IssueService_ImportIssueEvents_0   = runtime.ForwardResponseMessage
-	forward_IssueService_GetFlowMetrics_0      = runtime.ForwardResponseMessage
+	forward_IssueService_ListProjects_0           = runtime.ForwardResponseMessage
+	forward_IssueService_CreateProject_0          = runtime.ForwardResponseMessage
+	forward_IssueService_ListIssues_0             = runtime.ForwardResponseMessage
+	forward_IssueService_GetIssue_0               = runtime.ForwardResponseMessage
+	forward_IssueService_CreateIssue_0            = runtime.ForwardResponseMessage
+	forward_IssueService_MoveIssue_0              = runtime.ForwardResponseMessage
+	forward_IssueService_UpdateIssue_0            = runtime.ForwardResponseMessage
+	forward_IssueService_DiscardIssue_0           = runtime.ForwardResponseMessage
+	forward_IssueService_RestoreIssue_0           = runtime.ForwardResponseMessage
+	forward_IssueService_ListStatuses_0           = runtime.ForwardResponseMessage
+	forward_IssueService_CreateStatus_0           = runtime.ForwardResponseMessage
+	forward_IssueService_UpdateStatus_0           = runtime.ForwardResponseMessage
+	forward_IssueService_DeleteStatus_0           = runtime.ForwardResponseMessage
+	forward_IssueService_BatchUpdateStatuses_0    = runtime.ForwardResponseMessage
+	forward_IssueService_ListLabels_0             = runtime.ForwardResponseMessage
+	forward_IssueService_CreateLabel_0            = runtime.ForwardResponseMessage
+	forward_IssueService_UpdateLabel_0            = runtime.ForwardResponseMessage
+	forward_IssueService_DeleteLabel_0            = runtime.ForwardResponseMessage
+	forward_IssueService_CreateComment_0          = runtime.ForwardResponseMessage
+	forward_IssueService_ListIssueEvents_0        = runtime.ForwardResponseMessage
+	forward_IssueService_ImportIssue_0            = runtime.ForwardResponseMessage
+	forward_IssueService_ImportIssueEvents_0      = runtime.ForwardResponseMessage
+	forward_IssueService_GetFlowMetrics_0         = runtime.ForwardResponseMessage
+	forward_IssueService_GetIssueFlowEfficiency_0 = runtime.ForwardResponseMessage
 )

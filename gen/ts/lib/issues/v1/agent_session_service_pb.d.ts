@@ -10,7 +10,7 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { AgentSession, SessionLink, SessionSource, SessionStatus, WaitingOn } from "./agent_sessions_pb.js";
+import type { AgentSession, SessionLink, SessionSource, SessionStatus, WaitingOn, WaitingReason } from "./agent_sessions_pb.js";
 import type { AgentTool } from "./actors_pb.js";
 import type { PageRequest, PageResponse } from "./issues_pb.js";
 
@@ -149,6 +149,17 @@ export declare type ReportedSession = Message<"issues.v1.ReportedSession"> & {
    * @generated from field: string waiting_text = 12;
    */
   waitingText: string;
+
+  /**
+   * Token espera_motivo ya traducido (issue 036). Se guarda si la sesión
+   * espera: waiting_on distinto de NONE, o status WAITING_OK (esperando-ok
+   * sin token). Si no (WORKING, ENDED, o IDLE/UNKNOWN sin espera), se ignora
+   * y se guarda UNSPECIFIED. Un valor desconocido se guarda UNSPECIFIED y no
+   * rechaza el reporte.
+   *
+   * @generated from field: issues.v1.WaitingReason waiting_reason = 13;
+   */
+  waitingReason: WaitingReason;
 };
 
 /**

@@ -36,6 +36,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Duration, Timestamp } from "@bufbuild/protobuf/wkt";
+import type { WaitingReason } from "./agent_sessions_pb.js";
 
 /**
  * Describes the file issues/v1/flow_metrics.proto.
@@ -180,6 +181,24 @@ export declare type GetFlowMetricsResponse = Message<"issues.v1.GetFlowMetricsRe
    * @generated from field: issues.v1.FlowCoverage coverage = 9;
    */
   coverage?: FlowCoverage | undefined;
+
+  /**
+   * Desde cuándo hay historia de sesiones de agentes en el proyecto (la
+   * primera transición guardada, issue 036 parte 3). Ausente: ninguna. Las
+   * semanas que terminan antes no traen efficiency ni human_queue; la que la
+   * contiene trae lo medido desde ahí (parcial).
+   *
+   * @generated from field: google.protobuf.Timestamp sessions_recorded_since = 10;
+   */
+  sessionsRecordedSince?: Timestamp | undefined;
+
+  /**
+   * Señal de contratación de las 8 semanas completas anteriores a to (no
+   * depende de from).
+   *
+   * @generated from field: issues.v1.HiringSignal hiring_signal = 11;
+   */
+  hiringSignal?: HiringSignal | undefined;
 };
 
 /**
@@ -254,6 +273,21 @@ export declare type FlowWeek = Message<"issues.v1.FlowWeek"> & {
    * @generated from field: issues.v1.MetricSource source = 10;
    */
   source?: MetricSource | undefined;
+
+  /**
+   * Dónde se fue el tiempo esta semana, según las sesiones de agentes.
+   * Ausente si la semana termina antes de sessions_recorded_since.
+   *
+   * @generated from field: issues.v1.FlowEfficiency efficiency = 11;
+   */
+  efficiency?: FlowEfficiency | undefined;
+
+  /**
+   * Esperas a una persona. Ausente igual que efficiency.
+   *
+   * @generated from field: issues.v1.HumanQueue human_queue = 12;
+   */
+  humanQueue?: HumanQueue | undefined;
 };
 
 /**
@@ -315,6 +349,24 @@ export declare type FlowSummary = Message<"issues.v1.FlowSummary"> & {
    * @generated from field: issues.v1.MetricSource source = 8;
    */
   source?: MetricSource | undefined;
+
+  /**
+   * Las semanas con efficiency juntas: las duraciones suman; issues cuenta
+   * los issues distintos del período (no la suma de las semanas);
+   * efficiency_bp sale de las duraciones sumadas y waiting_human_by_reason se
+   * vuelve a ordenar. Ausente si ninguna semana tiene.
+   *
+   * @generated from field: issues.v1.FlowEfficiency efficiency = 9;
+   */
+  efficiency?: FlowEfficiency | undefined;
+
+  /**
+   * pending y oldest_pending en to; response_time de todo el período.
+   * Ausente igual que efficiency.
+   *
+   * @generated from field: issues.v1.HumanQueue human_queue = 10;
+   */
+  humanQueue?: HumanQueue | undefined;
 };
 
 /**
@@ -475,6 +527,409 @@ export declare type FlowCoverage = Message<"issues.v1.FlowCoverage"> & {
 export declare const FlowCoverageSchema: GenMessage<FlowCoverage>;
 
 /**
+ * Dónde se va el tiempo de un issue (o de los issues de un período) según
+ * el estado de sus sesiones de agentes (issue 026). Issue 036, CU-036-6.
+ * Siempre registrado en vivo: el histórico importado no tiene sesiones.
+ *
+ * Cómo se calcula (lo implementa tekitla-issues):
+ *   - Tiempo de reloj del issue, no suma de horas de agente: en cada
+ *     instante el issue está en un solo estado, el de mayor prioridad entre
+ *     sus sesiones: working > waiting_human > blocked > in_review > idle.
+ *     Dos sesiones trabajando a la vez una hora dan una hora.
+ *   - Cuentan las sesiones de todas las personas con acceso al proyecto, sin
+ *     detalle por persona (CU-036-9). Solo las ligadas a issues que existen.
+ *   - Noches y fines de semana cuentan como cualquier otra hora.
+ *   - Una sesión deja de contar desde su último reporte si pasa más de 10
+ *     minutos sin reportar (máquina apagada o recolector parado), hasta que
+ *     vuelve a reportar. Ese tiempo no es trabajo ni espera.
+ *   - Nada cuenta después de ahora.
+ *
+ * @generated from message issues.v1.FlowEfficiency
+ */
+export declare type FlowEfficiency = Message<"issues.v1.FlowEfficiency"> & {
+  /**
+   * Alguna sesión del issue en WORKING.
+   *
+   * @generated from field: google.protobuf.Duration working = 1;
+   */
+  working?: Duration | undefined;
+
+  /**
+   * Ninguna trabaja y alguna espera a su persona: waiting_on PERSON (en
+   * cualquier estado), o WAITING_OK sin waiting_on (esperando-ok: pide un
+   * permiso o una respuesta).
+   *
+   * @generated from field: google.protobuf.Duration waiting_human = 2;
+   */
+  waitingHuman?: Duration | undefined;
+
+  /**
+   * Ninguna trabaja ni espera a una persona, y alguna espera a otra sesión o
+   * a otra cosa (waiting_on SESSION u OTHER: un CI, un merge).
+   *
+   * @generated from field: google.protobuf.Duration blocked = 3;
+   */
+  blocked?: Duration | undefined;
+
+  /**
+   * MR abierto en revisión (issue 016). 0 hasta que exista esa fuente.
+   *
+   * @generated from field: google.protobuf.Duration in_review = 4;
+   */
+  inReview?: Duration | undefined;
+
+  /**
+   * Solo sesiones en IDLE o UNKNOWN sin esperar nada: no entra en la
+   * eficiencia.
+   *
+   * @generated from field: google.protobuf.Duration idle = 5;
+   */
+  idle?: Duration | undefined;
+
+  /**
+   * working / (working + waiting_human + blocked + in_review) × 10 000, en
+   * puntos base (redondeado hacia abajo). Ausente si el denominador es 0.
+   * Con 3 h en WORKING y 5 h esperando a su persona: 3750.
+   *
+   * @generated from field: optional int32 efficiency_bp = 6;
+   */
+  efficiencyBp?: number | undefined;
+
+  /**
+   * Issues con algún tiempo medido.
+   *
+   * @generated from field: int32 issues = 7;
+   */
+  issues: number;
+
+  /**
+   * Cómo se reparte waiting_human por motivo, de mayor a menor. Las partes
+   * suman waiting_human (incluye UNSPECIFIED: sin motivo).
+   *
+   * @generated from field: repeated issues.v1.ReasonTime waiting_human_by_reason = 8;
+   */
+  waitingHumanByReason: ReasonTime[];
+};
+
+/**
+ * Describes the message issues.v1.FlowEfficiency.
+ * Use `create(FlowEfficiencySchema)` to create a new message.
+ */
+export declare const FlowEfficiencySchema: GenMessage<FlowEfficiency>;
+
+/**
+ * Tiempo de espera a una persona con un motivo.
+ *
+ * @generated from message issues.v1.ReasonTime
+ */
+export declare type ReasonTime = Message<"issues.v1.ReasonTime"> & {
+  /**
+   * @generated from field: issues.v1.WaitingReason reason = 1;
+   */
+  reason: WaitingReason;
+
+  /**
+   * @generated from field: google.protobuf.Duration duration = 2;
+   */
+  duration?: Duration | undefined;
+};
+
+/**
+ * Describes the message issues.v1.ReasonTime.
+ * Use `create(ReasonTimeSchema)` to create a new message.
+ */
+export declare const ReasonTimeSchema: GenMessage<ReasonTime>;
+
+/**
+ * Esperas a una persona: la cola humana (issue 036). Una espera es un tramo
+ * en que el issue está en waiting_human (después de aplicar la prioridad de
+ * FlowEfficiency). Termina cuando el issue pasa a otro estado (eso es la
+ * respuesta). Un hueco sin reportes (máquina apagada) seguido de otra vez
+ * waiting_human no la corta: es la misma espera, y su duración va de punta a
+ * punta (aunque el hueco no sume a waiting_human). Si después del hueco no
+ * vuelve, no cuenta como respuesta.
+ *
+ * @generated from message issues.v1.HumanQueue
+ */
+export declare type HumanQueue = Message<"issues.v1.HumanQueue"> & {
+  /**
+   * Issues esperando a una persona al final de la semana (o en to).
+   *
+   * @generated from field: int32 pending = 1;
+   */
+  pending: number;
+
+  /**
+   * De las esperas que terminaron en la semana (o en el período): cuánto
+   * duraron, de entrar a salir.
+   *
+   * @generated from field: issues.v1.DurationStats response_time = 2;
+   */
+  responseTime?: DurationStats | undefined;
+
+  /**
+   * La espera abierta más vieja al final de la semana (o en to). Ausente si
+   * pending es 0.
+   *
+   * @generated from field: google.protobuf.Duration oldest_pending = 3;
+   */
+  oldestPending?: Duration | undefined;
+};
+
+/**
+ * Describes the message issues.v1.HumanQueue.
+ * Use `create(HumanQueueSchema)` to create a new message.
+ */
+export declare const HumanQueueSchema: GenMessage<HumanQueue>;
+
+/**
+ * Señal de contratación (issue 036, parte 3): interpreta las métricas del
+ * último mes. Es una señal, no una decisión: trae los números que la
+ * sostienen.
+ *
+ * Cómo se calcula (lo implementa tekitla-issues), sobre las semanas
+ * completas (lunes a lunes en time_zone) anteriores a to:
+ *   - current: las últimas 4; previous: las 4 anteriores.
+ *   - Menos de 4 semanas completas con historia de sesiones:
+ *     INSUFFICIENT_DATA. De 4 a 7: preliminary, sin previous y sin las
+ *     condiciones de crecimiento.
+ *   - NEEDS_PEOPLE (CU-036-7), todas:
+ *       1. waiting_human ≥ 30 % de working + waiting_human + blocked +
+ *          in_review en current;
+ *       2. (no preliminar) waiting_human o la mediana de human_response
+ *          creció 25 % o más contra previous;
+ *       3. los agentes no son el cuello: working ≤ waiting_human.
+ *   - REDUCE_WIP (CU-036-8): waiting_human < 15 % y wip_high.
+ *   - wip_high: wip_median > 0 y, además, wip_median ≥ 2 × los cerrados por
+ *     semana de current (al menos dos semanas de trabajo empezado), o (no
+ *     preliminar) wip_median creció 25 % o más contra previous.
+ *   - Con waiting_human entre 15 % y 30 %, o sin las otras condiciones:
+ *     NO_SIGNAL. NEEDS_PEOPLE puede venir con wip_high (falta gente y además
+ *     sobra trabajo empezado).
+ *   - Los umbrales son constantes del servicio: cambiarlos no cambia el
+ *     contrato.
+ *
+ * @generated from message issues.v1.HiringSignal
+ */
+export declare type HiringSignal = Message<"issues.v1.HiringSignal"> & {
+  /**
+   * @generated from field: issues.v1.HiringVerdict verdict = 1;
+   */
+  verdict: HiringVerdict;
+
+  /**
+   * Semanas completas con historia de sesiones antes de to (hasta 8): las
+   * que empiezan en sessions_recorded_since o después. La parcial no cuenta.
+   *
+   * @generated from field: int32 live_weeks = 2;
+   */
+  liveWeeks: number;
+
+  /**
+   * Semanas que hacen falta para la señal completa (8).
+   *
+   * @generated from field: int32 weeks_needed = 3;
+   */
+  weeksNeeded: number;
+
+  /**
+   * Semanas que hacen falta para la lectura preliminar (4).
+   *
+   * @generated from field: int32 weeks_needed_preliminary = 4;
+   */
+  weeksNeededPreliminary: number;
+
+  /**
+   * De 4 a 7 semanas: lectura preliminar, sin comparar con el mes anterior.
+   *
+   * @generated from field: bool preliminary = 5;
+   */
+  preliminary: boolean;
+
+  /**
+   * El WIP es alto (ver arriba). Falso con INSUFFICIENT_DATA.
+   *
+   * @generated from field: bool wip_high = 6;
+   */
+  wipHigh: boolean;
+
+  /**
+   * Dónde se junta la espera a personas en current: los motivos de
+   * waiting_human_by_reason sin UNSPECIFIED, cada uno con su parte de todo
+   * waiting_human (incluida la sin motivo, así que no siempre suman 10 000).
+   * De mayor a menor. Vacío si ninguna espera trae motivo.
+   *
+   * @generated from field: repeated issues.v1.ProfileShare profiles = 7;
+   */
+  profiles: ProfileShare[];
+
+  /**
+   * Las últimas 4 semanas. Ausente con INSUFFICIENT_DATA.
+   *
+   * @generated from field: issues.v1.SignalWindow current = 8;
+   */
+  current?: SignalWindow | undefined;
+
+  /**
+   * Las 4 anteriores. Ausente si es preliminar o con INSUFFICIENT_DATA.
+   *
+   * @generated from field: issues.v1.SignalWindow previous = 9;
+   */
+  previous?: SignalWindow | undefined;
+};
+
+/**
+ * Describes the message issues.v1.HiringSignal.
+ * Use `create(HiringSignalSchema)` to create a new message.
+ */
+export declare const HiringSignalSchema: GenMessage<HiringSignal>;
+
+/**
+ * Los números de 4 semanas que sostienen la señal.
+ *
+ * @generated from message issues.v1.SignalWindow
+ */
+export declare type SignalWindow = Message<"issues.v1.SignalWindow"> & {
+  /**
+   * @generated from field: google.protobuf.Timestamp start = 1;
+   */
+  start?: Timestamp | undefined;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp end = 2;
+   */
+  end?: Timestamp | undefined;
+
+  /**
+   * @generated from field: issues.v1.FlowEfficiency efficiency = 3;
+   */
+  efficiency?: FlowEfficiency | undefined;
+
+  /**
+   * De las esperas a una persona que terminaron en la ventana.
+   *
+   * @generated from field: issues.v1.DurationStats human_response = 4;
+   */
+  humanResponse?: DurationStats | undefined;
+
+  /**
+   * Mediana del WIP de fin de semana.
+   *
+   * @generated from field: int32 wip_median = 5;
+   */
+  wipMedian: number;
+
+  /**
+   * Terminados en la ventana (valor y otros).
+   *
+   * @generated from field: int32 closed = 6;
+   */
+  closed: number;
+};
+
+/**
+ * Describes the message issues.v1.SignalWindow.
+ * Use `create(SignalWindowSchema)` to create a new message.
+ */
+export declare const SignalWindowSchema: GenMessage<SignalWindow>;
+
+/**
+ * Parte de la espera a personas con un motivo (el perfil que haría falta:
+ * revisión → alguien senior que revise, pruebas → QA, decisión → producto,
+ * deploy → DevOps).
+ *
+ * @generated from message issues.v1.ProfileShare
+ */
+export declare type ProfileShare = Message<"issues.v1.ProfileShare"> & {
+  /**
+   * @generated from field: issues.v1.WaitingReason reason = 1;
+   */
+  reason: WaitingReason;
+
+  /**
+   * Parte de todo waiting_human, en puntos base (redondeo hacia abajo).
+   *
+   * @generated from field: int32 share_bp = 2;
+   */
+  shareBp: number;
+};
+
+/**
+ * Describes the message issues.v1.ProfileShare.
+ * Use `create(ProfileShareSchema)` to create a new message.
+ */
+export declare const ProfileShareSchema: GenMessage<ProfileShare>;
+
+/**
+ * @generated from message issues.v1.GetIssueFlowEfficiencyRequest
+ */
+export declare type GetIssueFlowEfficiencyRequest = Message<"issues.v1.GetIssueFlowEfficiencyRequest"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: int32 number = 2;
+   */
+  number: number;
+
+  /**
+   * Período opcional. Sin from: desde el alta (con un to anterior al alta,
+   * la respuesta va vacía). Sin to, o con un to futuro: ahora. from no
+   * anterior a to, o un Timestamp fuera de rango: INVALID_ARGUMENT
+   * (INVALID_PERIOD).
+   *
+   * @generated from field: google.protobuf.Timestamp from = 3;
+   */
+  from?: Timestamp | undefined;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp to = 4;
+   */
+  to?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message issues.v1.GetIssueFlowEfficiencyRequest.
+ * Use `create(GetIssueFlowEfficiencyRequestSchema)` to create a new message.
+ */
+export declare const GetIssueFlowEfficiencyRequestSchema: GenMessage<GetIssueFlowEfficiencyRequest>;
+
+/**
+ * @generated from message issues.v1.GetIssueFlowEfficiencyResponse
+ */
+export declare type GetIssueFlowEfficiencyResponse = Message<"issues.v1.GetIssueFlowEfficiencyResponse"> & {
+  /**
+   * Ausente si el issue no tiene historia de sesiones en el período.
+   *
+   * @generated from field: issues.v1.FlowEfficiency efficiency = 1;
+   */
+  efficiency?: FlowEfficiency | undefined;
+
+  /**
+   * Desde cuándo hay historia de sesiones del issue. Ausente: ninguna.
+   *
+   * @generated from field: google.protobuf.Timestamp recorded_since = 2;
+   */
+  recordedSince?: Timestamp | undefined;
+
+  /**
+   * Esperas a una persona del issue en el período (pending es 0 o 1).
+   * Ausente igual que efficiency.
+   *
+   * @generated from field: issues.v1.HumanQueue human_queue = 3;
+   */
+  humanQueue?: HumanQueue | undefined;
+};
+
+/**
+ * Describes the message issues.v1.GetIssueFlowEfficiencyResponse.
+ * Use `create(GetIssueFlowEfficiencyResponseSchema)` to create a new message.
+ */
+export declare const GetIssueFlowEfficiencyResponseSchema: GenMessage<GetIssueFlowEfficiencyResponse>;
+
+/**
  * Qué tan confiable es un número.
  *
  * @generated from enum issues.v1.MetricConfidence
@@ -512,4 +967,49 @@ export enum MetricConfidence {
  * Describes the enum issues.v1.MetricConfidence.
  */
 export declare const MetricConfidenceSchema: GenEnum<MetricConfidence>;
+
+/**
+ * Qué dice la señal de contratación.
+ *
+ * @generated from enum issues.v1.HiringVerdict
+ */
+export enum HiringVerdict {
+  /**
+   * @generated from enum value: HIRING_VERDICT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Menos de 4 semanas completas con historia de sesiones.
+   *
+   * @generated from enum value: HIRING_VERDICT_INSUFFICIENT_DATA = 1;
+   */
+  INSUFFICIENT_DATA = 1,
+
+  /**
+   * El flujo no pide nada.
+   *
+   * @generated from enum value: HIRING_VERDICT_NO_SIGNAL = 2;
+   */
+  NO_SIGNAL = 2,
+
+  /**
+   * El trabajo espera a personas: falta gente (el perfil, en profiles).
+   *
+   * @generated from enum value: HIRING_VERDICT_NEEDS_PEOPLE = 3;
+   */
+  NEEDS_PEOPLE = 3,
+
+  /**
+   * No falta gente, sobra trabajo empezado: bajar el WIP.
+   *
+   * @generated from enum value: HIRING_VERDICT_REDUCE_WIP = 4;
+   */
+  REDUCE_WIP = 4,
+}
+
+/**
+ * Describes the enum issues.v1.HiringVerdict.
+ */
+export declare const HiringVerdictSchema: GenEnum<HiringVerdict>;
 
