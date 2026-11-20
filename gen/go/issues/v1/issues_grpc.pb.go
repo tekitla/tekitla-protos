@@ -38,29 +38,30 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IssueService_ListProjects_FullMethodName        = "/issues.v1.IssueService/ListProjects"
-	IssueService_CreateProject_FullMethodName       = "/issues.v1.IssueService/CreateProject"
-	IssueService_ListIssues_FullMethodName          = "/issues.v1.IssueService/ListIssues"
-	IssueService_GetIssue_FullMethodName            = "/issues.v1.IssueService/GetIssue"
-	IssueService_CreateIssue_FullMethodName         = "/issues.v1.IssueService/CreateIssue"
-	IssueService_MoveIssue_FullMethodName           = "/issues.v1.IssueService/MoveIssue"
-	IssueService_UpdateIssue_FullMethodName         = "/issues.v1.IssueService/UpdateIssue"
-	IssueService_DiscardIssue_FullMethodName        = "/issues.v1.IssueService/DiscardIssue"
-	IssueService_RestoreIssue_FullMethodName        = "/issues.v1.IssueService/RestoreIssue"
-	IssueService_ListStatuses_FullMethodName        = "/issues.v1.IssueService/ListStatuses"
-	IssueService_CreateStatus_FullMethodName        = "/issues.v1.IssueService/CreateStatus"
-	IssueService_UpdateStatus_FullMethodName        = "/issues.v1.IssueService/UpdateStatus"
-	IssueService_DeleteStatus_FullMethodName        = "/issues.v1.IssueService/DeleteStatus"
-	IssueService_BatchUpdateStatuses_FullMethodName = "/issues.v1.IssueService/BatchUpdateStatuses"
-	IssueService_ListLabels_FullMethodName          = "/issues.v1.IssueService/ListLabels"
-	IssueService_CreateLabel_FullMethodName         = "/issues.v1.IssueService/CreateLabel"
-	IssueService_UpdateLabel_FullMethodName         = "/issues.v1.IssueService/UpdateLabel"
-	IssueService_DeleteLabel_FullMethodName         = "/issues.v1.IssueService/DeleteLabel"
-	IssueService_CreateComment_FullMethodName       = "/issues.v1.IssueService/CreateComment"
-	IssueService_ListIssueEvents_FullMethodName     = "/issues.v1.IssueService/ListIssueEvents"
-	IssueService_ImportIssue_FullMethodName         = "/issues.v1.IssueService/ImportIssue"
-	IssueService_ImportIssueEvents_FullMethodName   = "/issues.v1.IssueService/ImportIssueEvents"
-	IssueService_GetFlowMetrics_FullMethodName      = "/issues.v1.IssueService/GetFlowMetrics"
+	IssueService_ListProjects_FullMethodName           = "/issues.v1.IssueService/ListProjects"
+	IssueService_CreateProject_FullMethodName          = "/issues.v1.IssueService/CreateProject"
+	IssueService_ListIssues_FullMethodName             = "/issues.v1.IssueService/ListIssues"
+	IssueService_GetIssue_FullMethodName               = "/issues.v1.IssueService/GetIssue"
+	IssueService_CreateIssue_FullMethodName            = "/issues.v1.IssueService/CreateIssue"
+	IssueService_MoveIssue_FullMethodName              = "/issues.v1.IssueService/MoveIssue"
+	IssueService_UpdateIssue_FullMethodName            = "/issues.v1.IssueService/UpdateIssue"
+	IssueService_DiscardIssue_FullMethodName           = "/issues.v1.IssueService/DiscardIssue"
+	IssueService_RestoreIssue_FullMethodName           = "/issues.v1.IssueService/RestoreIssue"
+	IssueService_ListStatuses_FullMethodName           = "/issues.v1.IssueService/ListStatuses"
+	IssueService_CreateStatus_FullMethodName           = "/issues.v1.IssueService/CreateStatus"
+	IssueService_UpdateStatus_FullMethodName           = "/issues.v1.IssueService/UpdateStatus"
+	IssueService_DeleteStatus_FullMethodName           = "/issues.v1.IssueService/DeleteStatus"
+	IssueService_BatchUpdateStatuses_FullMethodName    = "/issues.v1.IssueService/BatchUpdateStatuses"
+	IssueService_ListLabels_FullMethodName             = "/issues.v1.IssueService/ListLabels"
+	IssueService_CreateLabel_FullMethodName            = "/issues.v1.IssueService/CreateLabel"
+	IssueService_UpdateLabel_FullMethodName            = "/issues.v1.IssueService/UpdateLabel"
+	IssueService_DeleteLabel_FullMethodName            = "/issues.v1.IssueService/DeleteLabel"
+	IssueService_CreateComment_FullMethodName          = "/issues.v1.IssueService/CreateComment"
+	IssueService_ListIssueEvents_FullMethodName        = "/issues.v1.IssueService/ListIssueEvents"
+	IssueService_ImportIssue_FullMethodName            = "/issues.v1.IssueService/ImportIssue"
+	IssueService_ImportIssueEvents_FullMethodName      = "/issues.v1.IssueService/ImportIssueEvents"
+	IssueService_GetFlowMetrics_FullMethodName         = "/issues.v1.IssueService/GetFlowMetrics"
+	IssueService_GetIssueFlowEfficiency_FullMethodName = "/issues.v1.IssueService/GetIssueFlowEfficiency"
 )
 
 // IssueServiceClient is the client API for IssueService service.
@@ -190,6 +191,11 @@ type IssueServiceClient interface {
 	// cada número dice de dónde sale y qué tan confiable es. Son métricas del
 	// sistema: no hay vista ni ranking por persona.
 	GetFlowMetrics(ctx context.Context, in *GetFlowMetricsRequest, opts ...grpc.CallOption) (*GetFlowMetricsResponse, error)
+	// Eficiencia del flujo de un issue (issue 036, CU-036-6): cuánto tiempo
+	// trabajó y cuánto esperó según sus sesiones de agentes (issue 026). Solo
+	// en vivo, desde que existe la historia de sesiones. Mismas reglas que
+	// FlowEfficiency (flow_metrics.proto). Issue inexistente: NOT_FOUND.
+	GetIssueFlowEfficiency(ctx context.Context, in *GetIssueFlowEfficiencyRequest, opts ...grpc.CallOption) (*GetIssueFlowEfficiencyResponse, error)
 }
 
 type issueServiceClient struct {
@@ -430,6 +436,16 @@ func (c *issueServiceClient) GetFlowMetrics(ctx context.Context, in *GetFlowMetr
 	return out, nil
 }
 
+func (c *issueServiceClient) GetIssueFlowEfficiency(ctx context.Context, in *GetIssueFlowEfficiencyRequest, opts ...grpc.CallOption) (*GetIssueFlowEfficiencyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIssueFlowEfficiencyResponse)
+	err := c.cc.Invoke(ctx, IssueService_GetIssueFlowEfficiency_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IssueServiceServer is the server API for IssueService service.
 // All implementations must embed UnimplementedIssueServiceServer
 // for forward compatibility.
@@ -557,6 +573,11 @@ type IssueServiceServer interface {
 	// cada número dice de dónde sale y qué tan confiable es. Son métricas del
 	// sistema: no hay vista ni ranking por persona.
 	GetFlowMetrics(context.Context, *GetFlowMetricsRequest) (*GetFlowMetricsResponse, error)
+	// Eficiencia del flujo de un issue (issue 036, CU-036-6): cuánto tiempo
+	// trabajó y cuánto esperó según sus sesiones de agentes (issue 026). Solo
+	// en vivo, desde que existe la historia de sesiones. Mismas reglas que
+	// FlowEfficiency (flow_metrics.proto). Issue inexistente: NOT_FOUND.
+	GetIssueFlowEfficiency(context.Context, *GetIssueFlowEfficiencyRequest) (*GetIssueFlowEfficiencyResponse, error)
 	mustEmbedUnimplementedIssueServiceServer()
 }
 
@@ -635,6 +656,9 @@ func (UnimplementedIssueServiceServer) ImportIssueEvents(context.Context, *Impor
 }
 func (UnimplementedIssueServiceServer) GetFlowMetrics(context.Context, *GetFlowMetricsRequest) (*GetFlowMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetFlowMetrics not implemented")
+}
+func (UnimplementedIssueServiceServer) GetIssueFlowEfficiency(context.Context, *GetIssueFlowEfficiencyRequest) (*GetIssueFlowEfficiencyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIssueFlowEfficiency not implemented")
 }
 func (UnimplementedIssueServiceServer) mustEmbedUnimplementedIssueServiceServer() {}
 func (UnimplementedIssueServiceServer) testEmbeddedByValue()                      {}
@@ -1071,6 +1095,24 @@ func _IssueService_GetFlowMetrics_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IssueService_GetIssueFlowEfficiency_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIssueFlowEfficiencyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IssueServiceServer).GetIssueFlowEfficiency(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IssueService_GetIssueFlowEfficiency_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IssueServiceServer).GetIssueFlowEfficiency(ctx, req.(*GetIssueFlowEfficiencyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IssueService_ServiceDesc is the grpc.ServiceDesc for IssueService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1169,6 +1211,10 @@ var IssueService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFlowMetrics",
 			Handler:    _IssueService_GetFlowMetrics_Handler,
+		},
+		{
+			MethodName: "GetIssueFlowEfficiency",
+			Handler:    _IssueService_GetIssueFlowEfficiency_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

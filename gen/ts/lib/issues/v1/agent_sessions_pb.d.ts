@@ -182,6 +182,13 @@ export declare type AgentSession = Message<"issues.v1.AgentSession"> & {
    * @generated from field: string waiting_text = 21;
    */
   waitingText: string;
+
+  /**
+   * Para qué espera (issue 036). Siempre UNSPECIFIED si waiting_on es NONE.
+   *
+   * @generated from field: issues.v1.WaitingReason waiting_reason = 22;
+   */
+  waitingReason: WaitingReason;
 };
 
 /**
@@ -309,6 +316,13 @@ export declare type SessionBrief = Message<"issues.v1.SessionBrief"> & {
    * @generated from field: google.protobuf.Timestamp status_changed_at = 9;
    */
   statusChangedAt?: Timestamp | undefined;
+
+  /**
+   * Para qué espera (issue 036). UNSPECIFIED si waiting_on es NONE.
+   *
+   * @generated from field: issues.v1.WaitingReason waiting_reason = 10;
+   */
+  waitingReason: WaitingReason;
 };
 
 /**
@@ -424,6 +438,55 @@ export enum WaitingOn {
  * Describes the enum issues.v1.WaitingOn.
  */
 export declare const WaitingOnSchema: GenEnum<WaitingOn>;
+
+/**
+ * Para qué espera una sesión a su persona (issue 036). Sale del token
+ * espera_motivo que escribe espera.ps1 -Motivo en el panel de herdr. Define
+ * el perfil de la señal de contratación (HiringSignal.profiles).
+ *
+ * @generated from enum issues.v1.WaitingReason
+ */
+export enum WaitingReason {
+  /**
+   * Sin motivo (el panel no lo trae, o trae uno desconocido).
+   *
+   * @generated from enum value: WAITING_REASON_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * revision: revisar código.
+   *
+   * @generated from enum value: WAITING_REASON_REVIEW = 1;
+   */
+  REVIEW = 1,
+
+  /**
+   * pruebas.
+   *
+   * @generated from enum value: WAITING_REASON_TESTING = 2;
+   */
+  TESTING = 2,
+
+  /**
+   * decision: una decisión de producto.
+   *
+   * @generated from enum value: WAITING_REASON_DECISION = 3;
+   */
+  DECISION = 3,
+
+  /**
+   * deploy: deploys e infraestructura.
+   *
+   * @generated from enum value: WAITING_REASON_DEPLOY = 4;
+   */
+  DEPLOY = 4,
+}
+
+/**
+ * Describes the enum issues.v1.WaitingReason.
+ */
+export declare const WaitingReasonSchema: GenEnum<WaitingReason>;
 
 /**
  * De dónde sale una sesión.

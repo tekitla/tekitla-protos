@@ -166,6 +166,69 @@ func (WaitingOn) EnumDescriptor() ([]byte, []int) {
 	return file_issues_v1_agent_sessions_proto_rawDescGZIP(), []int{1}
 }
 
+// Para qué espera una sesión a su persona (issue 036). Sale del token
+// espera_motivo que escribe espera.ps1 -Motivo en el panel de herdr. Define
+// el perfil de la señal de contratación (HiringSignal.profiles).
+type WaitingReason int32
+
+const (
+	// Sin motivo (el panel no lo trae, o trae uno desconocido).
+	WaitingReason_WAITING_REASON_UNSPECIFIED WaitingReason = 0
+	// revision: revisar código.
+	WaitingReason_WAITING_REASON_REVIEW WaitingReason = 1
+	// pruebas.
+	WaitingReason_WAITING_REASON_TESTING WaitingReason = 2
+	// decision: una decisión de producto.
+	WaitingReason_WAITING_REASON_DECISION WaitingReason = 3
+	// deploy: deploys e infraestructura.
+	WaitingReason_WAITING_REASON_DEPLOY WaitingReason = 4
+)
+
+// Enum value maps for WaitingReason.
+var (
+	WaitingReason_name = map[int32]string{
+		0: "WAITING_REASON_UNSPECIFIED",
+		1: "WAITING_REASON_REVIEW",
+		2: "WAITING_REASON_TESTING",
+		3: "WAITING_REASON_DECISION",
+		4: "WAITING_REASON_DEPLOY",
+	}
+	WaitingReason_value = map[string]int32{
+		"WAITING_REASON_UNSPECIFIED": 0,
+		"WAITING_REASON_REVIEW":      1,
+		"WAITING_REASON_TESTING":     2,
+		"WAITING_REASON_DECISION":    3,
+		"WAITING_REASON_DEPLOY":      4,
+	}
+)
+
+func (x WaitingReason) Enum() *WaitingReason {
+	p := new(WaitingReason)
+	*p = x
+	return p
+}
+
+func (x WaitingReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (WaitingReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_issues_v1_agent_sessions_proto_enumTypes[2].Descriptor()
+}
+
+func (WaitingReason) Type() protoreflect.EnumType {
+	return &file_issues_v1_agent_sessions_proto_enumTypes[2]
+}
+
+func (x WaitingReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use WaitingReason.Descriptor instead.
+func (WaitingReason) EnumDescriptor() ([]byte, []int) {
+	return file_issues_v1_agent_sessions_proto_rawDescGZIP(), []int{2}
+}
+
 // De dónde sale una sesión.
 type SessionSource int32
 
@@ -198,11 +261,11 @@ func (x SessionSource) String() string {
 }
 
 func (SessionSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_issues_v1_agent_sessions_proto_enumTypes[2].Descriptor()
+	return file_issues_v1_agent_sessions_proto_enumTypes[3].Descriptor()
 }
 
 func (SessionSource) Type() protoreflect.EnumType {
-	return &file_issues_v1_agent_sessions_proto_enumTypes[2]
+	return &file_issues_v1_agent_sessions_proto_enumTypes[3]
 }
 
 func (x SessionSource) Number() protoreflect.EnumNumber {
@@ -211,7 +274,7 @@ func (x SessionSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SessionSource.Descriptor instead.
 func (SessionSource) EnumDescriptor() ([]byte, []int) {
-	return file_issues_v1_agent_sessions_proto_rawDescGZIP(), []int{2}
+	return file_issues_v1_agent_sessions_proto_rawDescGZIP(), []int{3}
 }
 
 // Qué regla ligó la sesión a su proyecto e issue (issue 026, §2). Sirve para
@@ -259,11 +322,11 @@ func (x SessionLink) String() string {
 }
 
 func (SessionLink) Descriptor() protoreflect.EnumDescriptor {
-	return file_issues_v1_agent_sessions_proto_enumTypes[3].Descriptor()
+	return file_issues_v1_agent_sessions_proto_enumTypes[4].Descriptor()
 }
 
 func (SessionLink) Type() protoreflect.EnumType {
-	return &file_issues_v1_agent_sessions_proto_enumTypes[3]
+	return &file_issues_v1_agent_sessions_proto_enumTypes[4]
 }
 
 func (x SessionLink) Number() protoreflect.EnumNumber {
@@ -272,7 +335,7 @@ func (x SessionLink) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SessionLink.Descriptor instead.
 func (SessionLink) EnumDescriptor() ([]byte, []int) {
-	return file_issues_v1_agent_sessions_proto_rawDescGZIP(), []int{3}
+	return file_issues_v1_agent_sessions_proto_rawDescGZIP(), []int{4}
 }
 
 // Una sesión de agente tal como la guarda Tekitla.
@@ -329,7 +392,9 @@ type AgentSession struct {
 	WaitingTarget string `protobuf:"bytes,20,opt,name=waiting_target,json=waitingTarget,proto3" json:"waiting_target,omitempty"`
 	// El texto de la barra lateral de herdr (token espera) tal cual, solo para
 	// mostrar: no se interpreta. Vacío si waiting_on es NONE.
-	WaitingText   string `protobuf:"bytes,21,opt,name=waiting_text,json=waitingText,proto3" json:"waiting_text,omitempty"`
+	WaitingText string `protobuf:"bytes,21,opt,name=waiting_text,json=waitingText,proto3" json:"waiting_text,omitempty"`
+	// Para qué espera (issue 036). Siempre UNSPECIFIED si waiting_on es NONE.
+	WaitingReason WaitingReason `protobuf:"varint,22,opt,name=waiting_reason,json=waitingReason,proto3,enum=issues.v1.WaitingReason" json:"waiting_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -511,6 +576,13 @@ func (x *AgentSession) GetWaitingText() string {
 	return ""
 }
 
+func (x *AgentSession) GetWaitingReason() WaitingReason {
+	if x != nil {
+		return x.WaitingReason
+	}
+	return WaitingReason_WAITING_REASON_UNSPECIFIED
+}
+
 // Resumen de las sesiones activas ligadas a un issue (Issue.sessions).
 //
 // Activa: no ENDED y con un reporte en las últimas 24 horas. Una sesión que
@@ -630,8 +702,10 @@ type SessionBrief struct {
 	WaitingOn       WaitingOn              `protobuf:"varint,7,opt,name=waiting_on,json=waitingOn,proto3,enum=issues.v1.WaitingOn" json:"waiting_on,omitempty"`
 	WaitingTarget   string                 `protobuf:"bytes,8,opt,name=waiting_target,json=waitingTarget,proto3" json:"waiting_target,omitempty"`
 	StatusChangedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=status_changed_at,json=statusChangedAt,proto3" json:"status_changed_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Para qué espera (issue 036). UNSPECIFIED si waiting_on es NONE.
+	WaitingReason WaitingReason `protobuf:"varint,10,opt,name=waiting_reason,json=waitingReason,proto3,enum=issues.v1.WaitingReason" json:"waiting_reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SessionBrief) Reset() {
@@ -727,11 +801,18 @@ func (x *SessionBrief) GetStatusChangedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *SessionBrief) GetWaitingReason() WaitingReason {
+	if x != nil {
+		return x.WaitingReason
+	}
+	return WaitingReason_WAITING_REASON_UNSPECIFIED
+}
+
 var File_issues_v1_agent_sessions_proto protoreflect.FileDescriptor
 
 const file_issues_v1_agent_sessions_proto_rawDesc = "" +
 	"\n" +
-	"\x1eissues/v1/agent_sessions.proto\x12\tissues.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16issues/v1/actors.proto\"\x85\a\n" +
+	"\x1eissues/v1/agent_sessions.proto\x12\tissues.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16issues/v1/actors.proto\"\xc6\a\n" +
 	"\fAgentSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x120\n" +
 	"\x06source\x18\x02 \x01(\x0e2\x18.issues.v1.SessionSourceR\x06source\x12\x1f\n" +
@@ -759,7 +840,8 @@ const file_issues_v1_agent_sessions_proto_rawDesc = "" +
 	"\n" +
 	"waiting_on\x18\x13 \x01(\x0e2\x14.issues.v1.WaitingOnR\twaitingOn\x12%\n" +
 	"\x0ewaiting_target\x18\x14 \x01(\tR\rwaitingTarget\x12!\n" +
-	"\fwaiting_text\x18\x15 \x01(\tR\vwaitingText\"\xdb\x01\n" +
+	"\fwaiting_text\x18\x15 \x01(\tR\vwaitingText\x12?\n" +
+	"\x0ewaiting_reason\x18\x16 \x01(\x0e2\x18.issues.v1.WaitingReasonR\rwaitingReason\"\xdb\x01\n" +
 	"\rIssueSessions\x12\x16\n" +
 	"\x06active\x18\x01 \x01(\x05R\x06active\x12\x18\n" +
 	"\aworking\x18\x02 \x01(\x05R\aworking\x12\x18\n" +
@@ -767,7 +849,7 @@ const file_issues_v1_agent_sessions_proto_rawDesc = "" +
 	"\astalled\x18\x04 \x01(\x05R\astalled\x12\x12\n" +
 	"\x04idle\x18\x05 \x01(\x05R\x04idle\x12!\n" +
 	"\fneeds_person\x18\x06 \x01(\bR\vneedsPerson\x12-\n" +
-	"\x05items\x18\a \x03(\v2\x17.issues.v1.SessionBriefR\x05items\"\x94\x03\n" +
+	"\x05items\x18\a \x03(\v2\x17.issues.v1.SessionBriefR\x05items\"\xd5\x03\n" +
 	"\fSessionBrief\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12$\n" +
@@ -779,7 +861,9 @@ const file_issues_v1_agent_sessions_proto_rawDesc = "" +
 	"\n" +
 	"waiting_on\x18\a \x01(\x0e2\x14.issues.v1.WaitingOnR\twaitingOn\x12%\n" +
 	"\x0ewaiting_target\x18\b \x01(\tR\rwaitingTarget\x12F\n" +
-	"\x11status_changed_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x0fstatusChangedAt*\xd5\x01\n" +
+	"\x11status_changed_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x0fstatusChangedAt\x12?\n" +
+	"\x0ewaiting_reason\x18\n" +
+	" \x01(\x0e2\x18.issues.v1.WaitingReasonR\rwaitingReason*\xd5\x01\n" +
 	"\rSessionStatus\x12\x1e\n" +
 	"\x1aSESSION_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16SESSION_STATUS_WORKING\x10\x01\x12\x1d\n" +
@@ -793,7 +877,13 @@ const file_issues_v1_agent_sessions_proto_rawDesc = "" +
 	"\x0fWAITING_ON_NONE\x10\x01\x12\x15\n" +
 	"\x11WAITING_ON_PERSON\x10\x02\x12\x16\n" +
 	"\x12WAITING_ON_SESSION\x10\x03\x12\x14\n" +
-	"\x10WAITING_ON_OTHER\x10\x04*I\n" +
+	"\x10WAITING_ON_OTHER\x10\x04*\x9e\x01\n" +
+	"\rWaitingReason\x12\x1e\n" +
+	"\x1aWAITING_REASON_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15WAITING_REASON_REVIEW\x10\x01\x12\x1a\n" +
+	"\x16WAITING_REASON_TESTING\x10\x02\x12\x1b\n" +
+	"\x17WAITING_REASON_DECISION\x10\x03\x12\x19\n" +
+	"\x15WAITING_REASON_DEPLOY\x10\x04*I\n" +
 	"\rSessionSource\x12\x1e\n" +
 	"\x1aSESSION_SOURCE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14SESSION_SOURCE_HERDR\x10\x01*\x91\x01\n" +
@@ -818,38 +908,41 @@ func file_issues_v1_agent_sessions_proto_rawDescGZIP() []byte {
 	return file_issues_v1_agent_sessions_proto_rawDescData
 }
 
-var file_issues_v1_agent_sessions_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_issues_v1_agent_sessions_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_issues_v1_agent_sessions_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_issues_v1_agent_sessions_proto_goTypes = []any{
 	(SessionStatus)(0),            // 0: issues.v1.SessionStatus
 	(WaitingOn)(0),                // 1: issues.v1.WaitingOn
-	(SessionSource)(0),            // 2: issues.v1.SessionSource
-	(SessionLink)(0),              // 3: issues.v1.SessionLink
-	(*AgentSession)(nil),          // 4: issues.v1.AgentSession
-	(*IssueSessions)(nil),         // 5: issues.v1.IssueSessions
-	(*SessionBrief)(nil),          // 6: issues.v1.SessionBrief
-	(AgentTool)(0),                // 7: issues.v1.AgentTool
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(WaitingReason)(0),            // 2: issues.v1.WaitingReason
+	(SessionSource)(0),            // 3: issues.v1.SessionSource
+	(SessionLink)(0),              // 4: issues.v1.SessionLink
+	(*AgentSession)(nil),          // 5: issues.v1.AgentSession
+	(*IssueSessions)(nil),         // 6: issues.v1.IssueSessions
+	(*SessionBrief)(nil),          // 7: issues.v1.SessionBrief
+	(AgentTool)(0),                // 8: issues.v1.AgentTool
+	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
 }
 var file_issues_v1_agent_sessions_proto_depIdxs = []int32{
-	2,  // 0: issues.v1.AgentSession.source:type_name -> issues.v1.SessionSource
-	7,  // 1: issues.v1.AgentSession.tool:type_name -> issues.v1.AgentTool
-	3,  // 2: issues.v1.AgentSession.link:type_name -> issues.v1.SessionLink
+	3,  // 0: issues.v1.AgentSession.source:type_name -> issues.v1.SessionSource
+	8,  // 1: issues.v1.AgentSession.tool:type_name -> issues.v1.AgentTool
+	4,  // 2: issues.v1.AgentSession.link:type_name -> issues.v1.SessionLink
 	0,  // 3: issues.v1.AgentSession.status:type_name -> issues.v1.SessionStatus
-	8,  // 4: issues.v1.AgentSession.status_changed_at:type_name -> google.protobuf.Timestamp
-	8,  // 5: issues.v1.AgentSession.last_seen_at:type_name -> google.protobuf.Timestamp
-	8,  // 6: issues.v1.AgentSession.started_at:type_name -> google.protobuf.Timestamp
-	8,  // 7: issues.v1.AgentSession.ended_at:type_name -> google.protobuf.Timestamp
+	9,  // 4: issues.v1.AgentSession.status_changed_at:type_name -> google.protobuf.Timestamp
+	9,  // 5: issues.v1.AgentSession.last_seen_at:type_name -> google.protobuf.Timestamp
+	9,  // 6: issues.v1.AgentSession.started_at:type_name -> google.protobuf.Timestamp
+	9,  // 7: issues.v1.AgentSession.ended_at:type_name -> google.protobuf.Timestamp
 	1,  // 8: issues.v1.AgentSession.waiting_on:type_name -> issues.v1.WaitingOn
-	6,  // 9: issues.v1.IssueSessions.items:type_name -> issues.v1.SessionBrief
-	0,  // 10: issues.v1.SessionBrief.status:type_name -> issues.v1.SessionStatus
-	1,  // 11: issues.v1.SessionBrief.waiting_on:type_name -> issues.v1.WaitingOn
-	8,  // 12: issues.v1.SessionBrief.status_changed_at:type_name -> google.protobuf.Timestamp
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	2,  // 9: issues.v1.AgentSession.waiting_reason:type_name -> issues.v1.WaitingReason
+	7,  // 10: issues.v1.IssueSessions.items:type_name -> issues.v1.SessionBrief
+	0,  // 11: issues.v1.SessionBrief.status:type_name -> issues.v1.SessionStatus
+	1,  // 12: issues.v1.SessionBrief.waiting_on:type_name -> issues.v1.WaitingOn
+	9,  // 13: issues.v1.SessionBrief.status_changed_at:type_name -> google.protobuf.Timestamp
+	2,  // 14: issues.v1.SessionBrief.waiting_reason:type_name -> issues.v1.WaitingReason
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_issues_v1_agent_sessions_proto_init() }
@@ -863,7 +956,7 @@ func file_issues_v1_agent_sessions_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_issues_v1_agent_sessions_proto_rawDesc), len(file_issues_v1_agent_sessions_proto_rawDesc)),
-			NumEnums:      4,
+			NumEnums:      5,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,

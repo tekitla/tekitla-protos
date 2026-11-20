@@ -107,6 +107,10 @@ message ReportedSession {
   string waiting_target = 11;
   // Hasta 200 caracteres. Se ignora con waiting_on NONE.
   string waiting_text = 12;
+  // Token espera_motivo ya traducido (issue 036). Se ignora y se guarda
+  // UNSPECIFIED con waiting_on NONE, igual que waiting_text (también con
+  // status WORKING, que guarda waiting_on NONE).
+  WaitingReason waiting_reason = 13;
 }
 
 message ReportSessionsResponse {

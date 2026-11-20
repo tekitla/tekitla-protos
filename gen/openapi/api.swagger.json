@@ -995,6 +995,53 @@
         ]
       }
     },
+    "/v1/projects/{projectId}/issues/{number}/flowEfficiency": {
+      "get": {
+        "summary": "Eficiencia del flujo de un issue (issue 036, CU-036-6): cuánto tiempo\ntrabajó y cuánto esperó según sus sesiones de agentes (issue 026). Solo\nen vivo, desde que existe la historia de sesiones. Mismas reglas que\nFlowEfficiency (flow_metrics.proto). Issue inexistente: NOT_FOUND.",
+        "operationId": "IssueService_GetIssueFlowEfficiency",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetIssueFlowEfficiencyResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "from",
+            "description": "Período opcional. Sin from: desde el alta. Sin to, o con un to futuro:\nahora. to antes de from: INVALID_ARGUMENT (INVALID_PERIOD).",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "IssueService"
+        ]
+      }
+    },
     "/v1/projects/{projectId}/issues/{number}/links": {
       "post": {
         "summary": "Liga a mano una rama de un repo del proyecto a un issue. Si el link\nexistía suprimido, lo vuelve a mostrar. FAILED_PRECONDITION (motivo\nISSUE_LINK_LIMIT) si el issue ya tiene 20 links.",
@@ -2332,6 +2379,10 @@
         "waitingText": {
           "type": "string",
           "description": "El texto de la barra lateral de herdr (token espera) tal cual, solo para\nmostrar: no se interpreta. Vacío si waiting_on es NONE."
+        },
+        "waitingReason": {
+          "$ref": "#/definitions/v1WaitingReason",
+          "description": "Para qué espera (issue 036). Siempre UNSPECIFIED si waiting_on es NONE."
         }
       },
       "description": "Una sesión de agente tal como la guarda Tekitla.\n\nDatos personales: no hay rutas absolutas ni el usuario del sistema.\ncwd_rel es relativo a la raíz que configura la persona en el recolector, y\nlos nombres de herdr son los que ella les puso."
@@ -2724,6 +2775,50 @@
         }
       }
     },
+    "v1FlowEfficiency": {
+      "type": "object",
+      "properties": {
+        "working": {
+          "type": "string",
+          "description": "Alguna sesión del issue en WORKING."
+        },
+        "waitingHuman": {
+          "type": "string",
+          "description": "Ninguna trabaja y alguna espera a su persona (waiting_on PERSON, en\nWAITING_OK o en IDLE)."
+        },
+        "blocked": {
+          "type": "string",
+          "description": "Ninguna trabaja ni espera a una persona, y alguna espera a otra sesión o\na otra cosa (waiting_on SESSION u OTHER: un CI, un merge)."
+        },
+        "inReview": {
+          "type": "string",
+          "description": "MR abierto en revisión (issue 016). 0 hasta que exista esa fuente."
+        },
+        "idle": {
+          "type": "string",
+          "description": "Solo sesiones en IDLE o UNKNOWN sin esperar nada: no entra en la\neficiencia."
+        },
+        "efficiencyBp": {
+          "type": "integer",
+          "format": "int32",
+          "description": "working / (working + waiting_human + blocked + in_review) × 10 000, en\npuntos base (redondeado hacia abajo). Ausente si el denominador es 0.\nCon 3 h en WORKING y 5 h esperando a su persona: 3750."
+        },
+        "issues": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Issues con algún tiempo medido."
+        },
+        "waitingHumanByReason": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ReasonTime"
+          },
+          "description": "Cómo se reparte waiting_human por motivo, de mayor a menor. Las partes\nsuman waiting_human (incluye UNSPECIFIED: sin motivo)."
+        }
+      },
+      "description": "Dónde se va el tiempo de un issue (o de los issues de un período) según\nel estado de sus sesiones de agentes (issue 026). Issue 036, CU-036-6.\nSiempre registrado en vivo: el histórico importado no tiene sesiones.\n\nCómo se calcula (lo implementa tekitla-issues):\n  - Tiempo de reloj del issue, no suma de horas de agente: en cada\n    instante el issue está en un solo estado, el de mayor prioridad entre\n    sus sesiones: working \u003e waiting_human \u003e blocked \u003e in_review \u003e idle.\n    Dos sesiones trabajando a la vez una hora dan una hora.\n  - Cuentan las sesiones de todas las personas con acceso al proyecto, sin\n    detalle por persona (CU-036-9). Solo las ligadas a issues que existen.\n  - Noches y fines de semana cuentan como cualquier otra hora.\n  - Una sesión deja de contar desde su último reporte si pasa más de 10\n    minutos sin reportar (máquina apagada o recolector parado), hasta que\n    vuelve a reportar. Ese tiempo no es trabajo ni espera.\n  - Nada cuenta después de ahora."
+    },
     "v1FlowSummary": {
       "type": "object",
       "properties": {
@@ -2756,6 +2851,14 @@
         },
         "source": {
           "$ref": "#/definitions/v1MetricSource"
+        },
+        "efficiency": {
+          "$ref": "#/definitions/v1FlowEfficiency",
+          "description": "Suma de las semanas. Ausente si ninguna semana tiene."
+        },
+        "humanQueue": {
+          "$ref": "#/definitions/v1HumanQueue",
+          "description": "pending y oldest_pending en to; response_time de todo el período.\nAusente igual que efficiency."
         }
       },
       "description": "Métricas de todo el período: las semanas juntas. Los conteos son la suma\nde los de las semanas (un issue reabierto que vuelve a terminar en otra\nsemana cuenta dos veces) y las duraciones son las de todos los\nterminados del período. wip es el de to. source también es la suma de\nlas semanas: una transición que sostiene números de dos semanas (la\nentrada a IN_PROGRESS de un issue que empieza en una y termina en otra)\ncuenta en las dos."
@@ -2804,6 +2907,14 @@
         },
         "source": {
           "$ref": "#/definitions/v1MetricSource"
+        },
+        "efficiency": {
+          "$ref": "#/definitions/v1FlowEfficiency",
+          "description": "Dónde se fue el tiempo esta semana, según las sesiones de agentes.\nAusente si la semana termina antes de sessions_recorded_since."
+        },
+        "humanQueue": {
+          "$ref": "#/definitions/v1HumanQueue",
+          "description": "Esperas a una persona. Ausente igual que efficiency."
         }
       },
       "description": "Métricas de una semana."
@@ -2858,6 +2969,33 @@
         "coverage": {
           "$ref": "#/definitions/v1FlowCoverage",
           "description": "Issues que entran al cálculo y los que no tienen fechas para él."
+        },
+        "sessionsRecordedSince": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Desde cuándo hay historia de sesiones de agentes en el proyecto (la\nprimera transición guardada, issue 036 parte 3). Ausente: ninguna. Las\nsemanas que terminan antes no traen efficiency ni human_queue."
+        },
+        "hiringSignal": {
+          "$ref": "#/definitions/v1HiringSignal",
+          "description": "Señal de contratación de las 8 semanas completas anteriores a to (no\ndepende de from)."
+        }
+      }
+    },
+    "v1GetIssueFlowEfficiencyResponse": {
+      "type": "object",
+      "properties": {
+        "efficiency": {
+          "$ref": "#/definitions/v1FlowEfficiency",
+          "description": "Ausente si el issue no tiene historia de sesiones en el período."
+        },
+        "recordedSince": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Desde cuándo hay historia de sesiones del issue. Ausente: ninguna."
+        },
+        "humanQueue": {
+          "$ref": "#/definitions/v1HumanQueue",
+          "description": "Esperas a una persona del issue en el período (pending es 0 o 1).\nAusente igual que efficiency."
         }
       }
     },
@@ -2972,6 +3110,85 @@
       ],
       "default": "GITLAB_SYNC_MODE_UNSPECIFIED",
       "description": "Cómo llegan los cambios de un grupo de GitLab (issue 016, plan §3.2). No\ndepende de los webhooks de grupo (Premium).\n\n - GITLAB_SYNC_MODE_WEBHOOK: Un webhook por repo, todos con el mismo secreto de la conexión.\n - GITLAB_SYNC_MODE_POLL: Consulta periódica a la API con un token de solo lectura."
+    },
+    "v1HiringSignal": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "$ref": "#/definitions/v1HiringVerdict"
+        },
+        "liveWeeks": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Semanas completas con historia de sesiones antes de to (hasta 8)."
+        },
+        "weeksNeeded": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Semanas que hacen falta para la señal completa (8)."
+        },
+        "weeksNeededPreliminary": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Semanas que hacen falta para la lectura preliminar (4)."
+        },
+        "preliminary": {
+          "type": "boolean",
+          "description": "De 4 a 7 semanas: lectura preliminar, sin comparar con el mes anterior."
+        },
+        "wipHigh": {
+          "type": "boolean",
+          "description": "El WIP es alto (ver arriba). Falso con INSUFFICIENT_DATA."
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ProfileShare"
+          },
+          "description": "Dónde se junta la espera a personas en current: los motivos de\nwaiting_human_by_reason sin UNSPECIFIED, con su parte de waiting_human.\nDe mayor a menor. Vacío si ninguna espera trae motivo."
+        },
+        "current": {
+          "$ref": "#/definitions/v1SignalWindow",
+          "description": "Las últimas 4 semanas. Ausente con INSUFFICIENT_DATA."
+        },
+        "previous": {
+          "$ref": "#/definitions/v1SignalWindow",
+          "description": "Las 4 anteriores. Ausente si es preliminar o con INSUFFICIENT_DATA."
+        }
+      },
+      "description": "Señal de contratación (issue 036, parte 3): interpreta las métricas del\núltimo mes. Es una señal, no una decisión: trae los números que la\nsostienen.\n\nCómo se calcula (lo implementa tekitla-issues), sobre las semanas\ncompletas (lunes a lunes en time_zone) anteriores a to:\n  - current: las últimas 4; previous: las 4 anteriores.\n  - Menos de 4 semanas completas con historia de sesiones:\n    INSUFFICIENT_DATA. De 4 a 7: preliminary, sin previous y sin las\n    condiciones de crecimiento.\n  - NEEDS_PEOPLE (CU-036-7), todas:\n      1. waiting_human ≥ 30 % de working + waiting_human + blocked +\n         in_review en current;\n      2. (no preliminar) waiting_human o la mediana de human_response\n         creció 25 % o más contra previous;\n      3. los agentes no son el cuello: working ≤ waiting_human.\n  - REDUCE_WIP (CU-036-8): waiting_human \u003c 15 % y wip_high.\n  - wip_high: wip_median ≥ 2 × los cerrados por semana de current (más de\n    dos semanas de trabajo empezado), o (no preliminar) wip_median creció\n    25 % o más contra previous.\n  - Si se cumplen las dos, NEEDS_PEOPLE (y wip_high lo dice).\n  - Los umbrales son constantes del servicio: cambiarlos no cambia el\n    contrato."
+    },
+    "v1HiringVerdict": {
+      "type": "string",
+      "enum": [
+        "HIRING_VERDICT_UNSPECIFIED",
+        "HIRING_VERDICT_INSUFFICIENT_DATA",
+        "HIRING_VERDICT_NO_SIGNAL",
+        "HIRING_VERDICT_NEEDS_PEOPLE",
+        "HIRING_VERDICT_REDUCE_WIP"
+      ],
+      "default": "HIRING_VERDICT_UNSPECIFIED",
+      "description": "Qué dice la señal de contratación.\n\n - HIRING_VERDICT_INSUFFICIENT_DATA: Menos de 4 semanas completas con historia de sesiones.\n - HIRING_VERDICT_NO_SIGNAL: El flujo no pide nada.\n - HIRING_VERDICT_NEEDS_PEOPLE: El trabajo espera a personas: falta gente (el perfil, en profiles).\n - HIRING_VERDICT_REDUCE_WIP: No falta gente, sobra trabajo empezado: bajar el WIP."
+    },
+    "v1HumanQueue": {
+      "type": "object",
+      "properties": {
+        "pending": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Issues esperando a una persona al final de la semana (o en to)."
+        },
+        "responseTime": {
+          "$ref": "#/definitions/v1DurationStats",
+          "description": "De las esperas que terminaron en la semana (o en el período): cuánto\nduraron, de entrar a salir."
+        },
+        "oldestPending": {
+          "type": "string",
+          "description": "La espera abierta más vieja al final de la semana (o en to). Ausente si\npending es 0."
+        }
+      },
+      "description": "Esperas a una persona: la cola humana (issue 036). Una espera es un tramo\ncontinuo en que el issue está en waiting_human (después de aplicar la\nprioridad de FlowEfficiency). Termina cuando el issue pasa a otro estado;\nsi se corta porque sus sesiones dejan de reportar, no cuenta como\nrespuesta."
     },
     "v1ImportIssueEventsResponse": {
       "type": "object",
@@ -3758,6 +3975,20 @@
         }
       }
     },
+    "v1ProfileShare": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/definitions/v1WaitingReason"
+        },
+        "shareBp": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Parte de waiting_human, en puntos base."
+        }
+      },
+      "description": "Parte de la espera a personas con un motivo (el perfil que haría falta:\nrevisión → alguien senior que revise, pruebas → QA, decisión → producto,\ndeploy → DevOps)."
+    },
     "v1Project": {
       "type": "object",
       "properties": {
@@ -3787,6 +4018,18 @@
           "description": "Espacio de trabajo dueño del proyecto (personal o de un equipo). En la\nrebanada 1 siempre es el espacio personal del usuario."
         }
       }
+    },
+    "v1ReasonTime": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/definitions/v1WaitingReason"
+        },
+        "duration": {
+          "type": "string"
+        }
+      },
+      "description": "Tiempo de espera a una persona con un motivo."
     },
     "v1RepoKind": {
       "type": "string",
@@ -3923,6 +4166,10 @@
         "waitingText": {
           "type": "string",
           "description": "Hasta 200 caracteres. Se ignora con waiting_on NONE."
+        },
+        "waitingReason": {
+          "$ref": "#/definitions/v1WaitingReason",
+          "description": "Token espera_motivo ya traducido (issue 036). Se ignora y se guarda\nUNSPECIFIED con waiting_on NONE, igual que waiting_text (también con\nstatus WORKING, que guarda waiting_on NONE)."
         }
       },
       "description": "Lo que ve el recolector de una sesión, ya traducido a los valores de\nTekitla (issue 026, §1 y §2)."
@@ -4029,6 +4276,10 @@
         "statusChangedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "waitingReason": {
+          "$ref": "#/definitions/v1WaitingReason",
+          "description": "Para qué espera (issue 036). UNSPECIFIED si waiting_on es NONE."
         }
       },
       "description": "Una sesión dentro del resumen de un issue: quién la atiende y cómo está."
@@ -4275,6 +4526,37 @@
       },
       "description": "Estado (columna) visto por un enlace."
     },
+    "v1SignalWindow": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "efficiency": {
+          "$ref": "#/definitions/v1FlowEfficiency"
+        },
+        "humanResponse": {
+          "$ref": "#/definitions/v1DurationStats",
+          "description": "De las esperas a una persona que terminaron en la ventana."
+        },
+        "wipMedian": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Mediana del WIP de fin de semana."
+        },
+        "closed": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Terminados en la ventana (valor y otros)."
+        }
+      },
+      "description": "Los números de 4 semanas que sostienen la señal."
+    },
     "v1StaleIssue": {
       "type": "object",
       "properties": {
@@ -4508,6 +4790,18 @@
       ],
       "default": "WAITING_ON_UNSPECIFIED",
       "description": "Qué espera una sesión. Sale de los tokens que escribe espera.ps1 en el panel\nde herdr (espera_tipo y espera_a; issue 026, §1).\n\n - WAITING_ON_NONE: Libre: no espera nada.\n - WAITING_ON_PERSON: Bloqueada por su persona (una pregunta o una decisión).\n - WAITING_ON_SESSION: Espera a otra sesión; waiting_target dice a cuál.\n - WAITING_ON_OTHER: Espera otra cosa (un CI, un merge); waiting_target dice qué."
+    },
+    "v1WaitingReason": {
+      "type": "string",
+      "enum": [
+        "WAITING_REASON_UNSPECIFIED",
+        "WAITING_REASON_REVIEW",
+        "WAITING_REASON_TESTING",
+        "WAITING_REASON_DECISION",
+        "WAITING_REASON_DEPLOY"
+      ],
+      "default": "WAITING_REASON_UNSPECIFIED",
+      "description": "Para qué espera una sesión a su persona (issue 036). Sale del token\nespera_motivo que escribe espera.ps1 -Motivo en el panel de herdr. Define\nel perfil de la señal de contratación (HiringSignal.profiles).\n\n - WAITING_REASON_UNSPECIFIED: Sin motivo (el panel no lo trae, o trae uno desconocido).\n - WAITING_REASON_REVIEW: revision: revisar código.\n - WAITING_REASON_TESTING: pruebas.\n - WAITING_REASON_DECISION: decision: una decisión de producto.\n - WAITING_REASON_DEPLOY: deploy: deploys e infraestructura."
     }
   }
 }

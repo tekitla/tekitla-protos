@@ -111,6 +111,66 @@ func (MetricConfidence) EnumDescriptor() ([]byte, []int) {
 	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{0}
 }
 
+// Qué dice la señal de contratación.
+type HiringVerdict int32
+
+const (
+	HiringVerdict_HIRING_VERDICT_UNSPECIFIED HiringVerdict = 0
+	// Menos de 4 semanas completas con historia de sesiones.
+	HiringVerdict_HIRING_VERDICT_INSUFFICIENT_DATA HiringVerdict = 1
+	// El flujo no pide nada.
+	HiringVerdict_HIRING_VERDICT_NO_SIGNAL HiringVerdict = 2
+	// El trabajo espera a personas: falta gente (el perfil, en profiles).
+	HiringVerdict_HIRING_VERDICT_NEEDS_PEOPLE HiringVerdict = 3
+	// No falta gente, sobra trabajo empezado: bajar el WIP.
+	HiringVerdict_HIRING_VERDICT_REDUCE_WIP HiringVerdict = 4
+)
+
+// Enum value maps for HiringVerdict.
+var (
+	HiringVerdict_name = map[int32]string{
+		0: "HIRING_VERDICT_UNSPECIFIED",
+		1: "HIRING_VERDICT_INSUFFICIENT_DATA",
+		2: "HIRING_VERDICT_NO_SIGNAL",
+		3: "HIRING_VERDICT_NEEDS_PEOPLE",
+		4: "HIRING_VERDICT_REDUCE_WIP",
+	}
+	HiringVerdict_value = map[string]int32{
+		"HIRING_VERDICT_UNSPECIFIED":       0,
+		"HIRING_VERDICT_INSUFFICIENT_DATA": 1,
+		"HIRING_VERDICT_NO_SIGNAL":         2,
+		"HIRING_VERDICT_NEEDS_PEOPLE":      3,
+		"HIRING_VERDICT_REDUCE_WIP":        4,
+	}
+)
+
+func (x HiringVerdict) Enum() *HiringVerdict {
+	p := new(HiringVerdict)
+	*p = x
+	return p
+}
+
+func (x HiringVerdict) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (HiringVerdict) Descriptor() protoreflect.EnumDescriptor {
+	return file_issues_v1_flow_metrics_proto_enumTypes[1].Descriptor()
+}
+
+func (HiringVerdict) Type() protoreflect.EnumType {
+	return &file_issues_v1_flow_metrics_proto_enumTypes[1]
+}
+
+func (x HiringVerdict) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use HiringVerdict.Descriptor instead.
+func (HiringVerdict) EnumDescriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{1}
+}
+
 type GetFlowMetricsRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
@@ -245,7 +305,14 @@ type GetFlowMetricsResponse struct {
 	// es 0).
 	ValueLabelIds []string `protobuf:"bytes,8,rep,name=value_label_ids,json=valueLabelIds,proto3" json:"value_label_ids,omitempty"`
 	// Issues que entran al cálculo y los que no tienen fechas para él.
-	Coverage      *FlowCoverage `protobuf:"bytes,9,opt,name=coverage,proto3" json:"coverage,omitempty"`
+	Coverage *FlowCoverage `protobuf:"bytes,9,opt,name=coverage,proto3" json:"coverage,omitempty"`
+	// Desde cuándo hay historia de sesiones de agentes en el proyecto (la
+	// primera transición guardada, issue 036 parte 3). Ausente: ninguna. Las
+	// semanas que terminan antes no traen efficiency ni human_queue.
+	SessionsRecordedSince *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=sessions_recorded_since,json=sessionsRecordedSince,proto3" json:"sessions_recorded_since,omitempty"`
+	// Señal de contratación de las 8 semanas completas anteriores a to (no
+	// depende de from).
+	HiringSignal  *HiringSignal `protobuf:"bytes,11,opt,name=hiring_signal,json=hiringSignal,proto3" json:"hiring_signal,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -343,6 +410,20 @@ func (x *GetFlowMetricsResponse) GetCoverage() *FlowCoverage {
 	return nil
 }
 
+func (x *GetFlowMetricsResponse) GetSessionsRecordedSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SessionsRecordedSince
+	}
+	return nil
+}
+
+func (x *GetFlowMetricsResponse) GetHiringSignal() *HiringSignal {
+	if x != nil {
+		return x.HiringSignal
+	}
+	return nil
+}
+
 // Métricas de una semana.
 type FlowWeek struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -360,8 +441,13 @@ type FlowWeek struct {
 	// Entraron a IN_PROGRESS por primera vez esta semana.
 	Started int32 `protobuf:"varint,8,opt,name=started,proto3" json:"started,omitempty"`
 	// En IN_PROGRESS al final de la semana.
-	Wip           int32         `protobuf:"varint,9,opt,name=wip,proto3" json:"wip,omitempty"`
-	Source        *MetricSource `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
+	Wip    int32         `protobuf:"varint,9,opt,name=wip,proto3" json:"wip,omitempty"`
+	Source *MetricSource `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
+	// Dónde se fue el tiempo esta semana, según las sesiones de agentes.
+	// Ausente si la semana termina antes de sessions_recorded_since.
+	Efficiency *FlowEfficiency `protobuf:"bytes,11,opt,name=efficiency,proto3" json:"efficiency,omitempty"`
+	// Esperas a una persona. Ausente igual que efficiency.
+	HumanQueue    *HumanQueue `protobuf:"bytes,12,opt,name=human_queue,json=humanQueue,proto3" json:"human_queue,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -466,6 +552,20 @@ func (x *FlowWeek) GetSource() *MetricSource {
 	return nil
 }
 
+func (x *FlowWeek) GetEfficiency() *FlowEfficiency {
+	if x != nil {
+		return x.Efficiency
+	}
+	return nil
+}
+
+func (x *FlowWeek) GetHumanQueue() *HumanQueue {
+	if x != nil {
+		return x.HumanQueue
+	}
+	return nil
+}
+
 // Métricas de todo el período: las semanas juntas. Los conteos son la suma
 // de los de las semanas (un issue reabierto que vuelve a terminar en otra
 // semana cuenta dos veces) y las duraciones son las de todos los
@@ -482,8 +582,13 @@ type FlowSummary struct {
 	Canceled    int32                  `protobuf:"varint,5,opt,name=canceled,proto3" json:"canceled,omitempty"`
 	Started     int32                  `protobuf:"varint,6,opt,name=started,proto3" json:"started,omitempty"`
 	// En IN_PROGRESS en to.
-	Wip           int32         `protobuf:"varint,7,opt,name=wip,proto3" json:"wip,omitempty"`
-	Source        *MetricSource `protobuf:"bytes,8,opt,name=source,proto3" json:"source,omitempty"`
+	Wip    int32         `protobuf:"varint,7,opt,name=wip,proto3" json:"wip,omitempty"`
+	Source *MetricSource `protobuf:"bytes,8,opt,name=source,proto3" json:"source,omitempty"`
+	// Suma de las semanas. Ausente si ninguna semana tiene.
+	Efficiency *FlowEfficiency `protobuf:"bytes,9,opt,name=efficiency,proto3" json:"efficiency,omitempty"`
+	// pending y oldest_pending en to; response_time de todo el período.
+	// Ausente igual que efficiency.
+	HumanQueue    *HumanQueue `protobuf:"bytes,10,opt,name=human_queue,json=humanQueue,proto3" json:"human_queue,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -570,6 +675,20 @@ func (x *FlowSummary) GetWip() int32 {
 func (x *FlowSummary) GetSource() *MetricSource {
 	if x != nil {
 		return x.Source
+	}
+	return nil
+}
+
+func (x *FlowSummary) GetEfficiency() *FlowEfficiency {
+	if x != nil {
+		return x.Efficiency
+	}
+	return nil
+}
+
+func (x *FlowSummary) GetHumanQueue() *HumanQueue {
+	if x != nil {
+		return x.HumanQueue
 	}
 	return nil
 }
@@ -863,11 +982,683 @@ func (x *FlowCoverage) GetDoneWithoutDates() int32 {
 	return 0
 }
 
+// Dónde se va el tiempo de un issue (o de los issues de un período) según
+// el estado de sus sesiones de agentes (issue 026). Issue 036, CU-036-6.
+// Siempre registrado en vivo: el histórico importado no tiene sesiones.
+//
+// Cómo se calcula (lo implementa tekitla-issues):
+//   - Tiempo de reloj del issue, no suma de horas de agente: en cada
+//     instante el issue está en un solo estado, el de mayor prioridad entre
+//     sus sesiones: working > waiting_human > blocked > in_review > idle.
+//     Dos sesiones trabajando a la vez una hora dan una hora.
+//   - Cuentan las sesiones de todas las personas con acceso al proyecto, sin
+//     detalle por persona (CU-036-9). Solo las ligadas a issues que existen.
+//   - Noches y fines de semana cuentan como cualquier otra hora.
+//   - Una sesión deja de contar desde su último reporte si pasa más de 10
+//     minutos sin reportar (máquina apagada o recolector parado), hasta que
+//     vuelve a reportar. Ese tiempo no es trabajo ni espera.
+//   - Nada cuenta después de ahora.
+type FlowEfficiency struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Alguna sesión del issue en WORKING.
+	Working *durationpb.Duration `protobuf:"bytes,1,opt,name=working,proto3" json:"working,omitempty"`
+	// Ninguna trabaja y alguna espera a su persona (waiting_on PERSON, en
+	// WAITING_OK o en IDLE).
+	WaitingHuman *durationpb.Duration `protobuf:"bytes,2,opt,name=waiting_human,json=waitingHuman,proto3" json:"waiting_human,omitempty"`
+	// Ninguna trabaja ni espera a una persona, y alguna espera a otra sesión o
+	// a otra cosa (waiting_on SESSION u OTHER: un CI, un merge).
+	Blocked *durationpb.Duration `protobuf:"bytes,3,opt,name=blocked,proto3" json:"blocked,omitempty"`
+	// MR abierto en revisión (issue 016). 0 hasta que exista esa fuente.
+	InReview *durationpb.Duration `protobuf:"bytes,4,opt,name=in_review,json=inReview,proto3" json:"in_review,omitempty"`
+	// Solo sesiones en IDLE o UNKNOWN sin esperar nada: no entra en la
+	// eficiencia.
+	Idle *durationpb.Duration `protobuf:"bytes,5,opt,name=idle,proto3" json:"idle,omitempty"`
+	// working / (working + waiting_human + blocked + in_review) × 10 000, en
+	// puntos base (redondeado hacia abajo). Ausente si el denominador es 0.
+	// Con 3 h en WORKING y 5 h esperando a su persona: 3750.
+	EfficiencyBp *int32 `protobuf:"varint,6,opt,name=efficiency_bp,json=efficiencyBp,proto3,oneof" json:"efficiency_bp,omitempty"`
+	// Issues con algún tiempo medido.
+	Issues int32 `protobuf:"varint,7,opt,name=issues,proto3" json:"issues,omitempty"`
+	// Cómo se reparte waiting_human por motivo, de mayor a menor. Las partes
+	// suman waiting_human (incluye UNSPECIFIED: sin motivo).
+	WaitingHumanByReason []*ReasonTime `protobuf:"bytes,8,rep,name=waiting_human_by_reason,json=waitingHumanByReason,proto3" json:"waiting_human_by_reason,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *FlowEfficiency) Reset() {
+	*x = FlowEfficiency{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FlowEfficiency) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FlowEfficiency) ProtoMessage() {}
+
+func (x *FlowEfficiency) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FlowEfficiency.ProtoReflect.Descriptor instead.
+func (*FlowEfficiency) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *FlowEfficiency) GetWorking() *durationpb.Duration {
+	if x != nil {
+		return x.Working
+	}
+	return nil
+}
+
+func (x *FlowEfficiency) GetWaitingHuman() *durationpb.Duration {
+	if x != nil {
+		return x.WaitingHuman
+	}
+	return nil
+}
+
+func (x *FlowEfficiency) GetBlocked() *durationpb.Duration {
+	if x != nil {
+		return x.Blocked
+	}
+	return nil
+}
+
+func (x *FlowEfficiency) GetInReview() *durationpb.Duration {
+	if x != nil {
+		return x.InReview
+	}
+	return nil
+}
+
+func (x *FlowEfficiency) GetIdle() *durationpb.Duration {
+	if x != nil {
+		return x.Idle
+	}
+	return nil
+}
+
+func (x *FlowEfficiency) GetEfficiencyBp() int32 {
+	if x != nil && x.EfficiencyBp != nil {
+		return *x.EfficiencyBp
+	}
+	return 0
+}
+
+func (x *FlowEfficiency) GetIssues() int32 {
+	if x != nil {
+		return x.Issues
+	}
+	return 0
+}
+
+func (x *FlowEfficiency) GetWaitingHumanByReason() []*ReasonTime {
+	if x != nil {
+		return x.WaitingHumanByReason
+	}
+	return nil
+}
+
+// Tiempo de espera a una persona con un motivo.
+type ReasonTime struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        WaitingReason          `protobuf:"varint,1,opt,name=reason,proto3,enum=issues.v1.WaitingReason" json:"reason,omitempty"`
+	Duration      *durationpb.Duration   `protobuf:"bytes,2,opt,name=duration,proto3" json:"duration,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReasonTime) Reset() {
+	*x = ReasonTime{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReasonTime) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReasonTime) ProtoMessage() {}
+
+func (x *ReasonTime) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReasonTime.ProtoReflect.Descriptor instead.
+func (*ReasonTime) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ReasonTime) GetReason() WaitingReason {
+	if x != nil {
+		return x.Reason
+	}
+	return WaitingReason_WAITING_REASON_UNSPECIFIED
+}
+
+func (x *ReasonTime) GetDuration() *durationpb.Duration {
+	if x != nil {
+		return x.Duration
+	}
+	return nil
+}
+
+// Esperas a una persona: la cola humana (issue 036). Una espera es un tramo
+// continuo en que el issue está en waiting_human (después de aplicar la
+// prioridad de FlowEfficiency). Termina cuando el issue pasa a otro estado;
+// si se corta porque sus sesiones dejan de reportar, no cuenta como
+// respuesta.
+type HumanQueue struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Issues esperando a una persona al final de la semana (o en to).
+	Pending int32 `protobuf:"varint,1,opt,name=pending,proto3" json:"pending,omitempty"`
+	// De las esperas que terminaron en la semana (o en el período): cuánto
+	// duraron, de entrar a salir.
+	ResponseTime *DurationStats `protobuf:"bytes,2,opt,name=response_time,json=responseTime,proto3" json:"response_time,omitempty"`
+	// La espera abierta más vieja al final de la semana (o en to). Ausente si
+	// pending es 0.
+	OldestPending *durationpb.Duration `protobuf:"bytes,3,opt,name=oldest_pending,json=oldestPending,proto3" json:"oldest_pending,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HumanQueue) Reset() {
+	*x = HumanQueue{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HumanQueue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HumanQueue) ProtoMessage() {}
+
+func (x *HumanQueue) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HumanQueue.ProtoReflect.Descriptor instead.
+func (*HumanQueue) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *HumanQueue) GetPending() int32 {
+	if x != nil {
+		return x.Pending
+	}
+	return 0
+}
+
+func (x *HumanQueue) GetResponseTime() *DurationStats {
+	if x != nil {
+		return x.ResponseTime
+	}
+	return nil
+}
+
+func (x *HumanQueue) GetOldestPending() *durationpb.Duration {
+	if x != nil {
+		return x.OldestPending
+	}
+	return nil
+}
+
+// Señal de contratación (issue 036, parte 3): interpreta las métricas del
+// último mes. Es una señal, no una decisión: trae los números que la
+// sostienen.
+//
+// Cómo se calcula (lo implementa tekitla-issues), sobre las semanas
+// completas (lunes a lunes en time_zone) anteriores a to:
+//   - current: las últimas 4; previous: las 4 anteriores.
+//   - Menos de 4 semanas completas con historia de sesiones:
+//     INSUFFICIENT_DATA. De 4 a 7: preliminary, sin previous y sin las
+//     condiciones de crecimiento.
+//   - NEEDS_PEOPLE (CU-036-7), todas:
+//     1. waiting_human ≥ 30 % de working + waiting_human + blocked +
+//     in_review en current;
+//     2. (no preliminar) waiting_human o la mediana de human_response
+//     creció 25 % o más contra previous;
+//     3. los agentes no son el cuello: working ≤ waiting_human.
+//   - REDUCE_WIP (CU-036-8): waiting_human < 15 % y wip_high.
+//   - wip_high: wip_median ≥ 2 × los cerrados por semana de current (más de
+//     dos semanas de trabajo empezado), o (no preliminar) wip_median creció
+//     25 % o más contra previous.
+//   - Si se cumplen las dos, NEEDS_PEOPLE (y wip_high lo dice).
+//   - Los umbrales son constantes del servicio: cambiarlos no cambia el
+//     contrato.
+type HiringSignal struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Verdict HiringVerdict          `protobuf:"varint,1,opt,name=verdict,proto3,enum=issues.v1.HiringVerdict" json:"verdict,omitempty"`
+	// Semanas completas con historia de sesiones antes de to (hasta 8).
+	LiveWeeks int32 `protobuf:"varint,2,opt,name=live_weeks,json=liveWeeks,proto3" json:"live_weeks,omitempty"`
+	// Semanas que hacen falta para la señal completa (8).
+	WeeksNeeded int32 `protobuf:"varint,3,opt,name=weeks_needed,json=weeksNeeded,proto3" json:"weeks_needed,omitempty"`
+	// Semanas que hacen falta para la lectura preliminar (4).
+	WeeksNeededPreliminary int32 `protobuf:"varint,4,opt,name=weeks_needed_preliminary,json=weeksNeededPreliminary,proto3" json:"weeks_needed_preliminary,omitempty"`
+	// De 4 a 7 semanas: lectura preliminar, sin comparar con el mes anterior.
+	Preliminary bool `protobuf:"varint,5,opt,name=preliminary,proto3" json:"preliminary,omitempty"`
+	// El WIP es alto (ver arriba). Falso con INSUFFICIENT_DATA.
+	WipHigh bool `protobuf:"varint,6,opt,name=wip_high,json=wipHigh,proto3" json:"wip_high,omitempty"`
+	// Dónde se junta la espera a personas en current: los motivos de
+	// waiting_human_by_reason sin UNSPECIFIED, con su parte de waiting_human.
+	// De mayor a menor. Vacío si ninguna espera trae motivo.
+	Profiles []*ProfileShare `protobuf:"bytes,7,rep,name=profiles,proto3" json:"profiles,omitempty"`
+	// Las últimas 4 semanas. Ausente con INSUFFICIENT_DATA.
+	Current *SignalWindow `protobuf:"bytes,8,opt,name=current,proto3" json:"current,omitempty"`
+	// Las 4 anteriores. Ausente si es preliminar o con INSUFFICIENT_DATA.
+	Previous      *SignalWindow `protobuf:"bytes,9,opt,name=previous,proto3" json:"previous,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HiringSignal) Reset() {
+	*x = HiringSignal{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HiringSignal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HiringSignal) ProtoMessage() {}
+
+func (x *HiringSignal) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HiringSignal.ProtoReflect.Descriptor instead.
+func (*HiringSignal) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *HiringSignal) GetVerdict() HiringVerdict {
+	if x != nil {
+		return x.Verdict
+	}
+	return HiringVerdict_HIRING_VERDICT_UNSPECIFIED
+}
+
+func (x *HiringSignal) GetLiveWeeks() int32 {
+	if x != nil {
+		return x.LiveWeeks
+	}
+	return 0
+}
+
+func (x *HiringSignal) GetWeeksNeeded() int32 {
+	if x != nil {
+		return x.WeeksNeeded
+	}
+	return 0
+}
+
+func (x *HiringSignal) GetWeeksNeededPreliminary() int32 {
+	if x != nil {
+		return x.WeeksNeededPreliminary
+	}
+	return 0
+}
+
+func (x *HiringSignal) GetPreliminary() bool {
+	if x != nil {
+		return x.Preliminary
+	}
+	return false
+}
+
+func (x *HiringSignal) GetWipHigh() bool {
+	if x != nil {
+		return x.WipHigh
+	}
+	return false
+}
+
+func (x *HiringSignal) GetProfiles() []*ProfileShare {
+	if x != nil {
+		return x.Profiles
+	}
+	return nil
+}
+
+func (x *HiringSignal) GetCurrent() *SignalWindow {
+	if x != nil {
+		return x.Current
+	}
+	return nil
+}
+
+func (x *HiringSignal) GetPrevious() *SignalWindow {
+	if x != nil {
+		return x.Previous
+	}
+	return nil
+}
+
+// Los números de 4 semanas que sostienen la señal.
+type SignalWindow struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Start      *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=start,proto3" json:"start,omitempty"`
+	End        *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=end,proto3" json:"end,omitempty"`
+	Efficiency *FlowEfficiency        `protobuf:"bytes,3,opt,name=efficiency,proto3" json:"efficiency,omitempty"`
+	// De las esperas a una persona que terminaron en la ventana.
+	HumanResponse *DurationStats `protobuf:"bytes,4,opt,name=human_response,json=humanResponse,proto3" json:"human_response,omitempty"`
+	// Mediana del WIP de fin de semana.
+	WipMedian int32 `protobuf:"varint,5,opt,name=wip_median,json=wipMedian,proto3" json:"wip_median,omitempty"`
+	// Terminados en la ventana (valor y otros).
+	Closed        int32 `protobuf:"varint,6,opt,name=closed,proto3" json:"closed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignalWindow) Reset() {
+	*x = SignalWindow{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignalWindow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignalWindow) ProtoMessage() {}
+
+func (x *SignalWindow) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignalWindow.ProtoReflect.Descriptor instead.
+func (*SignalWindow) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SignalWindow) GetStart() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Start
+	}
+	return nil
+}
+
+func (x *SignalWindow) GetEnd() *timestamppb.Timestamp {
+	if x != nil {
+		return x.End
+	}
+	return nil
+}
+
+func (x *SignalWindow) GetEfficiency() *FlowEfficiency {
+	if x != nil {
+		return x.Efficiency
+	}
+	return nil
+}
+
+func (x *SignalWindow) GetHumanResponse() *DurationStats {
+	if x != nil {
+		return x.HumanResponse
+	}
+	return nil
+}
+
+func (x *SignalWindow) GetWipMedian() int32 {
+	if x != nil {
+		return x.WipMedian
+	}
+	return 0
+}
+
+func (x *SignalWindow) GetClosed() int32 {
+	if x != nil {
+		return x.Closed
+	}
+	return 0
+}
+
+// Parte de la espera a personas con un motivo (el perfil que haría falta:
+// revisión → alguien senior que revise, pruebas → QA, decisión → producto,
+// deploy → DevOps).
+type ProfileShare struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Reason WaitingReason          `protobuf:"varint,1,opt,name=reason,proto3,enum=issues.v1.WaitingReason" json:"reason,omitempty"`
+	// Parte de waiting_human, en puntos base.
+	ShareBp       int32 `protobuf:"varint,2,opt,name=share_bp,json=shareBp,proto3" json:"share_bp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProfileShare) Reset() {
+	*x = ProfileShare{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProfileShare) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProfileShare) ProtoMessage() {}
+
+func (x *ProfileShare) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProfileShare.ProtoReflect.Descriptor instead.
+func (*ProfileShare) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ProfileShare) GetReason() WaitingReason {
+	if x != nil {
+		return x.Reason
+	}
+	return WaitingReason_WAITING_REASON_UNSPECIFIED
+}
+
+func (x *ProfileShare) GetShareBp() int32 {
+	if x != nil {
+		return x.ShareBp
+	}
+	return 0
+}
+
+type GetIssueFlowEfficiencyRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Number    int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
+	// Período opcional. Sin from: desde el alta. Sin to, o con un to futuro:
+	// ahora. to antes de from: INVALID_ARGUMENT (INVALID_PERIOD).
+	From          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
+	To            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIssueFlowEfficiencyRequest) Reset() {
+	*x = GetIssueFlowEfficiencyRequest{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIssueFlowEfficiencyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIssueFlowEfficiencyRequest) ProtoMessage() {}
+
+func (x *GetIssueFlowEfficiencyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIssueFlowEfficiencyRequest.ProtoReflect.Descriptor instead.
+func (*GetIssueFlowEfficiencyRequest) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetIssueFlowEfficiencyRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GetIssueFlowEfficiencyRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *GetIssueFlowEfficiencyRequest) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *GetIssueFlowEfficiencyRequest) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+type GetIssueFlowEfficiencyResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Ausente si el issue no tiene historia de sesiones en el período.
+	Efficiency *FlowEfficiency `protobuf:"bytes,1,opt,name=efficiency,proto3" json:"efficiency,omitempty"`
+	// Desde cuándo hay historia de sesiones del issue. Ausente: ninguna.
+	RecordedSince *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=recorded_since,json=recordedSince,proto3" json:"recorded_since,omitempty"`
+	// Esperas a una persona del issue en el período (pending es 0 o 1).
+	// Ausente igual que efficiency.
+	HumanQueue    *HumanQueue `protobuf:"bytes,3,opt,name=human_queue,json=humanQueue,proto3" json:"human_queue,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIssueFlowEfficiencyResponse) Reset() {
+	*x = GetIssueFlowEfficiencyResponse{}
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIssueFlowEfficiencyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIssueFlowEfficiencyResponse) ProtoMessage() {}
+
+func (x *GetIssueFlowEfficiencyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_issues_v1_flow_metrics_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIssueFlowEfficiencyResponse.ProtoReflect.Descriptor instead.
+func (*GetIssueFlowEfficiencyResponse) Descriptor() ([]byte, []int) {
+	return file_issues_v1_flow_metrics_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetIssueFlowEfficiencyResponse) GetEfficiency() *FlowEfficiency {
+	if x != nil {
+		return x.Efficiency
+	}
+	return nil
+}
+
+func (x *GetIssueFlowEfficiencyResponse) GetRecordedSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RecordedSince
+	}
+	return nil
+}
+
+func (x *GetIssueFlowEfficiencyResponse) GetHumanQueue() *HumanQueue {
+	if x != nil {
+		return x.HumanQueue
+	}
+	return nil
+}
+
 var File_issues_v1_flow_metrics_proto protoreflect.FileDescriptor
 
 const file_issues_v1_flow_metrics_proto_rawDesc = "" +
 	"\n" +
-	"\x1cissues/v1/flow_metrics.proto\x12\tissues.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x97\x02\n" +
+	"\x1cissues/v1/flow_metrics.proto\x12\tissues.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1eissues/v1/agent_sessions.proto\"\x97\x02\n" +
 	"\x15GetFlowMetricsRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12.\n" +
@@ -877,7 +1668,7 @@ const file_issues_v1_flow_metrics_proto_rawDesc = "" +
 	"\tlabel_ids\x18\x05 \x03(\tR\blabelIds\x12(\n" +
 	"\x10stale_after_days\x18\x06 \x01(\x05R\x0estaleAfterDays\x12\x1f\n" +
 	"\vstale_limit\x18\a \x01(\x05R\n" +
-	"staleLimit\"\x99\x03\n" +
+	"staleLimit\"\xab\x04\n" +
 	"\x16GetFlowMetricsResponse\x12.\n" +
 	"\x04from\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
 	"\x02to\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\x12\x1b\n" +
@@ -888,7 +1679,10 @@ const file_issues_v1_flow_metrics_proto_rawDesc = "" +
 	"\vstale_total\x18\a \x01(\x05R\n" +
 	"staleTotal\x12&\n" +
 	"\x0fvalue_label_ids\x18\b \x03(\tR\rvalueLabelIds\x123\n" +
-	"\bcoverage\x18\t \x01(\v2\x17.issues.v1.FlowCoverageR\bcoverage\"\x99\x03\n" +
+	"\bcoverage\x18\t \x01(\v2\x17.issues.v1.FlowCoverageR\bcoverage\x12R\n" +
+	"\x17sessions_recorded_since\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\x15sessionsRecordedSince\x12<\n" +
+	"\rhiring_signal\x18\v \x01(\v2\x17.issues.v1.HiringSignalR\fhiringSignal\"\x8c\x04\n" +
 	"\bFlowWeek\x120\n" +
 	"\x05start\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x05start\x12,\n" +
 	"\x03end\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x03end\x125\n" +
@@ -901,7 +1695,12 @@ const file_issues_v1_flow_metrics_proto_rawDesc = "" +
 	"\astarted\x18\b \x01(\x05R\astarted\x12\x10\n" +
 	"\x03wip\x18\t \x01(\x05R\x03wip\x12/\n" +
 	"\x06source\x18\n" +
-	" \x01(\v2\x17.issues.v1.MetricSourceR\x06source\"\xbc\x02\n" +
+	" \x01(\v2\x17.issues.v1.MetricSourceR\x06source\x129\n" +
+	"\n" +
+	"efficiency\x18\v \x01(\v2\x19.issues.v1.FlowEfficiencyR\n" +
+	"efficiency\x126\n" +
+	"\vhuman_queue\x18\f \x01(\v2\x15.issues.v1.HumanQueueR\n" +
+	"humanQueue\"\xaf\x03\n" +
 	"\vFlowSummary\x125\n" +
 	"\tlead_time\x18\x01 \x01(\v2\x18.issues.v1.DurationStatsR\bleadTime\x127\n" +
 	"\n" +
@@ -911,7 +1710,13 @@ const file_issues_v1_flow_metrics_proto_rawDesc = "" +
 	"\bcanceled\x18\x05 \x01(\x05R\bcanceled\x12\x18\n" +
 	"\astarted\x18\x06 \x01(\x05R\astarted\x12\x10\n" +
 	"\x03wip\x18\a \x01(\x05R\x03wip\x12/\n" +
-	"\x06source\x18\b \x01(\v2\x17.issues.v1.MetricSourceR\x06source\"\x85\x01\n" +
+	"\x06source\x18\b \x01(\v2\x17.issues.v1.MetricSourceR\x06source\x129\n" +
+	"\n" +
+	"efficiency\x18\t \x01(\v2\x19.issues.v1.FlowEfficiencyR\n" +
+	"efficiency\x126\n" +
+	"\vhuman_queue\x18\n" +
+	" \x01(\v2\x15.issues.v1.HumanQueueR\n" +
+	"humanQueue\"\x85\x01\n" +
 	"\rDurationStats\x12\x14\n" +
 	"\x05count\x18\x01 \x01(\x05R\x05count\x121\n" +
 	"\x06median\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x06median\x12+\n" +
@@ -938,12 +1743,74 @@ const file_issues_v1_flow_metrics_proto_rawDesc = "" +
 	"confidence\"T\n" +
 	"\fFlowCoverage\x12\x16\n" +
 	"\x06issues\x18\x01 \x01(\x05R\x06issues\x12,\n" +
-	"\x12done_without_dates\x18\x02 \x01(\x05R\x10doneWithoutDates*\x97\x01\n" +
+	"\x12done_without_dates\x18\x02 \x01(\x05R\x10doneWithoutDates\"\xc3\x03\n" +
+	"\x0eFlowEfficiency\x123\n" +
+	"\aworking\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\aworking\x12>\n" +
+	"\rwaiting_human\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\fwaitingHuman\x123\n" +
+	"\ablocked\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\ablocked\x126\n" +
+	"\tin_review\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\binReview\x12-\n" +
+	"\x04idle\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x04idle\x12(\n" +
+	"\refficiency_bp\x18\x06 \x01(\x05H\x00R\fefficiencyBp\x88\x01\x01\x12\x16\n" +
+	"\x06issues\x18\a \x01(\x05R\x06issues\x12L\n" +
+	"\x17waiting_human_by_reason\x18\b \x03(\v2\x15.issues.v1.ReasonTimeR\x14waitingHumanByReasonB\x10\n" +
+	"\x0e_efficiency_bp\"u\n" +
+	"\n" +
+	"ReasonTime\x120\n" +
+	"\x06reason\x18\x01 \x01(\x0e2\x18.issues.v1.WaitingReasonR\x06reason\x125\n" +
+	"\bduration\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\bduration\"\xa7\x01\n" +
+	"\n" +
+	"HumanQueue\x12\x18\n" +
+	"\apending\x18\x01 \x01(\x05R\apending\x12=\n" +
+	"\rresponse_time\x18\x02 \x01(\v2\x18.issues.v1.DurationStatsR\fresponseTime\x12@\n" +
+	"\x0eoldest_pending\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\roldestPending\"\x98\x03\n" +
+	"\fHiringSignal\x122\n" +
+	"\averdict\x18\x01 \x01(\x0e2\x18.issues.v1.HiringVerdictR\averdict\x12\x1d\n" +
+	"\n" +
+	"live_weeks\x18\x02 \x01(\x05R\tliveWeeks\x12!\n" +
+	"\fweeks_needed\x18\x03 \x01(\x05R\vweeksNeeded\x128\n" +
+	"\x18weeks_needed_preliminary\x18\x04 \x01(\x05R\x16weeksNeededPreliminary\x12 \n" +
+	"\vpreliminary\x18\x05 \x01(\bR\vpreliminary\x12\x19\n" +
+	"\bwip_high\x18\x06 \x01(\bR\awipHigh\x123\n" +
+	"\bprofiles\x18\a \x03(\v2\x17.issues.v1.ProfileShareR\bprofiles\x121\n" +
+	"\acurrent\x18\b \x01(\v2\x17.issues.v1.SignalWindowR\acurrent\x123\n" +
+	"\bprevious\x18\t \x01(\v2\x17.issues.v1.SignalWindowR\bprevious\"\xa1\x02\n" +
+	"\fSignalWindow\x120\n" +
+	"\x05start\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x05start\x12,\n" +
+	"\x03end\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x03end\x129\n" +
+	"\n" +
+	"efficiency\x18\x03 \x01(\v2\x19.issues.v1.FlowEfficiencyR\n" +
+	"efficiency\x12?\n" +
+	"\x0ehuman_response\x18\x04 \x01(\v2\x18.issues.v1.DurationStatsR\rhumanResponse\x12\x1d\n" +
+	"\n" +
+	"wip_median\x18\x05 \x01(\x05R\twipMedian\x12\x16\n" +
+	"\x06closed\x18\x06 \x01(\x05R\x06closed\"[\n" +
+	"\fProfileShare\x120\n" +
+	"\x06reason\x18\x01 \x01(\x0e2\x18.issues.v1.WaitingReasonR\x06reason\x12\x19\n" +
+	"\bshare_bp\x18\x02 \x01(\x05R\ashareBp\"\xb2\x01\n" +
+	"\x1dGetIssueFlowEfficiencyRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x16\n" +
+	"\x06number\x18\x02 \x01(\x05R\x06number\x12.\n" +
+	"\x04from\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
+	"\x02to\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\"\xd6\x01\n" +
+	"\x1eGetIssueFlowEfficiencyResponse\x129\n" +
+	"\n" +
+	"efficiency\x18\x01 \x01(\v2\x19.issues.v1.FlowEfficiencyR\n" +
+	"efficiency\x12A\n" +
+	"\x0erecorded_since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\rrecordedSince\x126\n" +
+	"\vhuman_queue\x18\x03 \x01(\v2\x15.issues.v1.HumanQueueR\n" +
+	"humanQueue*\x97\x01\n" +
 	"\x10MetricConfidence\x12!\n" +
 	"\x1dMETRIC_CONFIDENCE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19METRIC_CONFIDENCE_NO_DATA\x10\x01\x12\x1e\n" +
 	"\x1aMETRIC_CONFIDENCE_RECORDED\x10\x02\x12!\n" +
-	"\x1dMETRIC_CONFIDENCE_APPROXIMATE\x10\x03B\xa3\x01\n" +
+	"\x1dMETRIC_CONFIDENCE_APPROXIMATE\x10\x03*\xb3\x01\n" +
+	"\rHiringVerdict\x12\x1e\n" +
+	"\x1aHIRING_VERDICT_UNSPECIFIED\x10\x00\x12$\n" +
+	" HIRING_VERDICT_INSUFFICIENT_DATA\x10\x01\x12\x1c\n" +
+	"\x18HIRING_VERDICT_NO_SIGNAL\x10\x02\x12\x1f\n" +
+	"\x1bHIRING_VERDICT_NEEDS_PEOPLE\x10\x03\x12\x1d\n" +
+	"\x19HIRING_VERDICT_REDUCE_WIP\x10\x04B\xa3\x01\n" +
 	"\rcom.issues.v1B\x10FlowMetricsProtoP\x01Z;github.com/tekitla/tekitla-protos/gen/go/issues/v1;issuesv1\xa2\x02\x03IXX\xaa\x02\tIssues.V1\xca\x02\tIssues\\V1\xe2\x02\x15Issues\\V1\\GPBMetadata\xea\x02\n" +
 	"Issues::V1b\x06proto3"
 
@@ -959,49 +1826,89 @@ func file_issues_v1_flow_metrics_proto_rawDescGZIP() []byte {
 	return file_issues_v1_flow_metrics_proto_rawDescData
 }
 
-var file_issues_v1_flow_metrics_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_issues_v1_flow_metrics_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_issues_v1_flow_metrics_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_issues_v1_flow_metrics_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_issues_v1_flow_metrics_proto_goTypes = []any{
-	(MetricConfidence)(0),          // 0: issues.v1.MetricConfidence
-	(*GetFlowMetricsRequest)(nil),  // 1: issues.v1.GetFlowMetricsRequest
-	(*GetFlowMetricsResponse)(nil), // 2: issues.v1.GetFlowMetricsResponse
-	(*FlowWeek)(nil),               // 3: issues.v1.FlowWeek
-	(*FlowSummary)(nil),            // 4: issues.v1.FlowSummary
-	(*DurationStats)(nil),          // 5: issues.v1.DurationStats
-	(*MetricSource)(nil),           // 6: issues.v1.MetricSource
-	(*StaleIssue)(nil),             // 7: issues.v1.StaleIssue
-	(*FlowCoverage)(nil),           // 8: issues.v1.FlowCoverage
-	(*timestamppb.Timestamp)(nil),  // 9: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),    // 10: google.protobuf.Duration
+	(MetricConfidence)(0),                  // 0: issues.v1.MetricConfidence
+	(HiringVerdict)(0),                     // 1: issues.v1.HiringVerdict
+	(*GetFlowMetricsRequest)(nil),          // 2: issues.v1.GetFlowMetricsRequest
+	(*GetFlowMetricsResponse)(nil),         // 3: issues.v1.GetFlowMetricsResponse
+	(*FlowWeek)(nil),                       // 4: issues.v1.FlowWeek
+	(*FlowSummary)(nil),                    // 5: issues.v1.FlowSummary
+	(*DurationStats)(nil),                  // 6: issues.v1.DurationStats
+	(*MetricSource)(nil),                   // 7: issues.v1.MetricSource
+	(*StaleIssue)(nil),                     // 8: issues.v1.StaleIssue
+	(*FlowCoverage)(nil),                   // 9: issues.v1.FlowCoverage
+	(*FlowEfficiency)(nil),                 // 10: issues.v1.FlowEfficiency
+	(*ReasonTime)(nil),                     // 11: issues.v1.ReasonTime
+	(*HumanQueue)(nil),                     // 12: issues.v1.HumanQueue
+	(*HiringSignal)(nil),                   // 13: issues.v1.HiringSignal
+	(*SignalWindow)(nil),                   // 14: issues.v1.SignalWindow
+	(*ProfileShare)(nil),                   // 15: issues.v1.ProfileShare
+	(*GetIssueFlowEfficiencyRequest)(nil),  // 16: issues.v1.GetIssueFlowEfficiencyRequest
+	(*GetIssueFlowEfficiencyResponse)(nil), // 17: issues.v1.GetIssueFlowEfficiencyResponse
+	(*timestamppb.Timestamp)(nil),          // 18: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),            // 19: google.protobuf.Duration
+	(WaitingReason)(0),                     // 20: issues.v1.WaitingReason
 }
 var file_issues_v1_flow_metrics_proto_depIdxs = []int32{
-	9,  // 0: issues.v1.GetFlowMetricsRequest.from:type_name -> google.protobuf.Timestamp
-	9,  // 1: issues.v1.GetFlowMetricsRequest.to:type_name -> google.protobuf.Timestamp
-	9,  // 2: issues.v1.GetFlowMetricsResponse.from:type_name -> google.protobuf.Timestamp
-	9,  // 3: issues.v1.GetFlowMetricsResponse.to:type_name -> google.protobuf.Timestamp
-	3,  // 4: issues.v1.GetFlowMetricsResponse.weeks:type_name -> issues.v1.FlowWeek
-	4,  // 5: issues.v1.GetFlowMetricsResponse.summary:type_name -> issues.v1.FlowSummary
-	7,  // 6: issues.v1.GetFlowMetricsResponse.stale:type_name -> issues.v1.StaleIssue
-	8,  // 7: issues.v1.GetFlowMetricsResponse.coverage:type_name -> issues.v1.FlowCoverage
-	9,  // 8: issues.v1.FlowWeek.start:type_name -> google.protobuf.Timestamp
-	9,  // 9: issues.v1.FlowWeek.end:type_name -> google.protobuf.Timestamp
-	5,  // 10: issues.v1.FlowWeek.lead_time:type_name -> issues.v1.DurationStats
-	5,  // 11: issues.v1.FlowWeek.cycle_time:type_name -> issues.v1.DurationStats
-	6,  // 12: issues.v1.FlowWeek.source:type_name -> issues.v1.MetricSource
-	5,  // 13: issues.v1.FlowSummary.lead_time:type_name -> issues.v1.DurationStats
-	5,  // 14: issues.v1.FlowSummary.cycle_time:type_name -> issues.v1.DurationStats
-	6,  // 15: issues.v1.FlowSummary.source:type_name -> issues.v1.MetricSource
-	10, // 16: issues.v1.DurationStats.median:type_name -> google.protobuf.Duration
-	10, // 17: issues.v1.DurationStats.p85:type_name -> google.protobuf.Duration
-	0,  // 18: issues.v1.MetricSource.confidence:type_name -> issues.v1.MetricConfidence
-	9,  // 19: issues.v1.StaleIssue.in_progress_since:type_name -> google.protobuf.Timestamp
-	9,  // 20: issues.v1.StaleIssue.last_activity_at:type_name -> google.protobuf.Timestamp
-	0,  // 21: issues.v1.StaleIssue.confidence:type_name -> issues.v1.MetricConfidence
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	18, // 0: issues.v1.GetFlowMetricsRequest.from:type_name -> google.protobuf.Timestamp
+	18, // 1: issues.v1.GetFlowMetricsRequest.to:type_name -> google.protobuf.Timestamp
+	18, // 2: issues.v1.GetFlowMetricsResponse.from:type_name -> google.protobuf.Timestamp
+	18, // 3: issues.v1.GetFlowMetricsResponse.to:type_name -> google.protobuf.Timestamp
+	4,  // 4: issues.v1.GetFlowMetricsResponse.weeks:type_name -> issues.v1.FlowWeek
+	5,  // 5: issues.v1.GetFlowMetricsResponse.summary:type_name -> issues.v1.FlowSummary
+	8,  // 6: issues.v1.GetFlowMetricsResponse.stale:type_name -> issues.v1.StaleIssue
+	9,  // 7: issues.v1.GetFlowMetricsResponse.coverage:type_name -> issues.v1.FlowCoverage
+	18, // 8: issues.v1.GetFlowMetricsResponse.sessions_recorded_since:type_name -> google.protobuf.Timestamp
+	13, // 9: issues.v1.GetFlowMetricsResponse.hiring_signal:type_name -> issues.v1.HiringSignal
+	18, // 10: issues.v1.FlowWeek.start:type_name -> google.protobuf.Timestamp
+	18, // 11: issues.v1.FlowWeek.end:type_name -> google.protobuf.Timestamp
+	6,  // 12: issues.v1.FlowWeek.lead_time:type_name -> issues.v1.DurationStats
+	6,  // 13: issues.v1.FlowWeek.cycle_time:type_name -> issues.v1.DurationStats
+	7,  // 14: issues.v1.FlowWeek.source:type_name -> issues.v1.MetricSource
+	10, // 15: issues.v1.FlowWeek.efficiency:type_name -> issues.v1.FlowEfficiency
+	12, // 16: issues.v1.FlowWeek.human_queue:type_name -> issues.v1.HumanQueue
+	6,  // 17: issues.v1.FlowSummary.lead_time:type_name -> issues.v1.DurationStats
+	6,  // 18: issues.v1.FlowSummary.cycle_time:type_name -> issues.v1.DurationStats
+	7,  // 19: issues.v1.FlowSummary.source:type_name -> issues.v1.MetricSource
+	10, // 20: issues.v1.FlowSummary.efficiency:type_name -> issues.v1.FlowEfficiency
+	12, // 21: issues.v1.FlowSummary.human_queue:type_name -> issues.v1.HumanQueue
+	19, // 22: issues.v1.DurationStats.median:type_name -> google.protobuf.Duration
+	19, // 23: issues.v1.DurationStats.p85:type_name -> google.protobuf.Duration
+	0,  // 24: issues.v1.MetricSource.confidence:type_name -> issues.v1.MetricConfidence
+	18, // 25: issues.v1.StaleIssue.in_progress_since:type_name -> google.protobuf.Timestamp
+	18, // 26: issues.v1.StaleIssue.last_activity_at:type_name -> google.protobuf.Timestamp
+	0,  // 27: issues.v1.StaleIssue.confidence:type_name -> issues.v1.MetricConfidence
+	19, // 28: issues.v1.FlowEfficiency.working:type_name -> google.protobuf.Duration
+	19, // 29: issues.v1.FlowEfficiency.waiting_human:type_name -> google.protobuf.Duration
+	19, // 30: issues.v1.FlowEfficiency.blocked:type_name -> google.protobuf.Duration
+	19, // 31: issues.v1.FlowEfficiency.in_review:type_name -> google.protobuf.Duration
+	19, // 32: issues.v1.FlowEfficiency.idle:type_name -> google.protobuf.Duration
+	11, // 33: issues.v1.FlowEfficiency.waiting_human_by_reason:type_name -> issues.v1.ReasonTime
+	20, // 34: issues.v1.ReasonTime.reason:type_name -> issues.v1.WaitingReason
+	19, // 35: issues.v1.ReasonTime.duration:type_name -> google.protobuf.Duration
+	6,  // 36: issues.v1.HumanQueue.response_time:type_name -> issues.v1.DurationStats
+	19, // 37: issues.v1.HumanQueue.oldest_pending:type_name -> google.protobuf.Duration
+	1,  // 38: issues.v1.HiringSignal.verdict:type_name -> issues.v1.HiringVerdict
+	15, // 39: issues.v1.HiringSignal.profiles:type_name -> issues.v1.ProfileShare
+	14, // 40: issues.v1.HiringSignal.current:type_name -> issues.v1.SignalWindow
+	14, // 41: issues.v1.HiringSignal.previous:type_name -> issues.v1.SignalWindow
+	18, // 42: issues.v1.SignalWindow.start:type_name -> google.protobuf.Timestamp
+	18, // 43: issues.v1.SignalWindow.end:type_name -> google.protobuf.Timestamp
+	10, // 44: issues.v1.SignalWindow.efficiency:type_name -> issues.v1.FlowEfficiency
+	6,  // 45: issues.v1.SignalWindow.human_response:type_name -> issues.v1.DurationStats
+	20, // 46: issues.v1.ProfileShare.reason:type_name -> issues.v1.WaitingReason
+	18, // 47: issues.v1.GetIssueFlowEfficiencyRequest.from:type_name -> google.protobuf.Timestamp
+	18, // 48: issues.v1.GetIssueFlowEfficiencyRequest.to:type_name -> google.protobuf.Timestamp
+	10, // 49: issues.v1.GetIssueFlowEfficiencyResponse.efficiency:type_name -> issues.v1.FlowEfficiency
+	18, // 50: issues.v1.GetIssueFlowEfficiencyResponse.recorded_since:type_name -> google.protobuf.Timestamp
+	12, // 51: issues.v1.GetIssueFlowEfficiencyResponse.human_queue:type_name -> issues.v1.HumanQueue
+	52, // [52:52] is the sub-list for method output_type
+	52, // [52:52] is the sub-list for method input_type
+	52, // [52:52] is the sub-list for extension type_name
+	52, // [52:52] is the sub-list for extension extendee
+	0,  // [0:52] is the sub-list for field type_name
 }
 
 func init() { file_issues_v1_flow_metrics_proto_init() }
@@ -1009,13 +1916,15 @@ func file_issues_v1_flow_metrics_proto_init() {
 	if File_issues_v1_flow_metrics_proto != nil {
 		return
 	}
+	file_issues_v1_agent_sessions_proto_init()
+	file_issues_v1_flow_metrics_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_issues_v1_flow_metrics_proto_rawDesc), len(file_issues_v1_flow_metrics_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   8,
+			NumEnums:      2,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

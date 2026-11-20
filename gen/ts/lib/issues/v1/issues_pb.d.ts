@@ -25,7 +25,7 @@ import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobu
 import type { Message } from "@bufbuild/protobuf";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import type { IssueSessions } from "./agent_sessions_pb.js";
-import type { GetFlowMetricsRequestSchema, GetFlowMetricsResponseSchema } from "./flow_metrics_pb.js";
+import type { GetFlowMetricsRequestSchema, GetFlowMetricsResponseSchema, GetIssueFlowEfficiencyRequestSchema, GetIssueFlowEfficiencyResponseSchema } from "./flow_metrics_pb.js";
 
 /**
  * Describes the file issues/v1/issues.proto.
@@ -2890,6 +2890,19 @@ export declare const IssueService: GenService<{
     methodKind: "unary";
     input: typeof GetFlowMetricsRequestSchema;
     output: typeof GetFlowMetricsResponseSchema;
+  },
+  /**
+   * Eficiencia del flujo de un issue (issue 036, CU-036-6): cuánto tiempo
+   * trabajó y cuánto esperó según sus sesiones de agentes (issue 026). Solo
+   * en vivo, desde que existe la historia de sesiones. Mismas reglas que
+   * FlowEfficiency (flow_metrics.proto). Issue inexistente: NOT_FOUND.
+   *
+   * @generated from rpc issues.v1.IssueService.GetIssueFlowEfficiency
+   */
+  getIssueFlowEfficiency: {
+    methodKind: "unary";
+    input: typeof GetIssueFlowEfficiencyRequestSchema;
+    output: typeof GetIssueFlowEfficiencyResponseSchema;
   },
 }>;
 

@@ -126,7 +126,11 @@ type ReportedSession struct {
 	// se ignora.
 	WaitingTarget string `protobuf:"bytes,11,opt,name=waiting_target,json=waitingTarget,proto3" json:"waiting_target,omitempty"`
 	// Hasta 200 caracteres. Se ignora con waiting_on NONE.
-	WaitingText   string `protobuf:"bytes,12,opt,name=waiting_text,json=waitingText,proto3" json:"waiting_text,omitempty"`
+	WaitingText string `protobuf:"bytes,12,opt,name=waiting_text,json=waitingText,proto3" json:"waiting_text,omitempty"`
+	// Token espera_motivo ya traducido (issue 036). Se ignora y se guarda
+	// UNSPECIFIED con waiting_on NONE, igual que waiting_text (también con
+	// status WORKING, que guarda waiting_on NONE).
+	WaitingReason WaitingReason `protobuf:"varint,13,opt,name=waiting_reason,json=waitingReason,proto3,enum=issues.v1.WaitingReason" json:"waiting_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -243,6 +247,13 @@ func (x *ReportedSession) GetWaitingText() string {
 		return x.WaitingText
 	}
 	return ""
+}
+
+func (x *ReportedSession) GetWaitingReason() WaitingReason {
+	if x != nil {
+		return x.WaitingReason
+	}
+	return WaitingReason_WAITING_REASON_UNSPECIFIED
 }
 
 type ReportSessionsResponse struct {
@@ -553,7 +564,7 @@ const file_issues_v1_agent_session_service_proto_rawDesc = "" +
 	"\x15ReportSessionsRequest\x120\n" +
 	"\x06source\x18\x01 \x01(\x0e2\x18.issues.v1.SessionSourceR\x06source\x12\x18\n" +
 	"\amachine\x18\x02 \x01(\tR\amachine\x126\n" +
-	"\bsessions\x18\x03 \x03(\v2\x1a.issues.v1.ReportedSessionR\bsessions\"\xe2\x03\n" +
+	"\bsessions\x18\x03 \x03(\v2\x1a.issues.v1.ReportedSessionR\bsessions\"\xa3\x04\n" +
 	"\x0fReportedSession\x12\x1f\n" +
 	"\vexternal_id\x18\x01 \x01(\tR\n" +
 	"externalId\x12(\n" +
@@ -570,7 +581,8 @@ const file_issues_v1_agent_session_service_proto_rawDesc = "" +
 	"waiting_on\x18\n" +
 	" \x01(\x0e2\x14.issues.v1.WaitingOnR\twaitingOn\x12%\n" +
 	"\x0ewaiting_target\x18\v \x01(\tR\rwaitingTarget\x12!\n" +
-	"\fwaiting_text\x18\f \x01(\tR\vwaitingText\"\xb9\x01\n" +
+	"\fwaiting_text\x18\f \x01(\tR\vwaitingText\x12?\n" +
+	"\x0ewaiting_reason\x18\r \x01(\x0e2\x18.issues.v1.WaitingReasonR\rwaitingReason\"\xb9\x01\n" +
 	"\x16ReportSessionsResponse\x12\x18\n" +
 	"\acreated\x18\x01 \x01(\x05R\acreated\x12\x18\n" +
 	"\aupdated\x18\x02 \x01(\x05R\aupdated\x12\x1c\n" +
@@ -625,9 +637,10 @@ var file_issues_v1_agent_session_service_proto_goTypes = []any{
 	(SessionLink)(0),                  // 8: issues.v1.SessionLink
 	(SessionStatus)(0),                // 9: issues.v1.SessionStatus
 	(WaitingOn)(0),                    // 10: issues.v1.WaitingOn
-	(*PageRequest)(nil),               // 11: issues.v1.PageRequest
-	(*AgentSession)(nil),              // 12: issues.v1.AgentSession
-	(*PageResponse)(nil),              // 13: issues.v1.PageResponse
+	(WaitingReason)(0),                // 11: issues.v1.WaitingReason
+	(*PageRequest)(nil),               // 12: issues.v1.PageRequest
+	(*AgentSession)(nil),              // 13: issues.v1.AgentSession
+	(*PageResponse)(nil),              // 14: issues.v1.PageResponse
 }
 var file_issues_v1_agent_session_service_proto_depIdxs = []int32{
 	6,  // 0: issues.v1.ReportSessionsRequest.source:type_name -> issues.v1.SessionSource
@@ -636,20 +649,21 @@ var file_issues_v1_agent_session_service_proto_depIdxs = []int32{
 	8,  // 3: issues.v1.ReportedSession.link:type_name -> issues.v1.SessionLink
 	9,  // 4: issues.v1.ReportedSession.status:type_name -> issues.v1.SessionStatus
 	10, // 5: issues.v1.ReportedSession.waiting_on:type_name -> issues.v1.WaitingOn
-	3,  // 6: issues.v1.ReportSessionsResponse.rejected:type_name -> issues.v1.SessionRejection
-	9,  // 7: issues.v1.ListAgentSessionsRequest.statuses:type_name -> issues.v1.SessionStatus
-	11, // 8: issues.v1.ListAgentSessionsRequest.page:type_name -> issues.v1.PageRequest
-	12, // 9: issues.v1.ListAgentSessionsResponse.sessions:type_name -> issues.v1.AgentSession
-	13, // 10: issues.v1.ListAgentSessionsResponse.page:type_name -> issues.v1.PageResponse
-	0,  // 11: issues.v1.AgentSessionService.ReportSessions:input_type -> issues.v1.ReportSessionsRequest
-	4,  // 12: issues.v1.AgentSessionService.ListAgentSessions:input_type -> issues.v1.ListAgentSessionsRequest
-	2,  // 13: issues.v1.AgentSessionService.ReportSessions:output_type -> issues.v1.ReportSessionsResponse
-	5,  // 14: issues.v1.AgentSessionService.ListAgentSessions:output_type -> issues.v1.ListAgentSessionsResponse
-	13, // [13:15] is the sub-list for method output_type
-	11, // [11:13] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	11, // 6: issues.v1.ReportedSession.waiting_reason:type_name -> issues.v1.WaitingReason
+	3,  // 7: issues.v1.ReportSessionsResponse.rejected:type_name -> issues.v1.SessionRejection
+	9,  // 8: issues.v1.ListAgentSessionsRequest.statuses:type_name -> issues.v1.SessionStatus
+	12, // 9: issues.v1.ListAgentSessionsRequest.page:type_name -> issues.v1.PageRequest
+	13, // 10: issues.v1.ListAgentSessionsResponse.sessions:type_name -> issues.v1.AgentSession
+	14, // 11: issues.v1.ListAgentSessionsResponse.page:type_name -> issues.v1.PageResponse
+	0,  // 12: issues.v1.AgentSessionService.ReportSessions:input_type -> issues.v1.ReportSessionsRequest
+	4,  // 13: issues.v1.AgentSessionService.ListAgentSessions:input_type -> issues.v1.ListAgentSessionsRequest
+	2,  // 14: issues.v1.AgentSessionService.ReportSessions:output_type -> issues.v1.ReportSessionsResponse
+	5,  // 15: issues.v1.AgentSessionService.ListAgentSessions:output_type -> issues.v1.ListAgentSessionsResponse
+	14, // [14:16] is the sub-list for method output_type
+	12, // [12:14] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_issues_v1_agent_session_service_proto_init() }
