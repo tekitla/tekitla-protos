@@ -1,0 +1,419 @@
+// Integración con GitHub y GitLab: conexiones, repos de un proyecto e
+// IssueLink (issue 016).
+//
+// Dos servicios con modelos de seguridad distintos:
+//   - RepositoryService: gestión de conexiones, repos y links. Autenticada;
+//     solo el dueño del proyecto (en la rebanada 3b, un admin del proyecto).
+//   - WebhookService: entrega cruda de un webhook. Interno: sin
+//     google.api.http; lo llama solo el handler de webhooks del gateway, que
+//     no lee credenciales. La autenticación es la firma (GitHub) o el
+//     secreto (GitLab), y la verifica tekitla-issues.
+//
+// Ninguna respuesta lleva llaves privadas, tokens ni secretos de webhook,
+// salvo ConnectOrganizationResponse.webhook_secret, una sola vez.
+syntax = "proto3";
+
+package issues.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// RepositoryService gestiona las conexiones de GitHub y GitLab de un
+// proyecto, sus repos y los links de los issues. Solo el dueño del
+// proyecto: uno ajeno o inexistente responde NOT_FOUND.
+service RepositoryService {
+  // Conexiones del proyecto y qué proveedores están habilitados en este
+  // ambiente.
+  rpc ListConnections(ListConnectionsRequest) returns (ListConnectionsResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/connections"};
+  }
+  // Conecta una organización de GitHub (la App ya instalada) o un grupo de
+  // GitLab y lista sus repos según el alcance. El servicio comprueba el
+  // acceso antes de guardar: FAILED_PRECONDITION si la App no tiene esa
+  // instalación (motivo GITHUB_INSTALLATION_NOT_FOUND), si el proveedor no
+  // está habilitado en el ambiente (GITHUB_NOT_ENABLED, GITLAB_NOT_ENABLED)
+  // o si se llegó al tope de conexiones (CONNECTION_LIMIT). ALREADY_EXISTS
+  // si esa organización o grupo ya está conectado.
+  rpc ConnectOrganization(ConnectOrganizationRequest) returns (ConnectOrganizationResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/connections"
+      body: "*"
+    };
+  }
+  // Cambia el alcance de una conexión y vuelve a listar sus repos.
+  rpc UpdateConnection(UpdateConnectionRequest) returns (UpdateConnectionResponse) {
+    option (google.api.http) = {
+      patch: "/v1/projects/{project_id}/connections/{connection_id}"
+      body: "*"
+    };
+  }
+  // Borra la conexión y sus repos (y con ellos sus links). No desinstala la
+  // App en GitHub: eso se hace en GitHub.
+  rpc DisconnectOrganization(DisconnectOrganizationRequest) returns (DisconnectOrganizationResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/connections/{connection_id}:disconnect"
+      body: "*"
+    };
+  }
+  // Vuelve a pedir al proveedor la lista de repos y los PR abiertos de cada
+  // uno. Sirve para la carga inicial y para recuperar entregas perdidas.
+  rpc SyncRepositories(SyncRepositoriesRequest) returns (SyncRepositoriesResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/connections/{connection_id}:sync"
+      body: "*"
+    };
+  }
+  // Repos conectados del proyecto, por owner y nombre.
+  rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/repositories"};
+  }
+  // Links de un issue (issue_number > 0) o de todo el proyecto
+  // (issue_number = 0, para el tablero: los 2000 más recientes, sin los de
+  // issues descartados). Sin los suprimidos.
+  rpc ListIssueLinks(ListIssueLinksRequest) returns (ListIssueLinksResponse) {
+    option (google.api.http) = {get: "/v1/projects/{project_id}/issueLinks"};
+  }
+  // Liga a mano una rama de un repo del proyecto a un issue. Si el link
+  // existía suprimido, lo vuelve a mostrar. FAILED_PRECONDITION (motivo
+  // ISSUE_LINK_LIMIT) si el issue ya tiene 20 links.
+  rpc LinkIssue(LinkIssueRequest) returns (LinkIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/issues/{number}/links"
+      body: "*"
+    };
+  }
+  // Quita un link. Queda suprimido: un push o un PR nuevo de esa rama no lo
+  // vuelve a crear (sí LinkIssue).
+  rpc UnlinkIssue(UnlinkIssueRequest) returns (UnlinkIssueResponse) {
+    option (google.api.http) = {
+      post: "/v1/projects/{project_id}/issues/{number}/links/{link_id}:unlink"
+      body: "*"
+    };
+  }
+}
+
+// WebhookService recibe la entrega cruda de un webhook. Solo interno: no
+// lleva google.api.http y el gateway lo niega por REST. No lee x-user-id: el
+// proyecto sale del repo conectado, nunca del payload.
+service WebhookService {
+  // Verifica la firma o el secreto, descarta entregas repetidas y actualiza
+  // los links. UNAUTHENTICATED si la firma o el secreto no valen (el mensaje
+  // no dice por qué), sin escribir nada. INVALID_ARGUMENT si el cuerpo no es
+  // JSON o le faltan campos.
+  rpc ReceiveWebhook(ReceiveWebhookRequest) returns (ReceiveWebhookResponse);
+}
+
+enum RepoProvider {
+  REPO_PROVIDER_UNSPECIFIED = 0;
+  REPO_PROVIDER_GITHUB = 1;
+  REPO_PROVIDER_GITLAB = 2;
+}
+
+// Cómo llegó el repo al proyecto.
+enum RepoSource {
+  REPO_SOURCE_UNSPECIFIED = 0;
+  // Conectado solo (reservado; hoy todo repo llega por una conexión).
+  REPO_SOURCE_REPO = 1;
+  // Por una organización de GitHub.
+  REPO_SOURCE_ORG = 2;
+  // Por un grupo de GitLab.
+  REPO_SOURCE_GROUP = 3;
+}
+
+enum RepoKind {
+  REPO_KIND_UNSPECIFIED = 0;
+  REPO_KIND_CODE = 1;
+  // Repo de documentación (issue 017).
+  REPO_KIND_DOCS = 2;
+}
+
+// Qué repos de la organización o grupo entran al proyecto.
+enum ConnectionScope {
+  CONNECTION_SCOPE_UNSPECIFIED = 0;
+  // Todos los que ve la App o el token.
+  CONNECTION_SCOPE_ALL = 1;
+  // Los que tienen el topic de Connection.topic.
+  CONNECTION_SCOPE_TOPIC = 2;
+  // Los de Connection.selected.
+  CONNECTION_SCOPE_SELECTED = 3;
+}
+
+// Cómo llegan los cambios de un grupo de GitLab (issue 016, plan §3.2). No
+// depende de los webhooks de grupo (Premium).
+enum GitlabSyncMode {
+  GITLAB_SYNC_MODE_UNSPECIFIED = 0;
+  // Un webhook por repo, todos con el mismo secreto de la conexión.
+  GITLAB_SYNC_MODE_WEBHOOK = 1;
+  // Consulta periódica a la API con un token de solo lectura.
+  GITLAB_SYNC_MODE_POLL = 2;
+}
+
+// Una conexión de organización (GitHub) o grupo (GitLab), sin secretos.
+message Connection {
+  string id = 1;
+  string project_id = 2;
+  RepoProvider provider = 3;
+  // github.com, gitlab.com o el host de la instancia propia.
+  string host = 4;
+  // Organización de GitHub o ruta del grupo de GitLab.
+  string owner = 5;
+  ConnectionScope scope = 6;
+  // Con CONNECTION_SCOPE_TOPIC.
+  string topic = 7;
+  // Nombres de repo, con CONNECTION_SCOPE_SELECTED.
+  repeated string selected = 8;
+  // Solo GitLab: nombre de la variable de entorno con el token
+  // (TEKITLA_GITLAB_TOKEN_…), nunca el token.
+  string credential_ref = 9;
+  // Solo GitLab.
+  GitlabSyncMode sync_mode = 10;
+  // Solo GitLab con GITLAB_SYNC_MODE_POLL: 2 a 60.
+  int32 poll_interval_minutes = 11;
+  // Cuándo llegó el último webhook válido (o la última consulta). Ausente:
+  // nunca. Sirve para ver en Ajustes si el webhook está bien configurado.
+  google.protobuf.Timestamp last_delivery_at = 12;
+  google.protobuf.Timestamp created_at = 13;
+  // Repos conectados por esta conexión.
+  int32 repository_count = 14;
+}
+
+// Un repo conectado a un proyecto. Pertenece a un solo proyecto.
+message Repository {
+  string id = 1;
+  string project_id = 2;
+  string connection_id = 3;
+  RepoProvider provider = 4;
+  string owner = 5;
+  string name = 6;
+  string default_branch = 7;
+  RepoSource source = 8;
+  RepoKind kind = 9;
+  // URL del repo en el proveedor. La arma el servicio con el host de la
+  // conexión; nunca se copia de un payload.
+  string web_url = 10;
+}
+
+enum PrState {
+  PR_STATE_UNSPECIFIED = 0;
+  // La rama no tiene PR.
+  PR_STATE_NONE = 1;
+  PR_STATE_DRAFT = 2;
+  PR_STATE_OPEN = 3;
+  PR_STATE_MERGED = 4;
+  // Cerrado sin fusionar.
+  PR_STATE_CLOSED = 5;
+}
+
+enum CiStatus {
+  CI_STATUS_UNSPECIFIED = 0;
+  // Sin checks ni pipeline para el último commit.
+  CI_STATUS_NONE = 1;
+  CI_STATUS_PENDING = 2;
+  CI_STATUS_SUCCESS = 3;
+  CI_STATUS_FAILED = 4;
+  CI_STATUS_CANCELED = 5;
+}
+
+// Por qué se ligó la rama al issue.
+enum LinkOrigin {
+  LINK_ORIGIN_UNSPECIFIED = 0;
+  // <CLAVE>-<n> o issue-<n> en el nombre de la rama.
+  LINK_ORIGIN_BRANCH_NAME = 1;
+  // <CLAVE>-<n> en el título o la descripción del PR.
+  LINK_ORIGIN_PR_TEXT = 2;
+  // LinkIssue.
+  LINK_ORIGIN_MANUAL = 3;
+}
+
+// Una rama (y su PR, si lo tiene) ligada a un issue. La llenan los webhooks
+// y SyncRepositories.
+message IssueLink {
+  string id = 1;
+  int32 issue_number = 2;
+  // Solo id, provider, owner, name y web_url.
+  Repository repo = 3;
+  string branch = 4;
+  // Último commit conocido de la rama (40 hex). Vacío si todavía no se vio
+  // ningún push.
+  string head_sha = 5;
+  // Primera línea del mensaje de ese commit, 120 caracteres como máximo.
+  string head_title = 6;
+  // Commits del último push o del PR (aproximado).
+  int32 commits = 7;
+  // 0: sin PR.
+  int32 pr_number = 8;
+  // 200 caracteres como máximo.
+  string pr_title = 9;
+  PrState pr_state = 10;
+  // Hay una revisión pedida sin responder.
+  bool review_requested = 11;
+  CiStatus ci_status = 12;
+  LinkOrigin origin = 13;
+  // Login del proveedor que causó el último cambio (no un uid de Tekitla).
+  string updated_by = 14;
+  google.protobuf.Timestamp updated_at = 15;
+  // La rama se borró en el repo.
+  bool branch_deleted = 16;
+  // URL de la rama o del PR en el proveedor, armada por el servicio.
+  string web_url = 17;
+}
+
+message ListConnectionsRequest {
+  string project_id = 1;
+}
+
+message ListConnectionsResponse {
+  repeated Connection connections = 1;
+  // URL para instalar la GitHub App de este ambiente. Vacía si GitHub no
+  // está habilitado. El panel le agrega ?state=<project_id>.
+  string github_install_url = 2;
+  // GitLab está habilitado en este ambiente.
+  bool gitlab_enabled = 3;
+}
+
+// Datos para conectar una organización de GitHub.
+message GithubConnection {
+  // El que manda GitHub a la Setup URL de la App. El servicio lo valida con
+  // la App: no se confía en el valor.
+  int64 installation_id = 1;
+}
+
+// Datos para conectar un grupo de GitLab.
+message GitlabConnection {
+  // https://gitlab.com o la URL de la instancia. Solo https y solo hosts de
+  // la lista del ambiente (GITLAB_ALLOWED_HOSTS).
+  string base_url = 1;
+  // Ruta completa del grupo (p. ej. «acme/backend»).
+  string group_path = 2;
+  // Nombre de la variable con el token: ^TEKITLA_GITLAB_TOKEN_[A-Z0-9_]{1,40}$.
+  string credential_ref = 3;
+  GitlabSyncMode sync_mode = 4;
+  // Con GITLAB_SYNC_MODE_POLL: 2 a 60. 0: 5 minutos.
+  int32 poll_interval_minutes = 5;
+}
+
+message ConnectOrganizationRequest {
+  string project_id = 1;
+  oneof provider {
+    GithubConnection github = 2;
+    GitlabConnection gitlab = 3;
+  }
+  // Obligatorio: UNSPECIFIED es INVALID_ARGUMENT.
+  ConnectionScope scope = 4;
+  // Con CONNECTION_SCOPE_TOPIC: 1 a 50 caracteres, minúsculas, números y
+  // guiones (como los topics de GitHub).
+  string topic = 5;
+  // Con CONNECTION_SCOPE_SELECTED: 1 a 300 nombres de repo.
+  repeated string selected = 6;
+}
+
+message ConnectOrganizationResponse {
+  Connection connection = 1;
+  repeated Repository repositories = 2;
+  // Solo GitLab con GITLAB_SYNC_MODE_WEBHOOK: el secreto (`tkw_…`) para
+  // pegar en los webhooks. Es la única vez que sale: el servicio guarda su
+  // hash. Nunca se registra en logs.
+  string webhook_secret = 3;
+}
+
+message UpdateConnectionRequest {
+  string project_id = 1;
+  string connection_id = 2;
+  // Ver ConnectOrganizationRequest.
+  ConnectionScope scope = 3;
+  string topic = 4;
+  repeated string selected = 5;
+}
+
+message UpdateConnectionResponse {
+  Connection connection = 1;
+  repeated Repository repositories = 2;
+}
+
+message DisconnectOrganizationRequest {
+  string project_id = 1;
+  string connection_id = 2;
+}
+
+message DisconnectOrganizationResponse {}
+
+message SyncRepositoriesRequest {
+  string project_id = 1;
+  string connection_id = 2;
+}
+
+message SyncRepositoriesResponse {
+  Connection connection = 1;
+  repeated Repository repositories = 2;
+  // Links creados o actualizados por la sincronización.
+  int32 links_updated = 3;
+}
+
+message ListRepositoriesRequest {
+  string project_id = 1;
+}
+
+message ListRepositoriesResponse {
+  repeated Repository repositories = 1;
+}
+
+message ListIssueLinksRequest {
+  string project_id = 1;
+  // > 0: los links de ese issue. 0: los de todo el proyecto.
+  int32 issue_number = 2;
+}
+
+message ListIssueLinksResponse {
+  // Por issue y, dentro de cada issue, los más recientes primero.
+  repeated IssueLink links = 1;
+}
+
+message LinkIssueRequest {
+  string project_id = 1;
+  int32 number = 2;
+  // Un repo del proyecto.
+  string repository_id = 3;
+  // 1 a 255 caracteres.
+  string branch = 4;
+}
+
+message LinkIssueResponse {
+  IssueLink link = 1;
+}
+
+message UnlinkIssueRequest {
+  string project_id = 1;
+  int32 number = 2;
+  string link_id = 3;
+}
+
+message UnlinkIssueResponse {}
+
+message ReceiveWebhookRequest {
+  RepoProvider provider = 1;
+  // X-GitHub-Event / X-Gitlab-Event.
+  string event = 2;
+  // X-GitHub-Delivery / X-Gitlab-Event-UUID. Lo usa el servicio para
+  // descartar entregas repetidas.
+  string delivery_id = 3;
+  // X-Hub-Signature-256 (GitHub). Nunca se registra en logs.
+  string signature = 4;
+  // X-Gitlab-Token (GitLab). Nunca se registra en logs.
+  string token = 5;
+  // El cuerpo tal como llegó, para verificar el HMAC. 1 MiB como máximo.
+  bytes body = 6;
+}
+
+enum WebhookOutcome {
+  WEBHOOK_OUTCOME_UNSPECIFIED = 0;
+  // Se procesó (aunque no haya cambiado ningún link).
+  WEBHOOK_OUTCOME_PROCESSED = 1;
+  // La misma entrega ya se había procesado: no se tocó nada.
+  WEBHOOK_OUTCOME_DUPLICATE = 2;
+  // Repo no conectado o evento que no interesa.
+  WEBHOOK_OUTCOME_IGNORED = 3;
+}
+
+message ReceiveWebhookResponse {
+  WebhookOutcome outcome = 1;
+}
